@@ -1775,6 +1775,25 @@ window.SSLI_VENDOR = {"source":"SuperSynthLabInstrument","sourceFiles":["shared/
     clearSsliMidiExpression();
   }
 
+  function cleanupSsliSustainedVoicesIfMidiIdle() {
+    var hasHeldSsliVoice = Object.keys(midiVoices).some(function(key) {
+      return midiVoices[key] && midiVoices[key].ssli;
+    });
+    if (hasHeldSsliVoice) return false;
+    var host = getSsliHost();
+    if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopAllSustained) return false;
+    var SL = host.SynthLab;
+    var activeCount = null;
+    if (SL.audio.getActiveOscillators) {
+      var activeOscs = SL.audio.getActiveOscillators();
+      if (activeOscs && typeof activeOscs.size === 'number') activeCount = activeOscs.size;
+    }
+    if (activeCount === 0) return false;
+    SL.audio.stopAllSustained();
+    logEvent('audio', 'SSLI all sustained voices cleared after MIDI idle' + (activeCount !== null ? ' count=' + activeCount : ''));
+    return true;
+  }
+
   function startSustainedWithSsli(midi, velocity) {
     var host = getSsliHost();
     if (!host) return false;
@@ -2260,6 +2279,7 @@ window.SSLI_VENDOR = {"source":"SuperSynthLabInstrument","sourceFiles":["shared/
     if (voice && voice.ssli) {
       stopSustainedWithSsli(voice.midi);
       delete midiVoices[key];
+      cleanupSsliSustainedVoicesIfMidiIdle();
       clearSsliMidiExpressionIfIdle();
       return;
     }

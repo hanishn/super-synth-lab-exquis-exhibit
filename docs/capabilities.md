@@ -93,6 +93,8 @@ The hidden SSLI host is now built with its app support files and audio worklet a
 
 When the Exquis reuses an MPE channel for a new note before a matching note-off arrives, the previous voice on that channel is explicitly stopped before the next note starts.
 
+When the last Exquis-held MIDI voice is released, the exhibit also asks SSLI to stop all sustained notes. This is an idle-only cleanup pass, not a per-note panic button; it prevents stale SSLI runtime voices from accumulating after fast multi-key bursts.
+
 Repeated Exquis note bursts must not reapply the selected SSLI preset for every incoming note, because preset application stops sustained SSLI voices. The exhibit caches the applied Engine/Category/Preset selection, invalidates that cache only when the user changes the sound selection, and prunes stale local MIDI voice bookkeeping when the active voice count exceeds the practice budget.
 
 Stale note-off messages for voices that were already pruned are ignored with a diagnostic log entry instead of double-stopping SSLI voices or clearing the current touch state. While multiple notes are held, global SSLI expression follows the strongest currently held pressure. A pressure-zero packet for one note must not collapse output gain/cutoff while another note is still pressed.

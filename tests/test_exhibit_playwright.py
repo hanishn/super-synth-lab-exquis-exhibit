@@ -53,6 +53,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "test_tone_must_be_loud_diagnostic_reference": "test_regression_test_tone_uses_loud_local_output",
         "waveform_must_show_visible_signal": "test_regression_test_tone_scope_draws_visible_waveform",
         "mpe_channel_reuse_must_release_previous_voice": "test_regression_mpe_channel_reuse_releases_previous_voice",
+        "midi_chord_bursts_must_cleanup_all_ssli_sustained_voices_when_idle": "test_regression_midi_chord_bursts_cleanup_all_ssli_sustained_voices_when_idle",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "midi_note_highlight_must_match_exact_midi_note_only": "test_regression_midi_highlight_matches_exact_note_only",
         "all_tonic_pitch_class_keys_must_be_root_white": "test_regression_all_c_keys_are_tonic_in_default_c_major",
@@ -1854,6 +1855,54 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn(["stopSustainedNote", 60], calls)
         self.assertIn(["startSustainedNote", 64, 127], calls)
         self.assertIn("released previous channel voice C4", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+
+    def test_regression_midi_chord_bursts_cleanup_all_ssli_sustained_voices_when_idle(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const activeOscs = new Map();
+          const makeInst = () => ({ type: 'subtractive', settings: { volume: 100, filter: {}, effects: {} } });
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running', createGain() { return { name: 'gain', gain: { value: 1 }, connect() {} }; } }; },
+              initEffectChain() {},
+              getActiveOscillators() { return activeOscs; },
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [makeInst()]; },
+              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained', activeOscs.size]); activeOscs.clear(); },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); activeOscs.set(midi, { midi }); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() { window.__ssliCalls.push(['clearExpression']); }
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        for raw, channel in [(48, 0), (52, 1), (55, 2)]:
+            self.page.evaluate("(args) => window.__mockExquisInput.onmidimessage({ data: [0x90 | args.channel, args.raw, 70] })", {"raw": raw, "channel": channel})
+        for raw, channel in [(52, 1), (55, 2), (48, 0)]:
+            self.page.evaluate("(args) => window.__mockExquisInput.onmidimessage({ data: [0x80 | args.channel, args.raw, 0] })", {"raw": raw, "channel": channel})
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertIn(["stopAllSustained", 3], calls)
+        self.assertEqual(self.page.evaluate("() => window.SynthLab.audio.getActiveOscillators().size"), 0)
+        self.assertIn("SSLI all sustained voices cleared after MIDI idle", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
 
     def test_regression_midi_diagnostics_console_is_visible(self):
         console = self.page.locator('[data-testid="console-panel"]')

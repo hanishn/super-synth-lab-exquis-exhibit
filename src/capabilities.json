@@ -156,6 +156,7 @@
         "diagnostic console is visible during practice with reset, copy, and exit controls",
         "Exquis MIDI note-on and note-off use SSLI sustained note APIs when SSLI is available",
         "MPE channel reuse releases the prior voice before starting the next note on that channel",
+        "when the last Exquis-held MIDI voice is released, SSLI receives an all-sustained-notes cleanup so stale runtime voices cannot jam later chord bursts",
         "repeated Exquis note-on bursts do not reapply the selected SSLI preset or call stop-all-sustained for every note",
         "stale note-off messages for already-pruned voices are ignored instead of double-stopping voices or clearing current touch state",
         "global SSLI expression follows the strongest currently held Exquis pressure instead of collapsing when one held note reports pressure zero",

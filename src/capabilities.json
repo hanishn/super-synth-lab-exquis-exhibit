@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "partVersion": "0.1.25",
+  "capabilities": [
+    {
+      "id": "exquis_layout_model",
+      "name": "Exquis Layout Model",
+      "status": "prototype",
+      "description": "Models the 61-key Exquis grid as an alternating 6/5-key hex arrangement and assigns pitch classes from horizontal semitone motion and vertical third motion.",
+      "userValue": "Shows why the same scale in different keys lights a different set of physical buttons.",
+      "acceptanceCriteria": [
+        "renders exactly 61 keys",
+        "all keys display note names and octave markers",
+        "changing tonic recomputes highlighted keys without reloading"
+      ]
+    },
+    {
+      "id": "scale_path_visualizer",
+      "name": "Scale Path Visualizer",
+      "status": "prototype",
+      "description": "Highlights in-scale keys and selects a compact practice path for the chosen tonic and scale.",
+      "userValue": "Turns the keyboard lights into a readable practice route rather than a cloud of possible duplicates.",
+      "acceptanceCriteria": [
+        "scale data is sourced from SSLI scales-modes.json",
+        "major, minor, pentatonic, chromatic, dorian, mixolydian, and blues scales are available",
+        "practice path updates when tonic or scale changes",
+        "practice path can be centered around a selected duplicate root note",
+        "practice path starts on the selected root and ascends scale degrees to the next octave root",
+        "default C-major practice path starts on the centered physical C3 cell and resolves to the virtual C4 octave target",
+        "octave labels are derived from chromatic semitone row math with alternating vertical third row starts, not note-name special cases",
+        "every physical key matching the selected tonic pitch class is shown as tonic/root-colored, not only the selected practice root",
+        "current drill note is visually distinct"
+      ]
+    },
+    {
+      "id": "left_hand_fingering_overlay",
+      "name": "Left-Hand Fingering Overlay",
+      "status": "prototype",
+      "description": "Overlays left-hand finger numbers using repeatable position-shift strategies instead of piano thumb-under rules.",
+      "userValue": "Gives a concrete starting fingering for one-hand scale practice.",
+      "acceptanceCriteria": [
+        "left-hand mode is the default",
+        "left and right hand fingering modes are selectable",
+        "4-finger ladder, thumb-assisted, and position-shift strategies are selectable",
+        "finger legend remains visible on desktop and mobile widths"
+      ]
+    },
+    {
+      "id": "key_comparison",
+      "name": "Key Comparison",
+      "status": "planned",
+      "description": "Side-by-side ghost overlays showing how C major, F major, D minor, and other keys shift across the Exquis grid.",
+      "userValue": "Makes transposition and duplicate-position choices easier to understand.",
+      "acceptanceCriteria": [
+        "two tonic/scale states can be compared",
+        "shared buttons and moved buttons have distinct colors",
+        "comparison mode never obscures the current practice path"
+      ]
+    },
+    {
+      "id": "guide_audio",
+      "name": "Built-In Guide Audio",
+      "status": "prototype",
+      "description": "Uses self-contained WebAudio guide tones to preview the current drill note or play the whole practice path.",
+      "userValue": "Lets the player hear the intended scale motion without relying on Exquis, Vital, or any external plugin.",
+      "acceptanceCriteria": [
+        "guide audio works without network access",
+        "audio status shows whether WebAudio is locked, unavailable, or playing",
+        "a dedicated test tone can be triggered before starting a drill",
+        "current note can be previewed",
+        "full practice path can be played in sequence",
+        "at least three guide tone characters are selectable",
+        "test tone uses the boosted local output bus and local analyser even when SSLI is available",
+        "test tone produces a visibly non-flat waveform and leaves a readable peak trace after playback",
+        "preview and path audio can still exercise SSLI one-shot playback"
+      ]
+    },
+    {
+      "id": "web_midi_feedback",
+      "name": "Web MIDI Feedback",
+      "status": "prototype",
+      "description": "Requests Web MIDI access, lists every visible MIDI input, lets the user choose an input, and lights the matching virtual key when the player presses a real key.",
+      "userValue": "Turns the exhibit into a self-checking practice coach while making connection failures diagnosable.",
+      "acceptanceCriteria": [
+        "MIDI permission is requested only when user enables it",
+        "visible MIDI inputs are listed by name",
+        "the selected MIDI input can be changed without reloading",
+        "MIDI activity updates immediately on incoming note-on messages",
+        "incoming notes highlight virtual keys",
+        "incoming notes highlight only keys whose full MIDI note number exactly equals the event, not every matching pitch class across octaves",
+        "MIDI touch, hit, and aftertouch feedback never falls back to octave-duplicate pitch-class highlights",
+        "wrong-path notes are reported without stopping practice"
+      ]
+    },
+    {
+      "id": "hardware_calibration",
+      "name": "Hardware Calibration",
+      "status": "prototype",
+      "description": "Guides the user through pressing physical Exquis keys so the virtual map can be corrected to match actual MIDI output for the selected layout/key mode.",
+      "userValue": "Turns a useful visualization into a trustworthy fingering teacher for the specific connected controller.",
+      "acceptanceCriteria": [
+        "calibration mode has an explicit UI state",
+        "expected note and received MIDI note are shown side by side",
+        "calibrated maps can be exported or stored once storage permission is enabled",
+        "practice mode can switch between theoretical and calibrated maps"
+      ]
+    },
+    {
+      "id": "practice_coach",
+      "name": "Practice Coach",
+      "status": "prototype",
+      "description": "Scores correct and missed physical notes against the current target, tracks streaks, and optionally advances after correct notes.",
+      "userValue": "Supports focused left-hand scale drills without constantly touching the computer.",
+      "acceptanceCriteria": [
+        "correct notes increment score and streak",
+        "wrong notes increment misses and reset streak",
+        "auto-advance can be toggled",
+        "score can be reset by clearing the session"
+      ]
+    },
+    {
+      "id": "responsive_practice_ergonomics",
+      "name": "Responsive Practice Ergonomics",
+      "status": "prototype",
+      "description": "Prioritizes the playable Exquis surface, keeps required sound controls visible, and fits the main desktop/laptop practice view without page-level scrolling.",
+      "userValue": "Lets the player focus on fingering and touch feedback instead of fighting a diagnostic cockpit.",
+      "acceptanceCriteria": [
+        "desktop and laptop layouts avoid document-level horizontal and vertical scrolling without clipping the right rail",
+        "horizontal orientation defaults to the corrected physical-facing view whose rotate button offers Rotate 180",
+        "horizontal orientation rotates the physical key shapes rather than transposing upright hexes",
+        "desktop layout keeps the practice surface visually dominant",
+        "mobile layouts keep controls reachable and make the Exquis surface intentionally pannable",
+        "keyboard surface is presented as a controller pad field, not a cartesian background grid",
+        "rendered key-field proportions match the tall compact Exquis hardware silhouette",
+        "adjacent hex keys use regular-hex honeycomb spacing with shared edges and no geometric gaps or overlap",
+        "rotation toggles only between the two visually correct hardware views whose buttons read Rotate 180 and Rotate 0",
+        "Exquis key field is visually dominant in the stage panel",
+        "Exquis key field scales to available stage space on desktop and after viewport resize without changing the locked hex geometry",
+        "practice mode lights two in-scale pads per row, matching the physical Exquis key LEDs without lighting out-of-key notes",
+        "hardware-lit scale pads remain visibly lit in both horizontal and vertical practice views",
+        "guide tone selection is visually separate from SSLI engine, preset, and FX selection",
+        "scale, path, tonic, current, and MIDI touch states are visually distinct",
+        "audio preset, FX, and filter controls are visible in the main practice view",
+        "all primary sound and practice controls remain visible without document scrolling at laptop size",
+        "SSLI presets are selected through engine, category, and preset controls",
+        "when SSLI is available, sound selector engines, categories, and presets are populated from the live SynthLab.presets API rather than the exhibit fallback bundle",
+        "selected sound presets are applied through the real SSLI preset/audio API when SSLI is available",
+        "SSLI app support files and audio worklet assets are served with the hidden SSLI engine host",
+        "selected SSLI engines are initialized before preset playback",
+        "selected SSLI presets mutate the actual SSLI instrument type/settings used for playback rather than only changing labels or logs",
+        "default exhibit filter and FX controls do not overwrite preset-owned filter/effect settings unless the user explicitly changes those controls",
+        "runtime subtractive preset filter cutoff values above the SSLI slider range are normalized before WebAudio playback",
+        "physical-model presets preserve their runtime physical settings during preview, including Physical / Plucked / Koto",
+        "one-shot preview and path playback do not force maximum global expression over physical-model presets before triggering the note",
+        "low-velocity Exquis note-on messages are promoted to an audible SSLI voice-start velocity",
+        "diagnostic console is visible during practice with reset, copy, and exit controls",
+        "Exquis MIDI note-on and note-off use SSLI sustained note APIs when SSLI is available",
+        "MPE channel reuse releases the prior voice before starting the next note on that channel",
+        "repeated Exquis note-on bursts do not reapply the selected SSLI preset or call stop-all-sustained for every note",
+        "stale note-off messages for already-pruned voices are ignored instead of double-stopping voices or clearing current touch state",
+        "global SSLI expression follows the strongest currently held Exquis pressure instead of collapsing when one held note reports pressure zero",
+        "single-note pressure zero clears expression without falling back to the note-on velocity",
+        "SSLI MIDI practice playback normalizes the active instrument volume through SynthLab.audio.setInstrumentVolume when a preset is too quiet",
+        "SSLI MIDI practice playback wraps SynthLab.audio.getFinalDestination with a practice output boost so sustained-note voices are audible against the local test tone",
+        "when multiple physical cells share an exact MIDI note, MIDI feedback highlights the centered matching cell instead of the first edge duplicate",
+        "Exquis channel pressure and aftertouch are mapped to SSLI expression gain and cutoff when SSLI is available",
+        "FX chains are selected through category and preset controls",
+        "selected FX chains are applied through the real SSLI EffectChain API when SSLI is available",
+        "filter type, cutoff, and resonance update the current SSLI instrument filter settings when SSLI is available",
+        "verbose diagnostics are demoted from the no-scroll practice view",
+        "test tone output is loud enough to be a useful diagnostic reference against the selected synth preset"
+      ]
+    },
+    {
+      "id": "repeatable_preset_sweep",
+      "name": "Repeatable Preset Sweep",
+      "status": "prototype",
+      "description": "Provides a Python and Playwright sweep harness that loads the built exhibit, iterates real sound engine/category/preset UI choices, triggers playback, and records pass/fail evidence.",
+      "userValue": "Makes preset compatibility testable across the whole SSLI library without relying on inference or a tiny hand-picked sample.",
+      "acceptanceCriteria": [
+        "sweep runs from the command line against the built public exhibit",
+        "sweep serves the built public exhibit over localhost so the hidden SSLI frame remains same-origin",
+        "sweep enumerates presets from the live UI controls rather than hard-coded guesses",
+        "sweep can filter by engine, category, and preset-name text for targeted regression checks",
+        "sweep writes JSON and CSV artifacts with engine, category, preset, status, diagnostic log excerpt, browser errors, SSLI instrument type/settings evidence, and live audio signature evidence",
+        "sweep samples the SSLI analyser after playback and records waveform peak/RMS plus spectrum peak/RMS, waveform hash, and spectrum hash so preset output can be compared repeatably",
+        "sweep supports an explicit limit for smoke runs while defaulting to full coverage",
+        "unit tests verify the sweep harness and documentation are present"
+      ]
+    }
+  ]
+}

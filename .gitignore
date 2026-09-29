@@ -1,0 +1,16 @@
+node_modules/
+products/ssli/node_modules/
+products/ssli/export/
+audioValidation/results/
+audioValidation/reports/
+Tests/results/
+tmp*/
+*.log
+*.png
+!ssli/logo.png
+!dist/ssli/logo.png
+__pycache__/
+*.pyc
+tests/_playwright_exhibit.html
+exhibit.json
+public/

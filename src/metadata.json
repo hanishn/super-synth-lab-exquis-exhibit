@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "partVersion": "0.1.0",
+  "exhibitId": "exhibit-1790604717226-nkx9ijte",
+  "name": "Super Synth Lab Exquis Exhibit",
+  "description": "Interactive Intuitive Instruments Exquis hex-key fingering and SSLI synth practice tool.",
+  "createdInWorkspaceId": "workspace-1783093124733-7jke6sp",
+  "createdInWorkspaceName": "Home",
+  "createdByStaffId": "techassistant",
+  "createdByStaffName": "TechAssistant",
+  "tags": ["music", "exquis", "fingering", "mpe", "practice"],
+  "permissions": {
+    "allowNetwork": false,
+    "allowStorage": false,
+    "allowClipboardRead": false,
+    "allowClipboardWrite": false
+  },
+  "capabilities": {
+    "version": 1,
+    "requested": []
+  }
+}

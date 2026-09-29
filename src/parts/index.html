@@ -1,0 +1,194 @@
+<main class="app-shell" data-testid="app-shell">
+  <iframe id="ssliEngineFrame" class="ssli-engine-frame" title="SSLI audio engine" src="ssli/index.html" aria-hidden="true" tabindex="-1"></iframe>
+  <section class="top-panel" aria-label="Practice controls">
+    <div class="brand-block">
+      <p class="eyebrow">Exquis Fingering Lab</p>
+      <h1>Scale map</h1>
+    </div>
+    <div class="controls-grid primary-controls">
+      <label>
+        <span>Tonic</span>
+        <select id="tonicSelect" data-testid="tonic-select"></select>
+      </label>
+      <label>
+        <span>Center Root</span>
+        <select id="rootSelect" data-testid="root-select"></select>
+      </label>
+      <label>
+        <span>Scale</span>
+        <select id="scaleSelect" data-testid="scale-select"></select>
+      </label>
+      <label>
+        <span>Hand</span>
+        <select id="handSelect" data-testid="hand-select">
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <label>
+        <span>Fingering</span>
+        <select id="strategySelect" data-testid="strategy-select"></select>
+      </label>
+      <label>
+        <span>View</span>
+        <select id="viewSelect" data-testid="view-select">
+          <option value="practice">Practice path</option>
+          <option value="scale">All scale tones</option>
+          <option value="map">Full note map</option>
+          <option value="calibration">Calibration preview</option>
+        </select>
+      </label>
+      <label>
+        <span>Orientation</span>
+        <select id="orientationSelect" data-testid="orientation-select">
+          <option value="vertical">Vertical</option>
+          <option value="horizontal">Horizontal</option>
+        </select>
+      </label>
+      <label class="rotation-control">
+        <span>Surface</span>
+        <button id="rotateSurface" type="button" data-testid="rotate-surface">Rotate 90</button>
+      </label>
+    </div>
+  </section>
+
+  <section class="stage-panel" aria-label="Exquis keyboard visualization">
+    <div class="stage-header">
+      <div>
+        <h2 id="stateTitle">C Major</h2>
+        <p id="stateSubtitle">Left hand: 4-finger ladder</p>
+      </div>
+      <div class="stepper" aria-label="Practice note stepper">
+        <button id="prevStep" type="button" aria-label="Previous note" data-testid="prev-step">Prev</button>
+        <output id="stepReadout" data-testid="step-readout">1 / 8</output>
+        <button id="nextStep" type="button" aria-label="Next note" data-testid="next-step">Next</button>
+        <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
+      </div>
+    </div>
+    <div id="keyboard" class="keyboard" data-testid="keyboard"></div>
+  </section>
+
+  <aside class="side-panel" aria-label="Practice guidance">
+    <section class="guide-section">
+      <h2>Guide</h2>
+      <label>
+        <span>Guide Tone</span>
+        <select id="toneSelect" data-testid="tone-select">
+          <option value="soft_wurli">Soft Wurli</option>
+          <option value="round_sine">Round Sine</option>
+          <option value="muted_pluck">Muted Pluck</option>
+        </select>
+      </label>
+    </section>
+    <section class="audio-section">
+      <h2>Sound</h2>
+      <label>
+        <span>Engine</span>
+        <select id="soundEngineSelect" data-testid="sound-engine-select"></select>
+      </label>
+      <label>
+        <span>Category</span>
+        <select id="soundCategorySelect" data-testid="sound-category-select"></select>
+      </label>
+      <label>
+        <span>Preset</span>
+        <select id="soundPresetSelect" data-testid="sound-preset-select"></select>
+      </label>
+      <label>
+        <span>FX Category</span>
+        <select id="fxCategorySelect" data-testid="fx-category-select"></select>
+      </label>
+      <label>
+        <span>FX Preset</span>
+        <select id="fxPresetSelect" data-testid="fx-preset-select"></select>
+      </label>
+      <div class="filter-row">
+        <label>
+          <span>Filter</span>
+          <select id="filterTypeSelect" data-testid="filter-type-select">
+            <option value="lowpass">Lowpass</option>
+            <option value="highpass">Highpass</option>
+            <option value="bandpass">Bandpass</option>
+            <option value="notch">Notch</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <span>Coach</span>
+          <input id="autoAdvance" type="checkbox" checked data-testid="auto-advance">
+          <b>Auto</b>
+        </label>
+      </div>
+      <label>
+        <span>Cutoff <output id="filterCutoffValue">2200 Hz</output></span>
+        <input id="filterCutoff" type="range" min="80" max="12000" step="1" value="2200" data-testid="filter-cutoff">
+      </label>
+      <label>
+        <span>Resonance <output id="filterResonanceValue">0.8</output></span>
+        <input id="filterResonance" type="range" min="0.3" max="18" step="0.1" value="0.8" data-testid="filter-resonance">
+      </label>
+    </section>
+    <section class="finger-rule-section">
+      <h2>Finger Rule</h2>
+      <p id="fingerRule">Use 5-4-3-2, shift the hand, then repeat. Keep the thumb quiet at first.</p>
+    </section>
+    <section>
+      <h2>Current Note</h2>
+      <p class="current-note" id="currentNote" data-testid="current-note">C4</p>
+      <p id="currentDegree">Scale degree 1</p>
+    </section>
+    <section>
+      <h2>Drill</h2>
+      <p id="drillPrompt">Play the current note, then advance. Listen before moving if the shape feels uncertain.</p>
+      <p id="audioStatus" data-testid="audio-status">Audio: locked until Play/Test.</p>
+      <div class="scope-panel" aria-label="Audio output scope">
+        <canvas id="audioScope" width="260" height="96" data-testid="audio-scope"></canvas>
+        <p id="scopeReadout" data-testid="scope-readout">Output: idle / peak 0%</p>
+      </div>
+      <button id="testAudio" type="button" data-testid="test-audio">Test Tone</button>
+      <button id="playScale" type="button" data-testid="play-scale">Play Path</button>
+    </section>
+    <section>
+      <h2>MIDI Coach</h2>
+      <p id="midiStatus" data-testid="midi-status">MIDI is off.</p>
+      <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
+      <label class="midi-picker">
+        <span>MIDI Input</span>
+        <select id="midiInputSelect" data-testid="midi-input-select" disabled>
+          <option value="">No inputs scanned</option>
+        </select>
+      </label>
+      <p id="midiDevices" data-testid="midi-devices">Devices: not scanned</p>
+      <p id="midiActivity" class="feedback-neutral" data-testid="midi-activity">Activity: none</p>
+      <p id="lastMidi" data-testid="last-midi">Last input: --</p>
+      <p id="coachFeedback" data-testid="coach-feedback">Enable MIDI to compare the physical Exquis against the current target.</p>
+      <p id="drillScore" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
+    </section>
+    <section id="consolePanel" class="console-panel" data-testid="console-panel">
+      <div class="console-header">
+        <h2>Console</h2>
+        <div class="console-actions">
+          <button id="resetConsole" type="button" data-testid="reset-console">Reset</button>
+          <button id="copyConsole" type="button" data-testid="copy-console">Copy</button>
+          <button id="exitConsole" type="button" data-testid="exit-console">Exit</button>
+        </div>
+      </div>
+      <pre id="diagnosticLog" data-testid="diagnostic-log">Ready.</pre>
+    </section>
+    <section class="calibration-section">
+      <h2>Calibration</h2>
+      <p id="calibrationStats" data-testid="calibration-stats">0 verified / 0 mismatched</p>
+      <button id="clearCalibration" type="button" data-testid="clear-calibration">Clear Session</button>
+    </section>
+    <section class="legend-section">
+      <h2>Legend</h2>
+      <div class="legend-row"><span class="swatch tonic"></span>Tonic</div>
+      <div class="legend-row"><span class="swatch scale"></span>Scale tone</div>
+      <div class="legend-row"><span class="swatch path"></span>Practice path</div>
+      <div class="legend-row"><span class="swatch current"></span>Current step</div>
+    </section>
+    <section class="assumption-section">
+      <h2>Assumption</h2>
+      <p id="assumptionText">This first build uses a documented Exquis-style model: horizontal semitones and vertical thirds. It is meant for fingering exploration, then calibration against the physical keyboard.</p>
+    </section>
+  </aside>
+</main>

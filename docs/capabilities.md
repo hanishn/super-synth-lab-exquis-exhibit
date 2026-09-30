@@ -73,7 +73,7 @@ The exhibit includes a self-contained WebAudio guide tone fallback. SSLI sound p
 - SSLI FX preset selector applying selected chains through the real SSLI `EffectChain` API when SSLI is available
 - Filter type, cutoff, and resonance controls
 
-SSLI preset selection is split into Engine, Category, and Preset controls. FX selection is split into FX Category and FX Preset controls.
+SSLI preset selection is split into Engine, Category, and Preset controls. FX selection is split into FX Category and FX Preset controls, with both FX controls kept on the same visual row so the FX chain reads as one grouped decision.
 
 Selected SSLI presets must change the actual generated sound, not just the UI label or diagnostic log. When the SSLI host is available, the Engine/Category/Preset selectors are populated from `SynthLab.presets.getEngines()`, `getCategoriesForEngine()`, and `getPresetsForEngineCategory()` instead of the exhibit's local preset bundle. Playback applies that runtime SSLI preset object through `SynthLab.presets.apply()` and verifies that playback sees the resulting instrument type/settings. The local preset bundle is only a fallback for no-SSLI/offline operation. The exhibit must not overwrite preset filter or effect settings with default local controls unless the user has explicitly changed those controls.
 
@@ -87,11 +87,27 @@ Test Tone now bypasses SSLI and uses the boosted local output bus, so it remains
 
 Filter and FX controls now update the current SSLI instrument rather than only changing local labels or a fallback bus. The local WebAudio filter/FX path remains only for non-SSLI fallback audio.
 
-Exquis touch pressure now maps to SSLI expression through `SynthLab.audio.setExpression`, using pressure to drive output gain and expression cutoff while the note is held.
+For non-physical SSLI engines, Exquis touch pressure maps to SSLI expression through `SynthLab.audio.setExpression`, using pressure to drive output gain and expression cutoff while the note is held.
 
 The hidden SSLI host is now built with its app support files and audio worklet assets. SSLI engines are initialized before selected preset playback, and Exquis note-on velocity is floored to a stronger playable SSLI voice-start level so pressure-first MIDI messages do not create effectively silent notes.
 
 When the Exquis reuses an MPE channel for a new note before a matching note-off arrives, the previous voice on that channel is explicitly stopped before the next note starts.
+
+Physical-model MIDI playback stays on SSLI sustained-note tracking, passes velocity into the physical engine, and scales new note velocity against the number of currently held physical voices. Three-note shapes must not force every physical note to maximum velocity or reapply the preset while independent voices are being added.
+
+Physical-model MIDI poly-aftertouch is applied per held note through `SL.physical.updateNotePressure(midi, pressure, inst)`. It must not be collapsed into a shared global physical pressure value, because the Exquis is an expressive poly-aftertouch controller. SSLI Physical worklet voices maintain independent per-note pressure gain so pressure changes affect only the matching active note.
+
+Plucked physical models receive bounded per-note pressure through the same SSLI path. A plucked string still receives its primary energy at note-on, but aftertouch must reach the matching SSLI voice as shallow per-note pressure gain rather than being bypassed by the exhibit or converted into global expression.
+
+The SSLI Physical worklet also scales summed output once more than four physical voices are active. Six independent Exquis voices must preserve per-note pressure while reducing total mix energy enough to avoid riding the soft clipper continuously.
+
+Physical per-note pressure updates are rate-limited per held note before being sent to SSLI. Tiny rapid aftertouch wiggles are skipped, while large changes and zero-pressure release updates remain immediate. This protects six independent voices from flooding the physical worklet without collapsing poly-aftertouch into one global value.
+
+Six-note physical pressure regressions must be tested with Playwright-driven MIDI against the actual audible SSLI signal path. The test samples final audio output, not only SSLI's pre-output instrument analyser or mocked API calls. Physical-model output must satisfy measurable loudness/headroom thresholds: solo voices remain audible, dense independent voices avoid sustained clipping, and cleanup returns the engine to idle.
+
+The exhibit may use a small adapter around SSLI's final output routing so every engine reaches the same audible diagnostic path. That adapter is tested by output metrics, not treated as the core sound architecture.
+
+When the last Exquis-held MIDI voice is released, exact per-note ownership cleanup must already have stopped all voices started by the exhibit. As a final failsafe, the exhibit may ask SSLI to stop all sustained notes only after MIDI idle; tests must prove normal note-on/note-off ownership first so the idle failsafe cannot mask lifecycle bugs.
 
 Repeated Exquis note bursts must not reapply the selected SSLI preset for every incoming note, because preset application stops sustained SSLI voices. The exhibit caches the applied Engine/Category/Preset selection, invalidates that cache only when the user changes the sound selection, and prunes stale local MIDI voice bookkeeping when the active voice count exceeds the practice budget.
 
@@ -103,7 +119,19 @@ When duplicate physical cells share the same exact MIDI note, incoming MIDI feed
 
 ### Repeatable Preset Sweep
 
-Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live SSLI analyser for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`.
+Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, pre-arms the audio analyser before playback, samples the live SSLI analyser or final SSLI output path for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`.
+
+The required mature-engine poly-pressure procedure is:
+
+```powershell
+python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
+```
+
+That command sweeps every live UI preset under Subtractive, FM, and Physical, drives six Exquis-style MIDI notes on independent channels, continuously varies their channel pressure, samples the actual audible SSLI output, and fails on silence, engine mismatch, duplicate signatures within the same engine/category, clipping, browser errors, stale-log-only cleanup, or missing current voice cleanup from the app's diagnostic state snapshot.
+
+`--one-per-category` is a smoke/debug shortcut only. It selects the first live UI preset from each category so a quick run can confirm that every category is reachable, but it is not acceptance coverage and must not be used to skip hard presets.
+
+Dense MIDI voice stacks use general runtime headroom protection. Subtractive/FM voices scale later independent note-on velocity and expression gain as held voice count rises, and physical models scale output based on active voice count. The required behavior is user-facing: simultaneous and sequential independent notes must preserve pitch identity, remain audible, avoid extra tones/noise, and avoid sustained clipping. Implementation must not use note-name, interval, or preset-specific exceptions.
 
 Useful commands:
 
@@ -111,9 +139,11 @@ Useful commands:
 python tools/preset_sweep.py --limit 10
 python tools/preset_sweep.py --engine Physical --category Plucked --preset-contains Koto
 python tools/preset_sweep.py --output-dir tmp_preset_sweep_full
+python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
+python tools/preset_sweep.py --mature-engines-only --one-per-category --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_smoke
 ```
 
-`--limit` is only for smoke/debug runs. Omitting it sweeps every preset visible through the UI.
+`--limit` and `--one-per-category` are only for smoke/debug runs. Omitting both sweeps every preset visible through the selected UI filters.
 
 ### Responsive Practice Ergonomics
 
@@ -133,6 +163,7 @@ Current ergonomic guarantees:
 - Practice mode lights two in-scale pads per row. The C-major practice path is separately marked and fingered, while the broader purple key LEDs remain in-key rather than random physical lanes.
 - Hardware-lit scale pads stay visibly lit in both horizontal and vertical practice views, even when they are not part of the current fingering path.
 - Guide Tone selection is visually separate from the SSLI engine/category/preset and FX controls.
+- MIDI enablement is the first prominent side-rail action because connecting the Exquis is the first required user step.
 - The keyboard surface uses a plain controller pad field, not a cartesian background grid.
 - Primary practice, sound, preset, FX, and filter controls remain visible at laptop size without relying on page clipping or document scrolling.
 - The diagnostic console is visible during practice as a dock with Reset, Copy, and Exit controls.

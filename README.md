@@ -55,11 +55,18 @@ python -m unittest tests.test_exhibit_static tests.test_exhibit_playwright
 The preset sweep harness can check SSLI preset behavior through the real UI and audio path:
 
 ```powershell
-python tools/preset_sweep.py --limit 10
 python tools/preset_sweep.py --engine Physical --category Plucked --preset-contains Koto
+python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
 ```
 
-Omit `--limit` for a full preset sweep.
+For quick smoke/debug runs only:
+
+```powershell
+python tools/preset_sweep.py --limit 10
+python tools/preset_sweep.py --mature-engines-only --one-per-category --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_smoke
+```
+
+Omit `--limit` and `--one-per-category` for acceptance sweeps.
 
 ## Repository Shape
 

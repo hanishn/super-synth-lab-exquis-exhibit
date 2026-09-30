@@ -76,7 +76,18 @@
   var SURFACE_H = 690;
   var SURFACE_HORIZONTAL_W = 620;
   var LOCAL_MASTER_GAIN = 2.6;
-  var SSLI_PRACTICE_OUTPUT_GAIN = 4;
+  var SSLI_PRACTICE_OUTPUT_GAIN = 4.5;
+  var SSLI_PRACTICE_OUTPUT_GAIN_MID = 2.4;
+  var SSLI_PRACTICE_OUTPUT_GAIN_POLY = 0.04;
+  var SSLI_FM_OUTPUT_GAIN_POLY = 0.012;
+  var SSLI_SUSTAINED_NOTE_VELOCITY = 127;
+  var SSLI_FM_SUSTAINED_NOTE_VELOCITY = 120;
+  var SSLI_EXPRESSION_GAIN_SCALE_MID = 0.22;
+  var SSLI_EXPRESSION_GAIN_SCALE_POLY = 0.02;
+  var SSLI_FM_EXPRESSION_GAIN_SCALE_POLY = 0.025;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_SOLO = 3.5;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_MID = 2.5;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_POLY = 0.35;
   var EXQUIS_BOTTOM_LEFT_MIDI = 27;
   var VERTICAL_THIRD = 4;
   var audioCtx = null;
@@ -95,10 +106,19 @@
   var midiHitTimer = null;
   var midiActivityTimer = null;
   var resizeTimer = null;
+  var ssliPresetRetryTimer = null;
   var logs = [];
   var midiVoices = {};
   var lastAppliedSsliPresetKey = '';
+  var lastSsliExpressionPressure = null;
+  var skippedSsliExpressionUpdates = 0;
   var MIDI_VOICE_BUDGET = 12;
+  var SSLI_EXPRESSION_PRESSURE_STEP = 3;
+  var PHYSICAL_PRESSURE_STEP = 14;
+  var PHYSICAL_PRESSURE_MIN_INTERVAL_MS = 35;
+  var PHYSICAL_SIMULTANEOUS_ONSET_MS = 45;
+  var PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES = 2;
+  var MATURE_SOUND_ENGINES = { subtractive: true, physical: true, fm: true };
   var state = {
     tonicPc: 0,
     rootCellId: '',
@@ -110,6 +130,7 @@
     soundPresetId: 'subtractive::Wurlitzer EP',
     soundEngine: 'subtractive',
     soundCategory: 'Keys',
+    showAllEngines: false,
     fxPresetId: 'dry',
     fxCategory: 'Clean / Natural',
     fxDirty: false,
@@ -172,6 +193,97 @@
   function voiceKey(channel, midi) {
     return String(channel) + ':' + String(midi);
   }
+
+  function objectKeyCount(obj) {
+    return Object.keys(obj || {}).length;
+  }
+
+  function getSsliActiveOscillators() {
+    var host = getSsliHost();
+    if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.getActiveOscillators) return null;
+    return host.SynthLab.audio.getActiveOscillators();
+  }
+
+  function getSsliActiveOscillatorCount() {
+    var activeOscs = getSsliActiveOscillators();
+    return activeOscs && typeof activeOscs.size === 'number' ? activeOscs.size : null;
+  }
+
+  function currentScopePeak() {
+    if (!audioAnalyser || !audioScopeData || !audioAnalyser.getByteTimeDomainData) return null;
+    audioAnalyser.getByteTimeDomainData(audioScopeData);
+    var peak = 0;
+    for (var i = 0; i < audioScopeData.length; i++) {
+      peak = Math.max(peak, Math.abs((audioScopeData[i] - 128) / 128));
+    }
+    return peak;
+  }
+
+  function logSsliAudioHealth(reason) {
+    var host = getSsliHost();
+    var SL = host && host.SynthLab;
+    var audio = SL && SL.audio;
+    var ctx = audio && audio.getCtx ? audio.getCtx() : null;
+    var activeOscs = audio && audio.getActiveOscillators ? audio.getActiveOscillators() : null;
+    var pool = audio && audio.getVoicePoolStats ? audio.getVoicePoolStats() : null;
+    var inst = audio && audio.getCurrentInstrument ? audio.getCurrentInstrument() : null;
+    var type = audio && audio.getInstrumentType && inst !== null ? audio.getInstrumentType(inst) : 'n/a';
+    var scopePeak = currentScopePeak();
+    var parts = [
+      'SSLI health ' + reason,
+      'ctx=' + (ctx ? ctx.state : 'n/a'),
+      't=' + (ctx && typeof ctx.currentTime === 'number' ? ctx.currentTime.toFixed(3) : 'n/a'),
+      'lat=' + (ctx && typeof ctx.baseLatency === 'number' ? ctx.baseLatency.toFixed(3) : 'n/a'),
+      'inst=' + (inst === null ? 'n/a' : inst),
+      'type=' + type,
+      'held=' + objectKeyCount(state.heldNotes),
+      'local=' + objectKeyCount(midiVoices),
+      'activeOsc=' + (activeOscs && typeof activeOscs.size === 'number' ? activeOscs.size : 'n/a'),
+      'nodeCount=' + (audio && typeof audio._activeNodeCount === 'number' ? audio._activeNodeCount : 'n/a'),
+      'scopePeak=' + (scopePeak === null ? 'n/a' : Math.round(scopePeak * 100) + '%')
+    ];
+    if (pool) {
+      parts.push(
+        'poolActive=' + (typeof pool.currentlyActive === 'number' ? pool.currentlyActive : 'n/a'),
+        'poolAvail=' + (typeof pool.available === 'number' ? pool.available : 'n/a'),
+        'poolPeak=' + (typeof pool.peakUsage === 'number' ? pool.peakUsage : 'n/a'),
+        'steals=' + (typeof pool.steals === 'number' ? pool.steals : 'n/a'),
+        'poolTotal=' + (typeof pool.totalAllocated === 'number' ? pool.totalAllocated : 'n/a')
+      );
+    } else {
+      parts.push('poolActive=n/a', 'poolAvail=n/a', 'poolPeak=n/a', 'steals=n/a', 'poolTotal=n/a');
+    }
+    logEvent('audio', parts.join(' '));
+    if (type !== 'physical' && pool && activeOscs && typeof activeOscs.size === 'number' && typeof pool.currentlyActive === 'number' && activeOscs.size !== pool.currentlyActive) {
+      logEvent('audio', 'SSLI health warning activeOsc/pool mismatch activeOsc=' + activeOscs.size + ' poolActive=' + pool.currentlyActive);
+    }
+  }
+
+  function localSsliVoiceMidiSet() {
+    var midis = {};
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (voice && voice.ssli) midis[voice.midi] = true;
+    });
+    return midis;
+  }
+
+  function logMidiVoiceStats(reason) {
+    var ssliCount = getSsliActiveOscillatorCount();
+    logEvent('audio', 'MIDI voices ' + reason + ' held=' + objectKeyCount(state.heldNotes) + ' local=' + objectKeyCount(midiVoices) + ' ssli=' + (ssliCount === null ? 'n/a' : ssliCount));
+  }
+
+  function getExquisDebugSnapshot() {
+    return {
+      heldNotes: objectKeyCount(state.heldNotes),
+      midiVoices: objectKeyCount(midiVoices),
+      ssliActiveOscillators: getSsliActiveOscillatorCount(),
+      lastAppliedSsliPresetKey: lastAppliedSsliPresetKey,
+      soundPresetId: state.soundPresetId
+    };
+  }
+
+  window.__exquisDebugSnapshot = getExquisDebugSnapshot;
 
   function mod(n, m) {
     return ((n % m) + m) % m;
@@ -237,6 +349,21 @@
       return SL.presets.getEngines();
     }
     return Object.keys(SSLI_PRESETS).sort();
+  }
+
+  function soundEngineKey(engine) {
+    return String(engine || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function isMatureSoundEngine(engine) {
+    return !!MATURE_SOUND_ENGINES[soundEngineKey(engine)];
+  }
+
+  function getVisibleSoundEngines() {
+    var engines = getSoundEngines();
+    if (state.showAllEngines) return engines;
+    var mature = engines.filter(isMatureSoundEngine);
+    return mature.length ? mature : engines;
   }
 
   function getSoundCategories(engine) {
@@ -332,6 +459,43 @@
       return null;
     }
     return null;
+  }
+
+  function ensureFreshSsliFrame() {
+    var frame = document.getElementById('ssliEngineFrame');
+    if (!frame) return;
+    var freshSrc = 'ssli/index.html?v=exquis-poly-aftertouch-v2';
+    if (frame.getAttribute('src') !== freshSrc) frame.setAttribute('src', freshSrc);
+    if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistrations) return;
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      var removed = false;
+      registrations.forEach(function(registration) {
+        var scope = registration && registration.scope ? registration.scope : '';
+        if (scope.indexOf('/ssli/') >= 0 || scope.indexOf('/dist/ssli/') >= 0) {
+          removed = true;
+          registration.unregister();
+        }
+      });
+      if (removed) {
+        logEvent('audio', 'removed stale SSLI service worker cache; reloading runtime frame');
+        frame.setAttribute('src', freshSrc + '&reload=' + Date.now());
+      }
+    }).catch(function(err) {
+      logEvent('audio', 'SSLI service worker cleanup warning: ' + (err && err.message ? err.message : err));
+    });
+  }
+
+  function describeSsliReadiness(SL, mode) {
+    if (!SL) return 'missing SynthLab host';
+    if (!SL.audio) return 'missing SynthLab.audio';
+    if (!SL.presets) return 'missing SynthLab.presets';
+    if (!SL.presets.apply) return 'missing SynthLab.presets.apply';
+    if (mode === 'midi') {
+      if (!SL.audio.getInstruments) return 'missing SynthLab.audio.getInstruments';
+      if (!SL.audio.getCurrentInstrument) return 'missing SynthLab.audio.getCurrentInstrument';
+      if (!SL.audio.startSustainedNote) return 'missing SynthLab.audio.startSustainedNote';
+    }
+    return 'ready';
   }
 
   function getSsliEngineDisplayName(engineId, SL) {
@@ -472,13 +636,26 @@
 
   function applySelectedSsliPreset() {
     var host = getSsliHost();
-    if (!host) return false;
+    if (!host) {
+      logEvent('audio', 'SSLI preset apply failed: missing runtime host for ' + state.soundPresetId);
+      scheduleSsliPresetApplyRetry('missing runtime host');
+      return false;
+    }
     var SL = host.SynthLab;
     var presetKey = currentSsliPresetKey();
-    if (lastAppliedSsliPresetKey === presetKey) return true;
     var preset = getSsliPresetPayload(SL);
-    if (!preset || !SL.presets || !SL.presets.apply || !SL.audio) return false;
+    if (lastAppliedSsliPresetKey === presetKey && objectKeyCount(midiVoices) > 0) {
+      return true;
+    }
+    if (lastAppliedSsliPresetKey === presetKey && preset && verifySsliPresetRuntime(SL, preset, false)) return true;
+    var readiness = describeSsliReadiness(SL, 'apply');
+    if (!preset || readiness !== 'ready') {
+      logEvent('audio', 'SSLI preset apply failed: ' + (!preset ? 'missing selected runtime preset' : readiness) + ' preset=' + state.soundPresetId);
+      scheduleSsliPresetApplyRetry(!preset ? 'missing selected runtime preset' : readiness);
+      return false;
+    }
     if (SL.audio.stopAllSustained) SL.audio.stopAllSustained();
+    cleanupSsliEngineVoices(SL, 'before preset apply');
     if (SL.audio.getCtx) {
       var ctx = SL.audio.getCtx();
       if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume();
@@ -489,7 +666,27 @@
     lastAppliedSsliPresetKey = presetKey;
     state.audioStatus = 'Audio: SSLI ' + (preset.name || state.soundPresetId) + '.';
     logEvent('audio', 'SSLI preset applied engine=' + preset.engine + ' preset=' + state.soundPresetId);
+    verifySsliPresetRuntime(SL, preset, true);
     return true;
+  }
+
+  function scheduleSsliPresetApplyRetry(reason) {
+    if (ssliPresetRetryTimer) return;
+    var attempts = 0;
+    ssliPresetRetryTimer = window.setInterval(function() {
+      attempts += 1;
+      var host = getSsliHost();
+      if (host && host.SynthLab && describeSsliReadiness(host.SynthLab, 'apply') === 'ready') {
+        window.clearInterval(ssliPresetRetryTimer);
+        ssliPresetRetryTimer = null;
+        logEvent('audio', 'SSLI runtime became ready; retrying preset apply after ' + reason);
+        applySelectedSsliPreset();
+      } else if (attempts >= 30) {
+        window.clearInterval(ssliPresetRetryTimer);
+        ssliPresetRetryTimer = null;
+        logEvent('audio', 'SSLI preset retry gave up after ' + reason);
+      }
+    }, 250);
   }
 
   function getSsliInstrument(SL) {
@@ -504,14 +701,108 @@
     return current && current.instrument ? current.instrument.type || '' : '';
   }
 
-  function ensureSsliPracticeVolume(SL, inst) {
+  function callSsliAllNotesOff(SL, engineName, inst) {
+    if (!SL || !SL[engineName] || !SL[engineName].allNotesOff) return false;
+    try {
+      SL[engineName].allNotesOff(inst);
+      return true;
+    } catch (err) {
+      logEvent('audio', 'SSLI ' + engineName + ' all-notes-off warning: ' + (err && err.message ? err.message : err));
+      return false;
+    }
+  }
+
+  function cleanupSsliEngineVoices(SL, reason) {
+    if (!SL || !SL.audio) return false;
+    var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    var cleaned = false;
+    [
+      'fm', 'physical', 'additive', 'granular', 'vocoderSynth',
+      'wavefolder', 'formant', 'modal', 'ringmod', 'chord',
+      'superwave', 'wavetableSynth', 'phasedist', 'chip',
+      'bytebeat', 'vector', 'drumsyn', 'pulsar', 'bodyResonance', 'reed'
+    ].forEach(function(engineName) {
+      cleaned = callSsliAllNotesOff(SL, engineName, inst) || cleaned;
+    });
+    if (cleaned && reason) logEvent('audio', 'SSLI engine all-notes-off ' + reason + ' inst=' + inst);
+    return cleaned;
+  }
+
+  function getCurrentPhysicalModel(SL) {
+    var current = getSsliInstrument(SL);
+    var instrument = current && current.instrument;
+    var settings = instrument && instrument.settings;
+    var physical = settings && settings.physicalSettings;
+    return physical && physical.model ? physical.model : '';
+  }
+
+  function hashObject(value) {
+    var text = '';
+    try {
+      text = JSON.stringify(value || {});
+    } catch (err) {
+      text = String(value || '');
+    }
+    var hash = 0;
+    for (var i = 0; i < text.length; i++) {
+      hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+    }
+    return String(hash);
+  }
+
+  function getEngineSettingsForInstrument(instrument) {
+    var settings = instrument && instrument.settings ? instrument.settings : {};
+    var type = instrument && instrument.type ? instrument.type : '';
+    var keyByType = {
+      fm: 'fmSettings',
+      physical: 'physicalSettings',
+      wavetable: 'wavetableSettings',
+      additive: 'additiveSettings',
+      granular: 'granularSettings',
+      modal: 'modalSettings',
+      ringmod: 'ringmodSettings',
+      superwave: 'superwaveSettings',
+      wavefolder: 'wavefoldSettings',
+      formant: 'formantSettings',
+      chord: 'chordSettings',
+      phasedist: 'phasedistSettings',
+      chip: 'chipSettings',
+      vector: 'vectorSettings',
+      drumsyn: 'drumsynSettings',
+      pulsar: 'pulsarSettings',
+      reed: 'reedSettings'
+    };
+    var key = keyByType[type] || '';
+    return {
+      key: key,
+      value: key ? (settings[key] || {}) : { osc: settings.osc || null, filter: settings.filter || null, adsr: settings.adsr || null }
+    };
+  }
+
+  function verifySsliPresetRuntime(SL, preset, shouldLog) {
+    var current = getSsliInstrument(SL);
+    if (!current || !current.instrument || !preset) return false;
+    var instrument = current.instrument;
+    var expected = preset.engine || '';
+    var actual = instrument.type || '';
+    var engineSettings = getEngineSettingsForInstrument(instrument);
+    var settingsHash = hashObject(instrument.settings || {});
+    var engineSettingsHash = hashObject(engineSettings.value);
+    var ok = !expected || actual === expected;
+    if (shouldLog || !ok) {
+      logEvent('audio', 'SSLI runtime inst=' + current.id + ' type=' + actual + ' expected=' + expected + ' settings=' + settingsHash + ' engineSettings=' + engineSettingsHash + (ok ? '' : ' MISMATCH'));
+    }
+    return ok;
+  }
+
+  function ensureSsliPracticeVolume(SL, inst, targetVolume) {
     if (!SL || !SL.audio || !SL.audio.getInstruments) return;
     var instruments = SL.audio.getInstruments() || [];
     var instrument = instruments[inst] || {};
     var settings = instrument.settings || {};
     var currentVolume = typeof settings.volume === 'number' ? settings.volume : null;
-    var targetVolume = 100;
-    if (SL.audio.setInstrumentVolume && (currentVolume === null || currentVolume < targetVolume)) {
+    targetVolume = typeof targetVolume === 'number' ? targetVolume : 100;
+    if (SL.audio.setInstrumentVolume && (currentVolume === null || Math.abs(currentVolume - targetVolume) >= 1)) {
       SL.audio.setInstrumentVolume(inst, targetVolume);
       logEvent('audio', 'SSLI instrument inst=' + inst + ' type=' + (instrument.type || 'unknown') + ' volume=' + (currentVolume === null ? 'unset' : currentVolume) + '->' + targetVolume);
     } else {
@@ -521,23 +812,54 @@
 
   function ensureSsliPracticeOutputBoost(SL) {
     if (!SL || !SL.audio || !SL.audio.getCtx || !SL.audio.getFinalDestination) return false;
-    if (SL.__exquisPracticeOutputBoost && SL.audio.getFinalDestination.__exquisBoosted) return true;
-    var ctx = SL.audio.getCtx();
-    if (!ctx || !ctx.createGain) return false;
-    var originalGetFinalDestination = SL.audio.getFinalDestination;
-    var originalDestination = originalGetFinalDestination.call(SL.audio);
-    if (!originalDestination) return false;
-    var boost = ctx.createGain();
-    boost.gain.value = SSLI_PRACTICE_OUTPUT_GAIN;
-    boost.connect(originalDestination);
-    SL.__exquisPracticeOutputBoost = boost;
-    SL.__exquisOriginalGetFinalDestination = originalGetFinalDestination;
-    SL.audio.getFinalDestination = function() {
-      return SL.__exquisPracticeOutputBoost || originalGetFinalDestination.call(SL.audio);
-    };
-    SL.audio.getFinalDestination.__exquisBoosted = true;
-    logEvent('audio', 'SSLI output boost gain=' + SSLI_PRACTICE_OUTPUT_GAIN);
+    if (!SL.__exquisPracticeOutputBoost || !SL.audio.getFinalDestination.__exquisBoosted) {
+      var ctx = SL.audio.getCtx();
+      if (!ctx || !ctx.createGain) return false;
+      var originalGetFinalDestination = SL.audio.getFinalDestination;
+      var originalDestination = originalGetFinalDestination.call(SL.audio);
+      if (!originalDestination) return false;
+      var boost = ctx.createGain();
+      boost.gain.value = SSLI_PRACTICE_OUTPUT_GAIN;
+      boost.connect(originalDestination);
+      SL.__exquisPracticeOutputBoost = boost;
+      SL.__exquisOriginalGetFinalDestination = originalGetFinalDestination;
+      SL.audio.getFinalDestination = function() {
+        return SL.__exquisPracticeOutputBoost || originalGetFinalDestination.call(SL.audio);
+      };
+      SL.audio.getFinalDestination.__exquisBoosted = true;
+      logEvent('audio', 'SSLI output boost gain=' + SSLI_PRACTICE_OUTPUT_GAIN);
+    }
+    if (SL.audio.getInstruments) {
+      (SL.audio.getInstruments() || []).forEach(function(instrument) {
+        if (instrument) instrument.masterOutput = SL.__exquisPracticeOutputBoost;
+      });
+    }
     return true;
+  }
+
+  window.__exquisPrepareSsliOutputBoost = function() {
+    var host = getSsliHost();
+    var SL = host && host.SynthLab;
+    return ensureSsliPracticeOutputBoost(SL);
+  };
+
+  function setSsliPracticeOutputGain(SL, gain, reason) {
+    if (!SL || !SL.__exquisPracticeOutputBoost || !SL.__exquisPracticeOutputBoost.gain) {
+      logEvent('audio', 'SSLI output boost unavailable' + (reason ? ' ' + reason : ''));
+      return false;
+    }
+    gain = Math.max(0.02, Math.min(SSLI_PRACTICE_OUTPUT_GAIN, gain));
+    var current = SL.__exquisPracticeOutputBoost.gain.value;
+    if (Math.abs(current - gain) < 0.01) return true;
+    SL.__exquisPracticeOutputBoost.gain.value = gain;
+    logEvent('audio', 'SSLI output boost gain=' + gain.toFixed(2) + (reason ? ' ' + reason : ''));
+    return true;
+  }
+
+  function ssliPracticeOutputGain(SL) {
+    if (!SL || !SL.__exquisPracticeOutputBoost || !SL.__exquisPracticeOutputBoost.gain) return 'n/a';
+    var value = SL.__exquisPracticeOutputBoost.gain.value;
+    return typeof value === 'number' ? value.toFixed(2) : String(value);
   }
 
   function ensureSsliAudioReady(SL) {
@@ -668,8 +990,40 @@
     };
   }
 
-  function playableSsliMidiVelocity(velocity) {
-    return 127;
+  function playableSsliMidiVelocity(instrumentType) {
+    return instrumentType === 'fm' ? SSLI_FM_SUSTAINED_NOTE_VELOCITY : SSLI_SUSTAINED_NOTE_VELOCITY;
+  }
+
+  function heldSsliVoiceCount() {
+    var count = 0;
+    Object.keys(midiVoices).forEach(function(key) {
+      if (midiVoices[key] && midiVoices[key].ssli) count += 1;
+    });
+    return count;
+  }
+
+  function effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices) {
+    var held = Math.max(0, Math.round(heldPhysicalVoices || 0));
+    if (held <= 0) return 0;
+    var nowMs = Date.now();
+    var recentPhysicalVoices = 0;
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (!voice || !voice.ssli || voice.instrumentType !== 'physical') return;
+      if (nowMs - (voice.startedAt || 0) <= PHYSICAL_SIMULTANEOUS_ONSET_MS) recentPhysicalVoices += 1;
+    });
+    if (recentPhysicalVoices === held && held < PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES) return 0;
+    return held;
+  }
+
+  function playablePhysicalMidiVelocity(velocity, heldPhysicalVoices) {
+    var raw = Math.max(1, Math.min(127, Math.round(velocity || 1)));
+    var held = Math.max(0, Math.min(6, Math.round(heldPhysicalVoices || 0)));
+    var scales = [1, 0.72, 0.56, 0.42, 0.3, 0.22, 0.18];
+    var voiceLoadScale = scales[held] || 0.18;
+    var cap = Math.max(42, Math.round(96 * voiceLoadScale));
+    var floor = Math.max(32, Math.round(48 * voiceLoadScale));
+    return Math.max(floor, Math.min(cap, Math.round(raw * 1.5 * voiceLoadScale)));
   }
 
   function forgetHeldVoiceKey(key) {
@@ -700,13 +1054,30 @@
     }
   }
 
-  function setSsliMidiExpression(pressure) {
+  function setSsliMidiExpression(pressure, force) {
+    pressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
+    if (!force && lastSsliExpressionPressure !== null && Math.abs(pressure - lastSsliExpressionPressure) < SSLI_EXPRESSION_PRESSURE_STEP) {
+      skippedSsliExpressionUpdates += 1;
+      if (skippedSsliExpressionUpdates === 1 || skippedSsliExpressionUpdates % 16 === 0) {
+        logEvent('audio', 'SSLI expression skipped pressure=' + pressure + ' last=' + lastSsliExpressionPressure + ' skipped=' + skippedSsliExpressionUpdates);
+      }
+      return true;
+    }
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.setExpression) return false;
     var SL = host.SynthLab;
     ensureSsliAudioReady(SL);
     var expression = pressureToSsliExpression(pressure);
+    var activeSsliVoices = heldSsliVoiceCount();
+    var instrumentType = getCurrentSsliInstrumentType(SL);
+    if (activeSsliVoices >= 5) {
+      expression.gain = expression.gain * (instrumentType === 'fm' ? SSLI_FM_EXPRESSION_GAIN_SCALE_POLY : SSLI_EXPRESSION_GAIN_SCALE_POLY);
+    } else if (activeSsliVoices >= 3) {
+      expression.gain = expression.gain * SSLI_EXPRESSION_GAIN_SCALE_MID;
+    }
     SL.audio.setExpression(expression.cutoffHz, expression.gain);
+    lastSsliExpressionPressure = pressure;
+    skippedSsliExpressionUpdates = 0;
     logEvent('audio', 'SSLI expression pressure=' + pressure + ' cutoff=' + Math.round(expression.cutoffHz) + 'Hz gain=' + expression.gain.toFixed(2));
     return true;
   }
@@ -722,7 +1093,45 @@
     return strongest;
   }
 
+  function updatePhysicalPerNotePressure(key, pressure) {
+    var held = state.heldNotes[key];
+    if (!held) return false;
+    var nowMs = Date.now();
+    var host = getSsliHost();
+    var SL = host && host.SynthLab;
+    var inst = SL && SL.audio && SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    var shapedPressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
+    var voice = midiVoices[key];
+    if (voice && shapedPressure > 0 && typeof voice.lastPhysicalPressure === 'number') {
+      var pressureDelta = Math.abs(shapedPressure - voice.lastPhysicalPressure);
+      var elapsed = nowMs - (voice.lastPhysicalPressureAt || 0);
+      if (pressureDelta < PHYSICAL_PRESSURE_STEP && elapsed < PHYSICAL_PRESSURE_MIN_INTERVAL_MS) {
+        voice.skippedPhysicalPressure = (voice.skippedPhysicalPressure || 0) + 1;
+        if (voice.skippedPhysicalPressure === 1 || voice.skippedPhysicalPressure % 24 === 0) {
+          logEvent('audio', 'SSLI physical per-note pressure skipped ' + noteLabelFromMidi(held.midi) + ' pressure=' + shapedPressure + ' last=' + voice.lastPhysicalPressure + ' skipped=' + voice.skippedPhysicalPressure);
+        }
+        return true;
+      }
+    }
+    if (!SL || !SL.physical || !SL.physical.updateNotePressure) {
+      logEvent('audio', 'SSLI physical per-note pressure unavailable ' + noteLabelFromMidi(held.midi) + ' pressure=' + shapedPressure + ' channel=' + (typeof held.channel === 'number' ? held.channel + 1 : held.channel));
+      return false;
+    }
+    SL.physical.updateNotePressure(held.midi, shapedPressure, inst);
+    if (voice) {
+      voice.lastPhysicalPressure = shapedPressure;
+      voice.lastPhysicalPressureAt = nowMs;
+      voice.skippedPhysicalPressure = 0;
+    }
+    logEvent('audio', 'SSLI physical per-note pressure updated ' + noteLabelFromMidi(held.midi) + ' pressure=' + shapedPressure + ' channel=' + (typeof held.channel === 'number' ? held.channel + 1 : held.channel));
+    return true;
+  }
+
   function updateSsliExpressionFromHeldNotes() {
+    var host = getSsliHost();
+    if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
+      return false;
+    }
     var strongest = strongestHeldMidiPressure();
     if (strongest > 0) {
       setSsliMidiExpression(strongest);
@@ -736,6 +1145,8 @@
     var host = getSsliHost();
     if (host && host.SynthLab && host.SynthLab.audio && host.SynthLab.audio.clearExpression) {
       host.SynthLab.audio.clearExpression();
+      lastSsliExpressionPressure = null;
+      skippedSsliExpressionUpdates = 0;
       logEvent('audio', 'SSLI expression cleared');
       return true;
     }
@@ -755,6 +1166,7 @@
       return midiVoices[key] && midiVoices[key].ssli;
     });
     if (hasHeldSsliVoice) return false;
+    cleanupPhysicalEngineIfMidiIdle();
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopAllSustained) return false;
     var SL = host.SynthLab;
@@ -769,23 +1181,102 @@
     return true;
   }
 
+  function cleanupPhysicalEngineIfMidiIdle() {
+    var host = getSsliHost();
+    if (!host || !host.SynthLab || !host.SynthLab.audio) return false;
+    var SL = host.SynthLab;
+    return cleanupSsliEngineVoices(SL, 'after MIDI idle');
+  }
+
+  function reconcileSsliSustainedVoices(reason) {
+    var host = getSsliHost();
+    if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopSustainedNote) return;
+    var activeOscs = getSsliActiveOscillators();
+    if (!activeOscs || !activeOscs.forEach) return;
+    var liveMidis = localSsliVoiceMidiSet();
+    activeOscs.forEach(function(node, midi) {
+      if (!liveMidis[midi]) {
+        host.SynthLab.audio.stopSustainedNote(Number(midi));
+        logEvent('audio', 'reconciled stale SSLI voice ' + noteLabelFromMidi(Number(midi)) + ' after ' + reason);
+      }
+    });
+  }
+
+  function releaseDuplicateMidiVoices(midi, nextKey) {
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (!voice || voice.midi !== midi || key === nextKey) return;
+      forgetHeldVoiceKey(key);
+      releaseMidiVoice(key, true);
+      logEvent('audio', 'released duplicate MIDI voice ' + noteLabelFromMidi(midi) + ' from ' + key);
+    });
+  }
+
   function startSustainedWithSsli(midi, velocity) {
     var host = getSsliHost();
-    if (!host) return false;
+    if (!host) {
+      logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': missing runtime host');
+      return false;
+    }
     var SL = host.SynthLab;
-    if (!SL || !SL.audio || !SL.audio.startSustainedNote) return false;
+    var readiness = describeSsliReadiness(SL, 'midi');
+    if (readiness !== 'ready') {
+      logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': ' + readiness);
+      return false;
+    }
     ensureSsliAudioReady(SL);
-    applySelectedSsliPreset();
+    if (!applySelectedSsliPreset()) {
+      logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
+      return false;
+    }
     if (state.filterDirty) applySelectedSsliFilter();
     if (state.fxDirty) applySelectedSsliFxChain();
     var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
-    ensureSsliPracticeVolume(SL, inst);
+    var preset = getSsliPresetPayload(SL);
+    verifySsliPresetRuntime(SL, preset, true);
     ensureSsliPracticeOutputBoost(SL);
-    var playableVelocity = playableSsliMidiVelocity(velocity);
+    var instrumentType = getCurrentSsliInstrumentType(SL);
+    var heldPhysicalVoices = instrumentType === 'physical' ? heldSsliVoiceCount() : 0;
+    if (instrumentType === 'physical') {
+      var physicalVoiceCount = heldPhysicalVoices + 1;
+      ensureSsliPracticeVolume(SL, inst, 100);
+      var targetPhysicalGain = physicalVoiceCount >= 5 ? SSLI_PHYSICAL_OUTPUT_GAIN_POLY : (physicalVoiceCount >= 3 ? SSLI_PHYSICAL_OUTPUT_GAIN_MID : SSLI_PHYSICAL_OUTPUT_GAIN_SOLO);
+      setSsliPracticeOutputGain(SL, targetPhysicalGain, 'physicalVoices=' + physicalVoiceCount);
+    } else {
+      var nonPhysicalVoiceCount = heldSsliVoiceCount() + 1;
+      var targetInstrumentVolume = nonPhysicalVoiceCount >= 5 ? 55 : (nonPhysicalVoiceCount >= 3 ? 80 : 100);
+      var settings = preset && preset.settings ? preset.settings : {};
+      var liveInstruments = SL.audio.getInstruments ? SL.audio.getInstruments() || [] : [];
+      var liveSettings = liveInstruments[inst] && liveInstruments[inst].settings ? liveInstruments[inst].settings : {};
+      var presetNoiseLevel = settings.noise ? Number(settings.noise.level || 0) : 0;
+      var liveNoiseLevel = liveSettings.noise ? Number(liveSettings.noise.level || 0) : 0;
+      var selectedNoiseClass = /noise/i.test(String(state.soundCategory || '') + ' ' + String(state.soundPresetId || ''));
+      var isHighNoisePreset = selectedNoiseClass || Math.max(presetNoiseLevel, liveNoiseLevel) >= 80;
+      if (isHighNoisePreset) targetInstrumentVolume = Math.min(targetInstrumentVolume, 24);
+      ensureSsliPracticeVolume(SL, inst, targetInstrumentVolume);
+      var targetPracticeGain = nonPhysicalVoiceCount >= 5 ? SSLI_PRACTICE_OUTPUT_GAIN_POLY : (nonPhysicalVoiceCount >= 2 ? SSLI_PRACTICE_OUTPUT_GAIN_MID : SSLI_PRACTICE_OUTPUT_GAIN);
+      if (instrumentType === 'fm') targetPracticeGain = Math.min(targetPracticeGain, SSLI_PRACTICE_OUTPUT_GAIN_MID);
+      if (instrumentType === 'fm' && nonPhysicalVoiceCount >= 5) targetPracticeGain = SSLI_FM_OUTPUT_GAIN_POLY;
+      if (isHighNoisePreset) targetPracticeGain = Math.min(targetPracticeGain, 0.026);
+      setSsliPracticeOutputGain(SL, targetPracticeGain, 'engine=' + instrumentType + ' voices=' + nonPhysicalVoiceCount);
+    }
+    var physicalModel = instrumentType === 'physical' ? getCurrentPhysicalModel(SL) : '';
+    var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices) : 0;
+    var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(instrumentType);
+    if (physicalModel === 'strike') {
+      playableVelocity = Math.max(8, Math.round(playableVelocity * 0.25));
+    }
+    if (instrumentType === 'physical') {
+      logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel);
+    }
     SL.audio.startSustainedNote(midi, playableVelocity);
-    setSsliMidiExpression(Math.max(1, velocity || 1));
+    if (instrumentType === 'physical') {
+      logEvent('audio', 'SSLI physical note-on pressure captured ' + noteLabelFromMidi(midi) + ' pressure=' + Math.max(1, velocity || 1) + ' audioUpdate=note-on-velocity-only');
+    } else {
+      setSsliMidiExpression(Math.max(1, strongestHeldMidiPressure(), velocity || 1));
+    }
     state.audioStatus = 'Audio: SSLI held ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId);
+    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId + ' boost=' + ssliPracticeOutputGain(SL));
     startAudioScope();
     render();
     return true;
@@ -794,6 +1285,7 @@
   function stopSustainedWithSsli(midi) {
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopSustainedNote) return false;
+    var SL = host.SynthLab;
     host.SynthLab.audio.stopSustainedNote(midi);
     logEvent('audio', 'SSLI MIDI sustain stop ' + noteLabelFromMidi(midi));
     return true;
@@ -1195,7 +1687,12 @@
     releaseMidiVoice(key, true);
     pruneMidiVoiceBudget(key);
     if (startSustainedWithSsli(midi, Math.max(1, velocity))) {
-      midiVoices[key] = { midi: midi, ssli: true, startedAt: Date.now() };
+      var host = getSsliHost();
+      var SL = host && host.SynthLab;
+      midiVoices[key] = { midi: midi, ssli: true, instrumentType: SL ? getCurrentSsliInstrumentType(SL) : '', startedAt: Date.now() };
+      reconcileSsliSustainedVoices('start ' + noteLabelFromMidi(midi));
+      logMidiVoiceStats('after-start ' + noteLabelFromMidi(midi));
+      logSsliAudioHealth('after-start ' + noteLabelFromMidi(midi));
       return;
     }
     var ctx = ensureAudio();
@@ -1236,6 +1733,11 @@
     var voice = midiVoices[key];
     if (!voice) return;
     if (voice.ssli) {
+      var host = getSsliHost();
+      if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
+        updatePhysicalPerNotePressure(key, pressure);
+        return;
+      }
       updateSsliExpressionFromHeldNotes();
       return;
     }
@@ -1254,8 +1756,11 @@
     if (voice && voice.ssli) {
       stopSustainedWithSsli(voice.midi);
       delete midiVoices[key];
+      reconcileSsliSustainedVoices('release ' + noteLabelFromMidi(voice.midi));
       cleanupSsliSustainedVoicesIfMidiIdle();
       clearSsliMidiExpressionIfIdle();
+      logMidiVoiceStats('after-stop ' + noteLabelFromMidi(voice.midi));
+      logSsliAudioHealth('after-stop ' + noteLabelFromMidi(voice.midi));
       return;
     }
     if (!voice || !audioCtx) return;
@@ -1800,6 +2305,7 @@
       releaseMidiVoice(previousKey, true);
       logEvent('audio', 'released previous channel voice ' + noteLabelFromMidi(previousMidi) + ' before ' + noteLabelFromMidi(midi));
     }
+    releaseDuplicateMidiVoices(midi, heldKey);
     state.heldNotes[heldKey] = {
       midi: midi,
       rawMidi: rawMidi,
@@ -1998,7 +2504,7 @@
   }
 
   function renderSoundSelectorOptions() {
-    var engines = getSoundEngines();
+    var engines = getVisibleSoundEngines();
     appendOptions(els.soundEngine, engines.map(function(engine) { return { id: engine, label: engine }; }), 'id', 'label');
     if (engines.indexOf(state.soundEngine) < 0) state.soundEngine = engines[0] || '';
     els.soundEngine.value = state.soundEngine;
@@ -2312,6 +2818,12 @@
       applySelectedSsliPreset();
       logEvent('audio', 'sound preset ' + state.soundPresetId);
     });
+    els.showAllEngines.addEventListener('change', function() {
+      state.showAllEngines = els.showAllEngines.checked;
+      invalidateSsliPresetCache();
+      renderSoundSelectorOptions();
+      logEvent('audio', 'show all sound engines ' + (state.showAllEngines ? 'on' : 'off'));
+    });
     els.fxCategory.addEventListener('change', function() {
       state.fxCategory = els.fxCategory.value;
       state.fxPresetId = '';
@@ -2362,12 +2874,14 @@
     els.testAudio.addEventListener('click', playTestTone);
     els.playScale.addEventListener('click', playPath);
     els.enableMidi.addEventListener('click', enableMidi);
+    els.audioDiag.addEventListener('click', function() { logSsliAudioHealth('manual'); });
     els.resetConsole.addEventListener('click', resetConsole);
     els.copyConsole.addEventListener('click', copyConsole);
     els.exitConsole.addEventListener('click', exitConsole);
     window.addEventListener('pointerup', releaseAllUiKeys);
     window.addEventListener('blur', releaseAllUiKeys);
     window.addEventListener('resize', function() {
+      render();
       if (resizeTimer) window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(function() {
         render();
@@ -2407,6 +2921,7 @@
       soundEngine: document.getElementById('soundEngineSelect'),
       soundCategory: document.getElementById('soundCategorySelect'),
       soundPreset: document.getElementById('soundPresetSelect'),
+      showAllEngines: document.getElementById('showAllEngines'),
       fxCategory: document.getElementById('fxCategorySelect'),
       fxPreset: document.getElementById('fxPresetSelect'),
       filterType: document.getElementById('filterTypeSelect'),
@@ -2443,6 +2958,7 @@
       clearCalibration: document.getElementById('clearCalibration'),
       consolePanel: document.getElementById('consolePanel'),
       diagnosticLog: document.getElementById('diagnosticLog'),
+      audioDiag: document.getElementById('audioDiag'),
       resetConsole: document.getElementById('resetConsole'),
       copyConsole: document.getElementById('copyConsole'),
       exitConsole: document.getElementById('exitConsole')
@@ -2463,15 +2979,20 @@
     els.filterType.value = state.filterType;
     els.filterCutoff.value = String(state.filterCutoff);
     els.filterResonance.value = String(state.filterResonance);
+    els.showAllEngines.checked = state.showAllEngines;
     els.autoAdvance.checked = state.autoAdvance;
     bindEvents();
+    ensureFreshSsliFrame();
     var ssliFrame = document.getElementById('ssliEngineFrame');
     if (ssliFrame) {
       ssliFrame.addEventListener('load', function() {
         renderSoundSelectorOptions();
         syncSoundSelectorsFromPreset();
         render();
-        logEvent('audio', 'SSLI runtime preset API ready');
+        var host = getSsliHost();
+        var readiness = host && host.SynthLab ? describeSsliReadiness(host.SynthLab, 'apply') : 'missing runtime host';
+        logEvent('audio', 'SSLI runtime preset API ' + readiness);
+        if (readiness === 'ready') applySelectedSsliPreset();
       });
     }
     render();

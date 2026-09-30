@@ -67,6 +67,7 @@ var SINE_TABLE_MASK = SINE_TABLE_SIZE - 1;
 
 // Per-voice output scaling; keeps multi-voice sum below clipping
 var VOICE_OUTPUT_GAIN = 0.18;
+var POLY_MIX_EXPONENT = 1.0;
 
 // ============================================================
 // DX7 Envelope Generator
@@ -940,11 +941,15 @@ class FMWorkletProcessor extends AudioWorkletProcessor {
     var voices = this.voices;
     var bufLen = channel.length;
 
-    // Per-sample loop: sum all active voices, then soft-clip
+    // Per-sample loop: sum all active voices, then soft-clip.
+    // Normalize dense polyphony before the limiter so six-note MPE
+    // playing keeps independent voices without driving the mix into
+    // constant saturation.
+    var voiceMixGain = VOICE_OUTPUT_GAIN / Math.pow(Math.max(1, aviLen), POLY_MIX_EXPONENT);
     for (var s = 0; s < bufLen; s++) {
       var sample = 0;
       for (var v = 0; v < aviLen; v++) {
-        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN;
+        sample += voices[avi[v]].process() * voiceMixGain;
       }
       // Global soft clipper: Pade approximant of tanh
       // Keeps output in [-1, +1] with smooth saturation curve

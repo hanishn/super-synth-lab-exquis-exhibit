@@ -1,6 +1,6 @@
-// Super Synth Lab - Physical Modelling AudioWorklet Processor
+﻿// Super Synth Lab - Physical Modelling AudioWorklet Processor
 // Karplus-Strong, Bowed String, Blown Pipe, Modal Synthesis
-// v1.1.3 — fix: per-voice gain scaling + smooth soft clipper for chord headroom
+// v1.1.4 - fix: bounded pluck output for independent poly-aftertouch voices
 //
 // ================================================================
 // EDUCATIONAL CONTEXT: Physical Modelling DSP (AudioWorklet)
@@ -30,7 +30,7 @@
 // Per-voice output gain — keeps 4 simultaneous voices under the
 // soft-clipper knee (~0.9). 4 voices * 0.22 = 0.88 peak sum.
 var PHYS_VOICE_OUTPUT_GAIN = 0.22;
-var PLUCK_OUTPUT_SCALE = 3.0;
+var PLUCK_OUTPUT_SCALE = 1.5;
 // Pre-computed sine lookup table: avoids calling Math.sin() at audio
 // rate. Size is a power of 2 (4096) so we can use bitwise AND with
 // PHYS_SINE_MASK for fast modular indexing. At 4096 entries, the
@@ -1209,6 +1209,8 @@ class PhysicalVoice {
     this.midiNote = -1;
     this.instId = 0;
     this.modelType = 'pluck';
+    this.pressureGain = 1;
+    this.targetPressureGain = 1;
 
     // One of each model type (reused per voice)
     this.pluck = new PluckModel(sampleRate);
@@ -1223,6 +1225,8 @@ class PhysicalVoice {
     this.midiNote = midiNote;
     this.instId = settings.instId || 0;
     this.modelType = settings.model || 'pluck';
+    this.pressureGain = 1;
+    this.targetPressureGain = 1;
 
     // Select model and apply parameters
     switch (this.modelType) {
@@ -1272,9 +1276,22 @@ class PhysicalVoice {
     }
   }
 
+  setPressure(pressure) {
+    var normalized = Math.max(0, Math.min(127, pressure || 0)) / 127;
+    // Plucked strings already got their energy at note-on. Deep pressure-gain
+    // modulation on six active resonators sounds like zippering during release,
+    // so keep aftertouch shallow: still per-note, but never a volume pedal.
+    if (this.modelType === 'pluck') {
+      this.targetPressureGain = Math.max(0.95, Math.min(1.0, 0.95 + normalized * 0.05));
+    } else {
+      this.targetPressureGain = Math.max(0.2, Math.min(1.0, 0.2 + normalized * 0.8));
+    }
+  }
+
   process() {
     if (!this.active) return 0;
     var sample = this.currentModel.process();
+    this.pressureGain += (this.targetPressureGain - this.pressureGain) * 0.08;
     var isPluck = (this.modelType === 'pluck');
     if (isPluck) {
       sample = sample * PLUCK_OUTPUT_SCALE;
@@ -1282,7 +1299,7 @@ class PhysicalVoice {
     if (this.currentModel.isFinished()) {
       this.active = false;
     }
-    return sample;
+    return sample * this.pressureGain;
   }
 }
 
@@ -1335,6 +1352,10 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
         this.stopNote(data.midiNote, data.instId);
         break;
 
+      case 'notePressure':
+        this.updateNotePressure(data.midiNote, data.pressure, data.instId);
+        break;
+
       case 'allNotesOff':
         this.stopAllNotes(data.instId);
         break;
@@ -1383,6 +1404,16 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       var isWorkletMatchingVoice = v.active && v.midiNote === midiNote && v.instId === instId;
       if (isWorkletMatchingVoice) {
         v.noteOff();
+      }
+    }
+  }
+
+  updateNotePressure(midiNote, pressure, instId) {
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      var isMatchingVoice = v.active && v.midiNote === midiNote && v.instId === instId;
+      if (isMatchingVoice) {
+        v.setPressure(pressure);
       }
     }
   }
@@ -1444,10 +1475,12 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       return true;
     }
 
+    var polyphonyMixGain = numActive > 4 ? 4 / numActive : 1;
+    var effectiveVoiceGain = PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain;
     for (var s = 0; s < channel.length; s++) {
       var sample = 0;
       for (var a = 0; a < numActive; a++) {
-        sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN;
+        sample += voices[active[a]].process() * effectiveVoiceGain;
       }
       // Pade [3/3] approximant of tanh for soft clipping (always-on):
       //   tanh(x) ~ x * (27 + x^2) / (27 + 9*x^2)

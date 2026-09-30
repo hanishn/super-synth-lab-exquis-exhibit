@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+challenge_file="$repo_root/.git/github-action-passcode"
+
+if [ ! -f "$challenge_file" ]; then
+  nonce="$(date +%Y%m%d%H%M%S)-$$"
+  printf '%s\n' "$nonce" > "$challenge_file"
+fi
+
+expected="AUTHORIZE-GITHUB-ACTION-$(cat "$challenge_file")"
+provided="${SSLI_EXQUIS_GITHUB_ACTION_PASSCODE:-}"
+
+if [ "$provided" = "$expected" ]; then
+  rm -f "$challenge_file"
+  echo "GitHub action passcode accepted for this push."
+  exit 0
+fi
+
+cat >&2 <<EOF
+BLOCKED: GitHub push requires explicit user passcode authorization.
+
+This repository is protected against accidental GitHub actions by agents.
+Ask the user for this exact call/response approval:
+
+  $expected
+
+Then run the push with:
+
+  SSLI_EXQUIS_GITHUB_ACTION_PASSCODE="$expected" git push ...
+
+This passcode is one-time. A successful push consumes it.
+EOF
+exit 1

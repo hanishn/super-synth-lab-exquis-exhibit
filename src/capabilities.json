@@ -12,6 +12,11 @@
         "renders exactly 61 keys",
         "all keys display note names and octave markers",
         "changing tonic recomputes highlighted keys without reloading"
+      ],
+      "testIds": [
+        "test_regression_exquis_grid_octaves_match_c3_to_c4_practice_range",
+        "test_regression_hex_neighbors_touch_without_gaps_or_overlap",
+        "test_regression_default_c_major_leds_match_product_photo"
       ]
     },
     {
@@ -30,6 +35,11 @@
         "octave labels are derived from chromatic semitone row math with alternating vertical third row starts, not note-name special cases",
         "every physical key matching the selected tonic pitch class is shown as tonic/root-colored, not only the selected practice root",
         "current drill note is visually distinct"
+      ],
+      "testIds": [
+        "test_regression_practice_lights_only_two_exquis_chains",
+        "test_regression_scale_path_ascends_root_to_octave",
+        "test_regression_all_c_keys_are_tonic_in_default_c_major"
       ]
     },
     {
@@ -43,6 +53,11 @@
         "left and right hand fingering modes are selectable",
         "4-finger ladder, thumb-assisted, and position-shift strategies are selectable",
         "finger legend remains visible on desktop and mobile widths"
+      ],
+      "testIds": [
+        "test_regression_fingering_labels_only_two_lit_chains",
+        "test_regression_fingering_labels_are_valid_for_visible_path",
+        "test_regression_selected_root_keeps_first_fingering_assignment"
       ]
     },
     {
@@ -55,6 +70,10 @@
         "two tonic/scale states can be compared",
         "shared buttons and moved buttons have distinct colors",
         "comparison mode never obscures the current practice path"
+      ],
+      "testIds": [
+        "test_tonic_change_updates_title_and_current_note",
+        "test_regression_hardware_lit_keys_are_all_in_selected_key"
       ]
     },
     {
@@ -73,6 +92,12 @@
         "test tone uses the boosted local output bus and local analyser even when SSLI is available",
         "test tone produces a visibly non-flat waveform and leaves a readable peak trace after playback",
         "preview and path audio can still exercise SSLI one-shot playback"
+      ],
+      "testIds": [
+        "test_regression_test_tone_uses_loud_local_output",
+        "test_regression_test_tone_bypasses_ssli_and_drives_local_scope",
+        "test_regression_test_tone_scope_draws_visible_waveform",
+        "test_regression_real_test_tone_drives_scope_without_mocked_audio_context"
       ]
     },
     {
@@ -90,6 +115,12 @@
         "incoming notes highlight only keys whose full MIDI note number exactly equals the event, not every matching pitch class across octaves",
         "MIDI touch, hit, and aftertouch feedback never falls back to octave-duplicate pitch-class highlights",
         "wrong-path notes are reported without stopping practice"
+      ],
+      "testIds": [
+        "test_mock_midi_note_marks_calibration",
+        "test_regression_midi_highlight_matches_exact_note_only",
+        "test_regression_mpe_channel_reuse_releases_previous_voice",
+        "test_regression_four_note_physical_voices_track_pressure_independently_without_global_expression"
       ]
     },
     {
@@ -103,6 +134,10 @@
         "expected note and received MIDI note are shown side by side",
         "calibrated maps can be exported or stored once storage permission is enabled",
         "practice mode can switch between theoretical and calibrated maps"
+      ],
+      "testIds": [
+        "test_regression_midi_highlight_matches_exact_note_only",
+        "test_regression_exquis_raw_midi_is_not_octave_transposed"
       ]
     },
     {
@@ -116,6 +151,10 @@
         "wrong notes increment misses and reset streak",
         "auto-advance can be toggled",
         "score can be reset by clearing the session"
+      ],
+      "testIds": [
+        "test_mock_midi_note_marks_calibration",
+        "test_exquis_mpe_note_sequence_scores_and_advances"
       ]
     },
     {
@@ -143,23 +182,48 @@
         "audio preset, FX, and filter controls are visible in the main practice view",
         "all primary sound and practice controls remain visible without document scrolling at laptop size",
         "SSLI presets are selected through engine, category, and preset controls",
+        "SSLI engine selection defaults to mature engines only: Subtractive, Physical, and FM, with a Show all opt-in for experimental engines",
+        "FX category and FX preset controls appear on the same visual row so the FX chain reads as one grouped decision",
         "when SSLI is available, sound selector engines, categories, and presets are populated from the live SynthLab.presets API rather than the exhibit fallback bundle",
         "selected sound presets are applied through the real SSLI preset/audio API when SSLI is available",
         "SSLI app support files and audio worklet assets are served with the hidden SSLI engine host",
         "selected SSLI engines are initialized before preset playback",
         "selected SSLI presets mutate the actual SSLI instrument type/settings used for playback rather than only changing labels or logs",
+        "preset diagnostics intone selected SSLI presets and compare real analyser waveforms, spectrum hashes, engine type, and engine parameter hashes",
         "default exhibit filter and FX controls do not overwrite preset-owned filter/effect settings unless the user explicitly changes those controls",
         "runtime subtractive preset filter cutoff values above the SSLI slider range are normalized before WebAudio playback",
         "physical-model presets preserve their runtime physical settings during preview, including Physical / Plucked / Koto",
+        "Physical-model MIDI playback stays on SSLI sustained-note tracking while passing the intended velocity into the physical engine",
+        "when Physical-model MIDI playback becomes idle, the physical engine receives all-notes-off cleanup so resonator tails cannot accumulate into noise",
+        "Physical-model MIDI pressure uses native model dynamics and does not drive the global SSLI expression filter/gain path",
+        "Physical-model MIDI playback uses shaped Exquis note-on velocity instead of forcing every note to maximum velocity, preventing physical triads from overloading",
+        "Physical-model MIDI playback uses general independent-voice headroom so simultaneous and sequential notes preserve pitch identity, remain audible, and avoid sustained clipping",
+        "Physical-model MIDI behavior must not depend on note names, intervals, preset names, or special-case two-note exceptions",
+        "Physical pluck headroom is handled by the general worklet output path without note-name, interval, or preset-specific exceptions",
+        "dense Subtractive and FM MIDI playback scales later independent voice velocities and expression gain so six-note poly-aftertouch practice does not overload the synth engine",
+        "Physical strike-model MIDI playback receives additional model-specific velocity shaping because struck resonators clip under six-note stress at pluck/bow velocity levels",
+        "Physical-model MIDI poly-aftertouch is applied per held note through SSLI physical updateNotePressure and must never be collapsed into a shared global physical pressure value",
+        "SSLI physical worklet voices expose independent per-note pressure gain so Exquis pressure changes affect only the matching active note",
+        "Plucked physical presets receive bounded per-note pressure through SSLI updateNotePressure rather than an exhibit-side bypass or global expression path",
+        "Continuous and plucked physical models both preserve independent note ownership for pressure updates and note-off cleanup",
+        "SSLI physical worklet output scales summed polyphony above four active voices so six independent Exquis voices retain headroom instead of pushing the soft clipper continuously",
+        "Physical-model per-note pressure updates are rate-limited per held note so dense Exquis aftertouch streams do not overload the physical worklet while zero-pressure release remains immediate",
+        "Six-note physical pressure regressions are tested against the actual audible SSLI output using Playwright-driven MIDI and analyser metrics, not only mocked API call counts",
+        "Physical-model output must meet measured audible-output and headroom thresholds as held independent voice count changes",
+        "SSLI output routing adapters are validated by measured output behavior rather than treated as core sound architecture",
         "one-shot preview and path playback do not force maximum global expression over physical-model presets before triggering the note",
         "low-velocity Exquis note-on messages are promoted to an audible SSLI voice-start velocity",
         "diagnostic console is visible during practice with reset, copy, and exit controls",
+        "diagnostic console can capture SSLI audio health snapshots including active oscillators, voice pool stats, active node count, context state, latency, and scope peak",
+        "MIDI enablement is the first prominent side-rail action because connecting the Exquis is the first required user step",
         "Exquis MIDI note-on and note-off use SSLI sustained note APIs when SSLI is available",
         "MPE channel reuse releases the prior voice before starting the next note on that channel",
-        "when the last Exquis-held MIDI voice is released, SSLI receives an all-sustained-notes cleanup so stale runtime voices cannot jam later chord bursts",
+        "MPE same-note retriggers on a new channel release the previous SSLI owner for that exact MIDI note before starting the replacement voice",
+        "exact note-on/note-off ownership cleanup is required before the idle all-sustained-notes cleanup failsafe can run",
         "repeated Exquis note-on bursts do not reapply the selected SSLI preset or call stop-all-sustained for every note",
         "stale note-off messages for already-pruned voices are ignored instead of double-stopping voices or clearing current touch state",
         "global SSLI expression follows the strongest currently held Exquis pressure instead of collapsing when one held note reports pressure zero",
+        "dense Exquis pressure streams are coalesced so repeated near-identical aftertouch does not flood SSLI expression, logging, or rendering",
         "single-note pressure zero clears expression without falling back to the note-on velocity",
         "SSLI MIDI practice playback normalizes the active instrument volume through SynthLab.audio.setInstrumentVolume when a preset is too quiet",
         "SSLI MIDI practice playback wraps SynthLab.audio.getFinalDestination with a practice output boost so sustained-note voices are audible against the local test tone",
@@ -170,6 +234,18 @@
         "filter type, cutoff, and resonance update the current SSLI instrument filter settings when SSLI is available",
         "verbose diagnostics are demoted from the no-scroll practice view",
         "test tone output is loud enough to be a useful diagnostic reference against the selected synth preset"
+      ],
+      "testIds": [
+        "test_regression_no_scroll_layout_does_not_clip_right_rail",
+        "test_regression_enable_midi_is_first_prominent_side_rail_action",
+        "test_regression_console_actions_fit_on_one_row",
+        "test_regression_exquis_ui_is_visually_dominant",
+        "test_regression_physical_midi_pressure_does_not_call_global_expression",
+        "test_regression_physical_concurrent_voices_use_shaped_velocity_not_max_velocity",
+        "test_regression_four_note_physical_voices_track_pressure_independently_without_global_expression",
+        "test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine",
+        "test_regression_six_note_physical_pressure_flow_has_stable_final_audio_output",
+        "test_regression_adjacent_pluck_has_stable_audio_output"
       ]
     },
     {
@@ -183,10 +259,21 @@
         "sweep serves the built public exhibit over localhost so the hidden SSLI frame remains same-origin",
         "sweep enumerates presets from the live UI controls rather than hard-coded guesses",
         "sweep can filter by engine, category, and preset-name text for targeted regression checks",
+        "sweep can restrict to the mature default engines Subtractive, FM, and Physical",
+        "sweep can optionally run a one-per-category smoke pass that is not acceptance coverage",
+        "full mature-engine acceptance sweeps every live Subtractive, FM, and Physical preset; one-per-category smoke mode must not skip hard presets by preference table",
+        "sweep can drive six Exquis-style MIDI notes on independent channels with continuously varying pressure",
         "sweep writes JSON and CSV artifacts with engine, category, preset, status, diagnostic log excerpt, browser errors, SSLI instrument type/settings evidence, and live audio signature evidence",
         "sweep samples the SSLI analyser after playback and records waveform peak/RMS plus spectrum peak/RMS, waveform hash, and spectrum hash so preset output can be compared repeatably",
+        "six-note MIDI sweep samples the actual audible SSLI output and fails on silence, engine mismatches, material clipping, or missing voice cleanup",
         "sweep supports an explicit limit for smoke runs while defaulting to full coverage",
-        "unit tests verify the sweep harness and documentation are present"
+        "unit tests verify the sweep harness behavior, documented acceptance command, and JSON/CSV evidence fields are present"
+      ],
+      "testIds": [
+        "test_capabilities_document_repeatable_preset_sweep",
+        "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
+        "test_regression_preset_sweep_runs_mature_engine_category_poly_pressure_audio",
+        "test_regression_first_noise_industrial_preset_survives_six_note_poly_pressure_audio"
       ]
     }
   ]

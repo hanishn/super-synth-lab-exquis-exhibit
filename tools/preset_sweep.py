@@ -27,6 +27,23 @@ def parse_args():
     parser.add_argument("--engine", default="", help="Only sweep engines whose value or label contains this text.")
     parser.add_argument("--category", default="", help="Only sweep categories whose value or label contains this text.")
     parser.add_argument("--preset-contains", default="", help="Only sweep presets whose value or label contains this text.")
+    parser.add_argument("--preset-list-file", default="", help="JSON results/list file containing exact presets to rerun.")
+    parser.add_argument(
+        "--mature-engines-only",
+        action="store_true",
+        help="Sweep only Subtractive, FM, and Physical engines.",
+    )
+    parser.add_argument(
+        "--one-per-category",
+        action="store_true",
+        help="Smoke mode: keep only the first live preset found for each engine/category pair. Do not use as full acceptance.",
+    )
+    parser.add_argument(
+        "--trigger",
+        choices=["preview", "six-note-midi"],
+        default="preview",
+        help="Use normal preview playback or a six-note Exquis-style MIDI pressure run.",
+    )
     return parser.parse_args()
 
 
@@ -83,18 +100,75 @@ def contains_text(row, fields, needle):
 
 
 def filter_presets(presets, args):
-    return [
+    filtered = [
         preset
         for preset in presets
         if contains_text(preset, ("engine", "engineLabel"), args.engine)
         and contains_text(preset, ("category", "categoryLabel"), args.category)
         and contains_text(preset, ("preset", "presetLabel"), args.preset_contains)
     ]
+    if args.mature_engines_only:
+        mature = {"fm", "physical", "subtractive"}
+        filtered = [preset for preset in filtered if str(preset["engine"]).lower() in mature or str(preset["engineLabel"]).lower() in mature]
+    if args.preset_list_file:
+        wanted = load_preset_list(args.preset_list_file)
+        filtered = [preset for preset in filtered if preset_key(preset) in wanted]
+    if args.one_per_category:
+        groups = {}
+        for preset in filtered:
+            key = (preset["engine"], preset["category"])
+            groups.setdefault(key, []).append(preset)
+        filtered = [rows[0] for rows in groups.values()]
+    return filtered
 
 
-def diagnostic_tail(page):
-    text = page.locator('[data-testid="diagnostic-log"]').inner_text(timeout=1000)
+def preset_key(row):
+    return (
+        str(row.get("engine", "")),
+        str(row.get("category", "")),
+        str(row.get("preset", "")),
+    )
+
+
+def load_preset_list(path):
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows = payload.get("results", payload) if isinstance(payload, dict) else payload
+    wanted = set()
+    for row in rows:
+        if str(row.get("status", "")).lower() == "pass":
+            continue
+        wanted.add(preset_key(row))
+    return wanted
+
+
+def diagnostic_snapshot(page):
+    return page.evaluate(
+        """
+        () => {
+          const log = document.querySelector('[data-testid="diagnostic-log"]');
+          return log ? log.textContent.length : 0;
+        }
+        """
+    )
+
+
+def diagnostic_tail(page, since_length=0):
+    text = page.evaluate(
+        """
+        () => {
+          const log = document.querySelector('[data-testid="diagnostic-log"]');
+          return log ? log.textContent : '';
+        }
+        """
+    )
+    if since_length:
+        text = text[since_length:]
     return text.splitlines()[-12:]
+
+
+def clear_diagnostics(page):
+    page.locator('[data-testid="reset-console"]').click(timeout=1000)
+    page.wait_for_timeout(25)
 
 
 def is_benign_console_message(text):
@@ -138,29 +212,42 @@ def ssli_instrument_snapshot(page):
     )
 
 
-def ssli_audio_signature(page, sample_ms):
+def prepare_ssli_audio_probe(page):
     return page.evaluate(
         """
-        async (sampleMs) => {
+        () => {
           const frame = document.getElementById('ssliEngineFrame');
           const host = frame && frame.contentWindow && frame.contentWindow.SynthLab
             ? frame.contentWindow
             : window;
           const SL = host.SynthLab;
           if (!SL || !SL.audio) {
-            return { available: false, peak: 0, rms: 0, spectrumPeak: 0, spectrumRms: 0, waveformHash: '', spectrumHash: '', samples: 0 };
+            window.__presetSweepAudioProbe = { available: false, error: 'missing SynthLab.audio' };
+            return window.__presetSweepAudioProbe;
           }
           const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
-          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
-          if (instruments && instruments[inst] && instruments[inst]._analyserNode) {
-            try { instruments[inst]._analyserNode.disconnect(); } catch (err) {}
-            instruments[inst]._analyserNode = null;
-          }
           let analyser = null;
           if (SL.audio.getInstrumentAnalyser) analyser = SL.audio.getInstrumentAnalyser(inst);
           if (!analyser && SL.audio.getAnalyser) analyser = SL.audio.getAnalyser();
           if (!analyser) {
-            return { available: false, peak: 0, rms: 0, spectrumPeak: 0, spectrumRms: 0, waveformHash: '', spectrumHash: '', samples: 0 };
+            window.__presetSweepAudioProbe = { available: false, error: 'missing analyser' };
+            return window.__presetSweepAudioProbe;
+          }
+          window.__presetSweepAudioProbe = { available: true, analyser, armedAt: performance.now() };
+          return { available: true, armedAt: window.__presetSweepAudioProbe.armedAt };
+        }
+        """
+    )
+
+
+def capture_ssli_audio_signature(page, sample_ms):
+    return page.evaluate(
+        """
+        async (sampleMs) => {
+          const probe = window.__presetSweepAudioProbe || {};
+          const analyser = probe.analyser;
+          if (!analyser) {
+            return { available: false, error: probe.error || 'audio probe was not armed', peak: 0, rms: 0, spectrumPeak: 0, spectrumRms: 0, waveformHash: '', spectrumHash: '', samples: 0 };
           }
           const wave = new Uint8Array(analyser.fftSize || 256);
           const spectrum = new Uint8Array(analyser.frequencyBinCount || 128);
@@ -205,12 +292,296 @@ def ssli_audio_signature(page, sample_ms):
             spectrumRms: Number(spectrumRms.toFixed(5)),
             waveformHash: String(waveHash),
             spectrumHash: String(spectrumHash),
+            analyserArmedBeforeTrigger: true,
+            armedAt: probe.armedAt || 0,
             samples
           };
         }
         """,
         sample_ms,
     )
+
+
+def ssli_audio_signature(page, sample_ms):
+    prepare_ssli_audio_probe(page)
+    return capture_ssli_audio_signature(page, sample_ms)
+
+
+def reset_runtime_audio(page):
+    page.evaluate(
+        """
+        () => {
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return;
+          try { if (SL.audio.stopAllSustained) SL.audio.stopAllSustained(); } catch (err) {}
+          try { if (SL.audio.clearExpression) SL.audio.clearExpression(); } catch (err) {}
+          try {
+            const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+            [
+              'fm', 'physical', 'additive', 'granular', 'vocoderSynth',
+              'wavefolder', 'formant', 'modal', 'ringmod', 'chord',
+              'superwave', 'wavetableSynth', 'phasedist', 'chip',
+              'bytebeat', 'vector', 'drumsyn', 'pulsar', 'bodyResonance', 'reed'
+            ].forEach((engineName) => {
+              const engine = SL[engineName];
+              if (engine && engine.allNotesOff) engine.allNotesOff(inst);
+            });
+          } catch (err) {}
+        }
+        """
+    )
+    page.wait_for_timeout(80)
+
+
+def enable_mock_midi(page):
+    page.evaluate(
+        """
+        () => {
+          window.__presetSweepMidiInput = { id: 'preset-sweep-exquis', name: 'Exquis Preset Sweep', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__presetSweepMidiInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """
+    )
+    page.locator('[data-testid="enable-midi"]').click()
+    page.wait_for_function("() => window.__presetSweepMidiInput && window.__presetSweepMidiInput.onmidimessage")
+
+
+def ssli_six_note_midi_signature(page, sample_ms):
+    return page.evaluate(
+        """
+        async (sampleMs) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          const settings = instrument.settings || {};
+          const settingsJson = JSON.stringify(settings);
+          let settingsHash = 0;
+          for (let i = 0; i < settingsJson.length; i += 1) settingsHash = ((settingsHash << 5) - settingsHash + settingsJson.charCodeAt(i)) | 0;
+          const engineSettingsKey = {
+            fm: 'fmSettings',
+            physical: 'physicalSettings'
+          }[instrument.type || ''] || '';
+          const engineSettings = engineSettingsKey ? (settings[engineSettingsKey] || {}) : {
+            osc: settings.osc || null,
+            filter: settings.filter || null,
+            adsr: settings.adsr || null
+          };
+          const engineSettingsJson = JSON.stringify(engineSettings || {});
+          let engineSettingsHash = 0;
+          for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          if (window.__exquisPrepareSsliOutputBoost) window.__exquisPrepareSsliOutputBoost();
+          const boost = SL.__exquisPracticeOutputBoost;
+          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          boost.connect(analyser);
+          const wave = new Uint8Array(analyser.fftSize);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount);
+          const first = { midi: 48, channel: 7, velocity: 104 };
+          send([0x90 | first.channel, first.midi, first.velocity]);
+          await new Promise(resolve => setTimeout(resolve, 30));
+          const notes = [
+            first,
+            { midi: 50, channel: 13, velocity: 108 },
+            { midi: 52, channel: 9, velocity: 96 },
+            { midi: 53, channel: 2, velocity: 116 },
+            { midi: 55, channel: 15, velocity: 92 },
+            { midi: 57, channel: 5, velocity: 122 }
+          ];
+          notes.slice(1).forEach((note, index) => setTimeout(() => send([0x90 | note.channel, note.midi, note.velocity]), 8 + index * 8));
+          const pressureFrames = [
+            [102, 108, 95, 116, 91, 123],
+            [112, 118, 104, 125, 99, 127],
+            [120, 126, 111, 127, 107, 124],
+            [116, 121, 106, 119, 101, 116],
+            [94, 104, 88, 106, 73, 98],
+            [68, 82, 51, 83, 38, 67],
+            [21, 44, 0, 37, 0, 29],
+            [0, 0, 0, 0, 0, 0]
+          ];
+          pressureFrames.forEach((frameValues, frameIndex) => {
+            frameValues.forEach((pressure, noteIndex) => {
+              const note = notes[noteIndex];
+              setTimeout(() => send([0xD0 | note.channel, pressure]), 80 + frameIndex * 45 + noteIndex * 5);
+            });
+          });
+          notes.forEach((note, index) => {
+            setTimeout(() => {
+              send([0xD0 | note.channel, 0]);
+              send([0x80 | note.channel, note.midi, 0]);
+            }, 480 + index * 12);
+          });
+
+          let peak = 0;
+          let rmsSum = 0;
+          let count = 0;
+          let clipped = 0;
+          let spectrumPeak = 0;
+          let spectrumSum = 0;
+          let spectrumCount = 0;
+          let waveHash = 0;
+          let spectrumHash = 0;
+          const framePeaks = [];
+          const started = Date.now();
+          while (Date.now() - started < sampleMs) {
+            analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
+            let framePeak = 0;
+            for (let i = 0; i < wave.length; i += 1) {
+              const normalized = (wave[i] - 128) / 128;
+              const abs = Math.abs(normalized);
+              peak = Math.max(peak, abs);
+              framePeak = Math.max(framePeak, abs);
+              rmsSum += normalized * normalized;
+              count += 1;
+              if (wave[i] <= 2 || wave[i] >= 253) clipped += 1;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + wave[i]) | 0;
+            }
+            framePeaks.push(framePeak);
+            for (let j = 0; j < spectrum.length; j += 1) {
+              const level = spectrum[j] / 255;
+              spectrumPeak = Math.max(spectrumPeak, level);
+              spectrumSum += level * level;
+              spectrumCount += 1;
+              if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
+            }
+            await new Promise(resolve => setTimeout(resolve, 16));
+          }
+          try { boost.disconnect(analyser); } catch (err) {}
+          await new Promise(resolve => setTimeout(resolve, 120));
+          framePeaks.sort((a, b) => a - b);
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          return {
+            available: true,
+            trigger: 'six-note-midi',
+            instrumentType: instrument.type || '',
+            settingsHash: String(settingsHash),
+            settingsKeys: Object.keys(settings).sort(),
+            engineSettingsKey,
+            engineSettingsHash: String(engineSettingsHash),
+            engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
+            physicalSettings: settings.physicalSettings || null,
+            peak: Number(peak.toFixed(5)),
+            rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            waveformHash: String(waveHash),
+            spectrumHash: String(spectrumHash),
+            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            analyserArmedBeforeTrigger: true,
+            diagnosticLog,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        sample_ms,
+    )
+
+
+def expected_type_for_engine(row):
+    engine = str(row.get("engine", "")).lower()
+    label = str(row.get("engineLabel", "")).lower()
+    if "physical" in {engine, label} or engine == "physical":
+        return "physical"
+    if engine == "fm" or label == "fm":
+        return "fm"
+    if engine == "subtractive" or label == "subtractive":
+        return "subtractive"
+    return ""
+
+
+def validate_audio_behavior(row, trigger):
+    errors = []
+    signature = row.get("audioSignature") or {}
+    expected_type = expected_type_for_engine(row)
+    if not signature.get("available"):
+        errors.append(f"audio unavailable: {signature.get('error', '')}")
+    if expected_type and signature.get("instrumentType") and signature.get("instrumentType") != expected_type:
+        errors.append(f"expected engine {expected_type}, got {signature.get('instrumentType')}")
+    if expected_type and expected_type != "subtractive" and not signature.get("engineSettingsKeys"):
+        errors.append(f"missing {expected_type} parameter block")
+    if max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 or signature.get("rms", 0) < 0.003:
+        errors.append("audio energy too low")
+    if trigger == "six-note-midi":
+        if signature.get("clipRatio", 0) > 0.03:
+            errors.append(f"clipping ratio too high ({signature.get('clipRatio')})")
+        log = signature.get("diagnosticLog", "")
+        cleanup = signature.get("voiceCleanup") or {}
+        if cleanup:
+            held = cleanup.get("heldNotes")
+            local = cleanup.get("midiVoices")
+            ssli = cleanup.get("ssliActiveOscillators")
+            if held != 0 or local != 0 or (ssli is not None and ssli != 0):
+                errors.append(f"MIDI voices not idle after run (held={held} local={local} ssli={ssli})")
+        else:
+            errors.append("missing MIDI voice cleanup snapshot")
+        if "held=0 local=0 ssli=0" not in log:
+            errors.append("current MIDI run did not report clean idle cleanup")
+    return errors
+
+
+def audio_signature_identity(row):
+    signature = row.get("audioSignature") or {}
+    settings_hash = str(row.get("instrumentSettingsHash") or signature.get("settingsHash") or "")
+    engine_settings_hash = str(signature.get("engineSettingsHash") or "")
+    waveform_hash = str(row.get("audioWaveformHash") or signature.get("waveformHash") or "")
+    spectrum_hash = str(row.get("audioSpectrumHash") or signature.get("spectrumHash") or "")
+    if not settings_hash or not waveform_hash or not spectrum_hash:
+        return None
+    return (
+        str(row.get("engine", "")),
+        str(row.get("category", "")),
+        str(row.get("instrumentType") or signature.get("instrumentType") or ""),
+        settings_hash,
+        engine_settings_hash,
+        waveform_hash,
+        spectrum_hash,
+    )
+
+
+def find_duplicate_signature_groups(results):
+    groups = {}
+    for row in results:
+        if row.get("status") != "pass":
+            continue
+        identity = audio_signature_identity(row)
+        if identity is None:
+            continue
+        groups.setdefault(identity, []).append(row)
+    return [rows for rows in groups.values() if len({preset_key(row) for row in rows}) > 1]
+
+
+def apply_duplicate_signature_failures(results):
+    duplicate_groups = find_duplicate_signature_groups(results)
+    for group_index, rows in enumerate(duplicate_groups, start=1):
+        names = ", ".join(row.get("presetLabel") or row.get("preset", "") for row in rows)
+        message = f"duplicate preset signature group {group_index}: {names}"
+        for row in rows:
+            row["status"] = "fail"
+            row["duplicateSignatureGroup"] = group_index
+            row["error"] = "; ".join(part for part in [row.get("error", ""), message] if part)
+    return len(duplicate_groups)
 
 
 def run_sweep(args):
@@ -246,6 +617,8 @@ def run_sweep(args):
             )
             page.goto(url)
             page.wait_for_selector('[data-testid="sound-engine-select"]')
+            if args.trigger == "six-note-midi":
+                enable_mock_midi(page)
             presets = collect_presets(page)
             total = len(presets)
             presets = filter_presets(presets, args)
@@ -261,16 +634,30 @@ def run_sweep(args):
                 instrument = {}
                 audio_signature = {}
                 try:
+                    reset_runtime_audio(page)
                     select_if_present(page, '[data-testid="sound-engine-select"]', preset["engine"])
                     select_if_present(page, '[data-testid="sound-category-select"]', preset["category"])
                     select_if_present(page, '[data-testid="sound-preset-select"]', preset["preset"])
-                    page.locator('[data-testid="play-step"]').click(timeout=args.timeout_ms)
-                    audio_signature = ssli_audio_signature(page, args.audio_sample_ms)
+                    clear_diagnostics(page)
+                    log_start = diagnostic_snapshot(page)
+                    if args.trigger == "six-note-midi":
+                        audio_signature = ssli_six_note_midi_signature(page, max(args.audio_sample_ms, 900))
+                    else:
+                        probe = prepare_ssli_audio_probe(page)
+                        page.locator('[data-testid="play-step"]').click(timeout=args.timeout_ms)
+                        audio_signature = capture_ssli_audio_signature(page, args.audio_sample_ms)
+                        if probe and not probe.get("available"):
+                            audio_signature["available"] = False
+                            audio_signature["error"] = probe.get("error", "audio probe unavailable")
                     page.wait_for_timeout(args.settle_ms)
-                    log_tail = diagnostic_tail(page)
+                    log_tail = diagnostic_tail(page, log_start)
                     instrument = ssli_instrument_snapshot(page)
                     joined = "\n".join(log_tail)
-                    if "SSLI play" not in joined and "playing C" not in joined and "playing " not in joined:
+                    validation_errors = validate_audio_behavior({**preset, "audioSignature": audio_signature}, args.trigger)
+                    if validation_errors:
+                        status = "fail"
+                        error = "; ".join(validation_errors)
+                    elif args.trigger == "preview" and "SSLI play" not in joined and "playing C" not in joined and "playing " not in joined:
                         status = "fail"
                         error = "No playback log found after preset play."
                 except Exception as exc:
@@ -311,6 +698,10 @@ def run_sweep(args):
                     "audioSpectrumHash": audio_signature.get("spectrumHash", ""),
                     "audioSamples": audio_signature.get("samples", 0),
                     "audioSignatureAvailable": audio_signature.get("available", False),
+                    "audioP95Peak": audio_signature.get("p95Peak", ""),
+                    "audioClipRatio": audio_signature.get("clipRatio", ""),
+                    "finalBoostGain": audio_signature.get("finalBoostGain", ""),
+                    "trigger": args.trigger,
                 }
                 results.append(row)
                 print(f"[{index}/{len(presets)}] {status.upper()} {preset['engine']} / {preset['categoryLabel']} / {preset['presetLabel']}")
@@ -318,12 +709,14 @@ def run_sweep(args):
             browser.close()
             server.shutdown()
 
+    duplicate_signature_groups = apply_duplicate_signature_failures(results)
     summary = {
         "url": url,
         "startedAt": started_at,
         "elapsedSeconds": round(time.time() - started_at, 3),
         "availablePresetCount": total,
         "sweptPresetCount": len(results),
+        "duplicateSignatureGroups": duplicate_signature_groups,
         "passed": sum(1 for row in results if row["status"] == "pass"),
         "failed": sum(1 for row in results if row["status"] == "fail"),
     }
@@ -352,6 +745,11 @@ def run_sweep(args):
                 "audioWaveformHash",
                 "audioSpectrumHash",
                 "audioSamples",
+                "audioP95Peak",
+                "audioClipRatio",
+                "finalBoostGain",
+                "duplicateSignatureGroup",
+                "trigger",
                 "error",
                 "availablePresetCount",
                 "sweepCount",

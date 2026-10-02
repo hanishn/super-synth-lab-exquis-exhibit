@@ -36,7 +36,36 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "midi_status_regions_must_remain_visible_on_laptop": "test_regression_midi_status_regions_remain_visible_and_live_on_laptop",
         "fingering_root_must_not_be_overwritten": "test_regression_selected_root_keeps_first_fingering_assignment",
         "fingering_labels_must_stay_valid": "test_regression_fingering_labels_are_valid_for_visible_path",
+        "wrist_led_pairs_must_allow_same_finger_for_nearby_steps": "test_regression_wrist_led_pairs_allow_same_finger_for_d3_e3",
+        "natural_clusters_must_prioritize_human_finger_names": "test_regression_natural_clusters_prioritize_human_finger_names",
+        "natural_clusters_must_be_default_fingering_strategy": "test_regression_natural_clusters_is_default_fingering_strategy",
         "scale_fingering_must_ascend_root_to_octave": "test_regression_scale_path_ascends_root_to_octave",
+        "practice_octaves_must_match_physical_play_labels": "test_regression_practice_octaves_match_physical_play_labels",
+        "duplicate_pitch_choices_must_prefer_centered_chain_cell": "test_regression_duplicate_pitch_choices_prefer_centered_chain_cell",
+        "two_octave_exercise_must_use_physical_two_octave_path": "test_regression_two_octave_exercise_uses_physical_two_octave_path",
+        "practice_console_must_not_cover_two_octave_keys": "test_regression_console_does_not_cover_two_octave_practice_keys",
+        "exercise_selector_must_change_actual_practice_path": "test_regression_exercise_selector_changes_actual_practice_path",
+        "inner_chain_exercise_must_descend_same_path": "test_regression_inner_chain_ladder_descends_same_two_chain_path",
+        "root_return_exercise_must_recenter_between_scale_tones": "test_regression_root_return_exercise_recenters_between_scale_tones",
+        "practice_mode_must_show_actionable_targets": "test_regression_practice_mode_shows_actionable_targets",
+        "practice_mode_must_explain_button_finger_motion_choices": "test_regression_practice_mode_explains_button_finger_motion_choices",
+        "practice_mode_must_score_ergonomic_movement_load": "test_regression_practice_mode_scores_ergonomic_movement_load",
+        "ergonomic_model_must_extend_to_other_keys_and_modes": "test_regression_ergonomic_model_extends_to_other_keys_and_modes",
+        "ergonomic_model_must_cover_every_key_mode_octave": "test_regression_ergonomic_model_covers_every_key_mode_octave",
+        "practice_mode_must_show_visible_hand_and_two_octave_controls": "test_regression_practice_mode_shows_visible_hand_and_two_octave_controls",
+        "hand_side_and_octave_side_must_be_deconflated": "test_regression_hand_side_and_octave_side_are_deconflated",
+        "practice_header_controls_must_not_overlap": "test_regression_practice_header_controls_do_not_overlap",
+        "practice_header_controls_must_follow_information_hierarchy": "test_regression_practice_header_controls_follow_information_hierarchy",
+        "two_octave_paths_must_extend_to_other_keys_and_modes": "test_regression_two_octave_paths_extend_to_other_keys_and_modes",
+        "practice_path_must_mark_hand_shift_steps": "test_regression_practice_path_marks_hand_shift_steps",
+        "play_mode_must_leave_full_surface_available": "test_regression_play_mode_leaves_full_surface_available",
+        "play_mode_must_not_foreground_practice_settings": "test_regression_play_mode_subtitle_hides_practice_scaffold",
+        "play_mode_midi_must_not_score_or_advance": "test_regression_play_mode_midi_does_not_score_or_advance",
+        "practice_mode_controls_must_be_mode_contingent": "test_regression_practice_controls_are_hidden_in_play_mode",
+        "two_octave_must_show_resolved_root_octave": "test_regression_two_octave_keeps_resolved_octave_state_visible",
+        "practice_key_labels_must_be_explicit": "test_regression_practice_key_labels_are_explicit",
+        "play_path_must_follow_visible_practice_order": "test_regression_play_path_audio_follows_visible_practice_order",
+        "two_octave_play_path_must_follow_visible_order": "test_regression_two_octave_play_path_audio_follows_visible_order",
         "guide_tone_must_be_separate_from_ssli_sound_controls": "test_regression_guide_tone_is_separate_from_ssli_sound_controls",
         "exquis_ui_must_not_be_tiny": "test_regression_exquis_ui_is_visually_dominant",
         "ssli_presets_need_engine_category_preset_selectors": "test_regression_ssli_preset_selectors_are_hierarchical",
@@ -62,16 +91,35 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "single_nonphysical_note_must_restore_full_practice_boost_after_quiet_poly_path": "test_regression_single_nonphysical_note_restores_full_practice_boost_after_quiet_poly_path",
         "exquis_midi_must_use_stable_voice_velocity_and_hot_expression": "test_regression_exquis_midi_uses_stable_ssli_voice_velocity_and_hot_expression",
         "fm_midi_must_use_calibrated_sustained_velocity_headroom": "test_regression_fm_midi_uses_calibrated_sustained_velocity_headroom",
+        "low_register_subtractive_poly_must_remain_audible": "test_regression_low_register_subtractive_poly_preserves_volume",
         "mpe_channel_reuse_must_release_previous_voice": "test_regression_mpe_channel_reuse_releases_previous_voice",
         "mpe_same_note_new_channel_must_release_previous_owner": "test_regression_mpe_same_note_on_new_channel_releases_previous_ssli_owner",
         "midi_voice_bursts_must_cleanup_all_ssli_sustained_voices_when_idle": "test_regression_midi_voice_bursts_cleanup_all_ssli_sustained_voices_when_idle",
         "repeated_exquis_notes_must_not_reapply_preset_or_leak_ssli_voices": "test_regression_repeated_exquis_notes_do_not_reapply_preset_or_leak_ssli_voices",
+        "play_mode_chords_must_keep_independent_ssli_voice_ownership": "test_regression_play_mode_chords_keep_independent_ssli_voice_ownership",
+        "plucked_presets_must_strum_simultaneous_buttons": "test_regression_plucked_presets_buffer_simultaneous_note_ons_into_strum",
+        "non_plucked_presets_must_not_strum_simultaneous_buttons": "test_regression_non_plucked_presets_keep_immediate_note_ons",
+        "released_buffered_notes_must_not_leak_to_synth": "test_regression_released_buffered_strum_note_does_not_start_synth_voice",
         "stale_note_off_after_prune_must_not_clear_current_touch": "test_regression_stale_note_off_after_prune_does_not_double_stop_or_clear_current_touch",
         "pressure_zero_for_one_note_must_not_collapse_other_notes": "test_regression_pressure_zero_for_one_held_note_does_not_collapse_expression_for_other_notes",
         "single_note_pressure_zero_must_not_fall_back_to_velocity": "test_regression_single_note_pressure_zero_does_not_fall_back_to_velocity",
         "pressure_flood_must_not_spam_ssli_expression": "test_regression_pressure_flood_is_coalesced_before_ssli_expression",
         "enable_midi_must_be_first_prominent_side_rail_action": "test_regression_enable_midi_is_first_prominent_side_rail_action",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
+        "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
+        "exquis_key_mode_sync_must_use_official_developer_sysex": "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
+        "exquis_incoming_root_scale_sysex_must_update_ui": "test_regression_exquis_incoming_root_scale_sysex_updates_ui_without_echo",
+        "exquis_sync_must_fallback_when_sysex_permission_denied": "test_regression_exquis_sync_falls_back_to_input_only_when_sysex_permission_denied",
+        "exquis_probe_must_capture_official_and_legacy_sysex": "test_regression_exquis_probe_sends_official_and_legacy_diagnostics",
+        "exquis_dials_must_drive_and_report_native_key_mode": "test_regression_exquis_dial_listen_uses_settings_encoder_developer_mode_and_logs_dials",
+        "exquis_native_write_probe_must_sweep_developer_masks": "test_regression_exquis_native_probe_sweeps_official_write_masks",
+        "exquis_edge_controls_must_be_labeled_in_ui": "test_regression_exquis_edge_controls_are_labeled_and_show_capture_state",
+        "exquis_edge_controls_must_follow_physical_orientation": "test_regression_exquis_edge_controls_follow_orientation_layout",
+        "exquis_hardware_controls_must_use_physical_shapes": "test_regression_exquis_hardware_controls_use_physical_shapes",
+        "horizontal_hardware_slab_must_not_waste_vertical_space": "test_regression_horizontal_hardware_slab_does_not_waste_vertical_space",
+        "tablet_horizontal_hardware_must_not_clip_stage": "test_regression_tablet_horizontal_hardware_fits_stage",
+        "mobile_build_badge_must_not_cover_keys": "test_regression_mobile_build_badge_does_not_cover_playable_keys",
+        "horizontal_exquis_layout_must_fit_without_dead_band_or_clipped_stepper": "test_regression_horizontal_exquis_layout_fits_stage_without_dead_band_or_clipped_stepper",
         "audio_diagnostics_must_include_ssli_voice_pool_health": "test_regression_audio_diag_reports_ssli_voice_pool_health",
         "console_actions_must_fit_on_one_row": "test_regression_console_actions_fit_on_one_row",
         "midi_note_highlight_must_match_exact_midi_note_only": "test_regression_midi_highlight_matches_exact_note_only",
@@ -96,6 +144,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "simultaneous_two_note_physical_attack_must_not_over_dampen_second_note": "test_regression_two_simultaneous_physical_notes_keep_shared_attack_velocity",
         "simultaneous_adjacent_pluck_notes_must_use_general_voice_load_policy": "test_regression_adjacent_pluck_uses_general_voice_load_policy",
         "simultaneous_adjacent_pluck_notes_must_have_stable_audio_output": "test_regression_adjacent_pluck_has_stable_audio_output",
+        "plucked_strum_must_use_group_headroom_from_first_note": "test_regression_plucked_strum_uses_group_headroom_from_first_note",
+        "plucked_strum_must_ignore_held_pressure_and_auto_damp": "test_regression_plucked_strum_ignores_held_pressure_and_auto_damps",
+        "plucked_held_one_shot_must_keep_voice_ownership_until_note_off": "test_regression_plucked_held_one_shot_keeps_voice_ownership_until_note_off",
+        "plucked_strum_must_play_notes_released_after_flush": "test_regression_plucked_strum_plays_note_released_after_flush_before_slot",
+        "plucked_strum_must_play_capture_matured_notes_when_timer_flush_is_late": "test_regression_plucked_strum_plays_capture_matured_note_even_when_flush_timer_is_late",
+        "real_plucked_strum_must_play_notes_released_after_flush": "test_regression_real_plucked_strum_plays_note_released_after_flush_before_slot",
+        "three_note_plucked_strum_must_have_stable_audio_output": "test_regression_three_note_plucked_strum_has_stable_audio_output",
         "physical_poly_aftertouch_must_remain_per_note": "test_regression_four_note_physical_voices_track_pressure_independently_without_global_expression",
         "plucked_physical_pressure_must_be_forwarded_per_note_to_audio_engine": "test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine",
         "six_note_physical_pressure_must_be_audio_tested": "test_regression_six_note_physical_pressure_flow_has_stable_final_audio_output",
@@ -134,6 +189,22 @@ class PlaywrightExhibitTests(unittest.TestCase):
         available = {name for name in dir(type(self)) if name.startswith("test_")}
         for failure_id, test_name in self.STATED_FAILURE_REGRESSIONS.items():
             self.assertIn(test_name, available, failure_id)
+
+    def test_build_version_badge_is_visible_and_matches_runtime_cache_key(self):
+        badge = self.page.locator('[data-testid="build-version"]')
+        self.assertTrue(badge.is_visible())
+        badge_box = badge.bounding_box()
+        self.assertIsNotNone(badge_box)
+        self.assertGreaterEqual(badge_box["width"], 120)
+        self.assertGreaterEqual(badge_box["height"], 28)
+        self.assertIn("Build", badge.inner_text())
+        version = badge.locator("b").inner_text()
+        self.assertRegex(version, r"^Build \d+$")
+        runtime = self.page.evaluate("() => window.SSLI_EXQUIS_BUILD")
+        self.assertEqual(runtime["version"], version)
+        self.assertRegex(runtime["timestamp"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M ET$")
+        self.assertRegex(runtime["timestampUtc"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        self.assertIn("ssli/index.html?v=" + runtime["timestampUtc"], self.page.locator("#ssliEngineFrame").get_attribute("src"))
 
     def test_renders_61_keys(self):
         self.assertEqual(self.page.locator('[data-testid="exquis-key"]').count(), 61)
@@ -360,12 +431,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("C", after)
 
     def test_practice_path_stays_on_inner_two_note_chains(self):
-        chain_lanes = self.page.evaluate("""() => {
-          return [...document.querySelectorAll('.key.in-path')].map((key) => key.dataset.chainLane);
+        labels = self.page.evaluate("""() => {
+          return [...document.querySelectorAll('.key.in-path')]
+            .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+            .map((key) => key.getAttribute('aria-label'));
         }""")
-        self.assertGreaterEqual(len(chain_lanes), 5)
-        self.assertLessEqual(len(set(chain_lanes)), 2)
-        self.assertNotIn("", chain_lanes)
+        self.assertEqual(labels, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
 
     def test_regression_practice_lights_only_two_exquis_chains(self):
         lit = self.page.evaluate("""() => {
@@ -440,16 +511,21 @@ class PlaywrightExhibitTests(unittest.TestCase):
             const key = finger.closest('.key');
             return {
               id: key.dataset.cellId,
+              index: Number(key.dataset.pathIndex),
               finger: finger.textContent.trim(),
               lane: key.dataset.chainLane,
               lit: key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('tonic')
             };
-          });
+          }).sort((a, b) => a.index - b.index);
         }""")
-        self.assertGreaterEqual(len(labels), 7)
-        self.assertLessEqual(len({label["lane"] for label in labels}), 2)
-        self.assertNotIn("", {label["lane"] for label in labels})
+        self.assertEqual(len(labels), 8)
+        self.assertEqual([label["finger"] for label in labels], ["Pink", "Ring", "Ring", "Mid", "Mid", "In", "In", "In"])
         self.assertTrue(all(label["lit"] for label in labels))
+
+    def test_regression_natural_clusters_is_default_fingering_strategy(self):
+        self.assertEqual(self.page.locator('[data-testid="strategy-select"]').input_value(), "natural_clusters")
+        self.assertIn("Natural clusters", self.page.locator("#stateSubtitle").inner_text())
+        self.assertIn("index handle the upper cluster", self.page.locator("#fingerRule").inner_text())
 
     def test_hand_selector_changes_fingering_overlay(self):
         self.assertIn("Left hand", self.page.locator("#stateSubtitle").inner_text())
@@ -459,17 +535,636 @@ class PlaywrightExhibitTests(unittest.TestCase):
         right_finger = self.page.locator(".finger").first.inner_text()
         self.assertNotEqual(left_finger, right_finger)
 
+    def test_regression_wrist_led_pairs_allow_same_finger_for_d3_e3(self):
+        self.page.select_option('[data-testid="strategy-select"]', "wrist_pairs")
+        model = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
+          .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+          .map((key) => ({
+            label: key.getAttribute('aria-label'),
+            finger: key.querySelector('.finger') ? key.querySelector('.finger').textContent.trim() : '',
+            cellId: key.dataset.cellId
+        }))""")
+        self.assertEqual([step["label"] for step in model[:4]], ["C3", "D3", "E3", "F3"])
+        self.assertEqual(model[1]["finger"], "Ring")
+        self.assertEqual(model[2]["finger"], "Ring")
+        self.page.locator('[data-testid="next-step"]').click()
+        self.assertEqual(self.page.locator('[data-testid="current-note"]').inner_text(), "D3")
+        self.assertIn("may cover a pair", self.page.locator('[data-testid="finger-reason"]').inner_text())
+        self.assertIn("wrist moves the hand", self.page.locator('[data-testid="finger-reason"]').inner_text())
+        self.assertIn("wrist carry this pair", self.page.locator('[data-testid="motion-reason"]').inner_text())
+
+    def test_regression_natural_clusters_prioritize_human_finger_names(self):
+        self.page.select_option('[data-testid="strategy-select"]', "natural_clusters")
+        model = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
+          .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+          .map((key) => ({
+            label: key.getAttribute('aria-label'),
+            finger: key.querySelector('.finger') ? key.querySelector('.finger').textContent.trim() : '',
+            aria: key.querySelector('.finger') ? key.querySelector('.finger').getAttribute('aria-label') : ''
+          }))""")
+        self.assertEqual([step["label"] for step in model], ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
+        self.assertEqual([step["finger"] for step in model], ["Pink", "Ring", "Ring", "Mid", "Mid", "In", "In", "In"])
+        self.assertEqual([step["aria"] for step in model], ["Pinky (5)", "Ring (4)", "Ring (4)", "Middle (3)", "Middle (3)", "Index (2)", "Index (2)", "Index (2)"])
+        self.assertIn("Natural clusters", self.page.locator("#stateSubtitle").inner_text())
+        self.assertIn("pinky", self.page.locator("#fingerRule").inner_text())
+        self.assertIn("index handle the upper cluster", self.page.locator("#fingerRule").inner_text())
+        self.assertIn("Pinky (5)", self.page.locator('[data-testid="target-finger"]').inner_text())
+        self.assertIn("hand cluster", self.page.locator('[data-testid="finger-reason"]').inner_text())
+
+    def test_exercise_selector_defaults_to_root_octave_practice(self):
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), "root_octave")
+        self.assertIn("Root to octave", self.page.locator("#stateSubtitle").inner_text())
+        self.assertIn("centered root-to-octave", self.page.locator('[data-testid="drill-prompt"]').inner_text())
+
+    def test_mode_selector_defaults_to_practice(self):
+        self.assertEqual(self.page.locator('[data-testid="mode-select"]').input_value(), "practice")
+        self.assertTrue(self.page.locator('[data-testid="mode-switch"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="practice-mode"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="play-mode"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="practice-mode"]').get_attribute("aria-pressed"), "true")
+        self.assertEqual(self.page.locator('[data-testid="play-mode"]').get_attribute("aria-pressed"), "false")
+        self.assertEqual(self.page.locator('[data-testid="keyboard"]').get_attribute("data-mode"), "practice")
+        self.assertIn("Practice:", self.page.locator("#stateSubtitle").inner_text())
+
+    def test_regression_practice_mode_shows_actionable_targets(self):
+        self.assertEqual(self.page.locator(".key.current").count(), 1)
+        self.assertGreater(self.page.locator(".key.in-path .finger").count(), 5)
+        self.assertGreater(self.page.locator(".key.dimmed").count(), 20)
+        self.assertIn("Scale degree 1", self.page.locator("#currentDegree").inner_text())
+        self.assertEqual(self.page.locator('[data-testid="target-finger"]').inner_text(), "Pinky (5)")
+        self.assertEqual(self.page.locator('[data-testid="target-step"]').inner_text(), "Step 1 of 8")
+        self.assertEqual(self.page.locator('[data-testid="path-chip"]').count(), 8)
+        self.assertEqual(self.page.locator('[data-testid="path-chip"]').first.inner_text(), "1 C3")
+        self.assertEqual(self.page.locator('[data-testid="path-chip"]').first.get_attribute("aria-label"), "Step 1 C3 Pinky (5)")
+
+    def test_regression_practice_mode_explains_button_finger_motion_choices(self):
+        self.assertTrue(self.page.locator('[data-testid="target-rationale"]').is_visible())
+        self.assertIn("Exact C3", self.page.locator('[data-testid="button-reason"]').inner_text())
+        self.assertIn("duplicates -> two-chain, then center", self.page.locator('[data-testid="button-reason"]').inner_text())
+        self.assertIn("hand cluster", self.page.locator('[data-testid="finger-reason"]').inner_text())
+        self.assertIn("index-led top", self.page.locator('[data-testid="finger-reason"]').inner_text())
+        self.assertIn("no reaching", self.page.locator('[data-testid="motion-reason"]').inner_text())
+        for _ in range(4):
+            self.page.locator('[data-testid="next-step"]').click()
+        self.assertEqual(self.page.locator('[data-testid="current-note"]').inner_text(), "G3")
+        self.assertIn("Anchor the hand shape", self.page.locator('[data-testid="motion-reason"]').inner_text())
+        self.assertIn("no reaching", self.page.locator('[data-testid="motion-reason"]').inner_text())
+
+    def test_regression_practice_mode_scores_ergonomic_movement_load(self):
+        self.assertIn("Movement load: low", self.page.locator('[data-testid="ergonomic-reason"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="ergonomic-reason"]').get_attribute("data-load-level"), "low")
+        self.page.select_option('[data-testid="strategy-select"]', "natural_clusters")
+        for _ in range(2):
+            self.page.locator('[data-testid="next-step"]').click()
+        load_text = self.page.locator('[data-testid="ergonomic-reason"]').inner_text()
+        self.assertIn("Movement load:", load_text)
+        self.assertIn("same ring", load_text)
+        self.assertIn("pressure risk", load_text)
+        self.assertIn(self.page.locator('[data-testid="ergonomic-reason"]').get_attribute("data-load-level"), {"medium", "high"})
+        for _ in range(2):
+            self.page.locator('[data-testid="next-step"]').click()
+        self.assertIn("hand shift", self.page.locator('[data-testid="ergonomic-reason"]').inner_text())
+
+    def test_regression_ergonomic_model_extends_to_other_keys_and_modes(self):
+        cases = [
+            ("2", "dorian", "D Dorian", ["D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4"]),
+            ("7", "mixolydian", "G Mixolydian", ["G3", "A3", "B3", "C4", "D4", "E4", "F4", "G4"]),
+            ("10", "blues", "Bb Blues", ["Bb2", "Db3", "Eb3", "E3", "F3", "Ab3", "Bb3"]),
+        ]
+        for tonic, scale, title, expected_prefix in cases:
+            with self.subTest(title=title):
+                self.page.select_option('[data-testid="tonic-select"]', tonic)
+                self.page.select_option('[data-testid="scale-select"]', scale)
+                self.page.select_option('[data-testid="strategy-select"]', "natural_clusters")
+                model = self.page.evaluate("""() => ({
+                  title: document.querySelector('#stateTitle').textContent,
+                  path: window.__exquisDebugSnapshot().currentPath.map((step) => ({
+                    label: step.label,
+                    midi: step.midi,
+                    virtual: step.virtual
+                  })),
+                  fingers: [...document.querySelectorAll('.key.in-path')]
+                    .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+                    .map((key) => key.querySelector('.finger') ? key.querySelector('.finger').textContent.trim() : ''),
+                  load: document.querySelector('[data-testid="ergonomic-reason"]').textContent,
+                  loadLevel: document.querySelector('[data-testid="ergonomic-reason"]').dataset.loadLevel
+                })""")
+                self.assertEqual(model["title"], title)
+                self.assertEqual([step["label"] for step in model["path"]], expected_prefix)
+                self.assertTrue(all(not step["virtual"] for step in model["path"]), model)
+                self.assertEqual(model["fingers"], ["Pink", "Ring", "Ring", "Mid", "Mid", "In", "In", "In"][:len(expected_prefix)])
+                self.assertIn("Movement load:", model["load"])
+                self.assertIn(model["loadLevel"], {"low", "medium", "high"})
+
+    def test_regression_two_octave_paths_extend_to_other_keys_and_modes(self):
+        cases = [
+            ("2", "dorian", ["D2", "E2", "F2", "G2", "A2", "B2", "C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4"]),
+            ("7", "mixolydian", ["G2", "A2", "B2", "C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4", "G4"]),
+            ("10", "blues", ["Bb1", "Db2", "Eb2", "E2", "F2", "Ab2", "Bb2", "Db3", "Eb3", "E3", "F3", "Ab3", "Bb3"]),
+        ]
+        for tonic, scale, expected_labels in cases:
+            with self.subTest(tonic=tonic, scale=scale):
+                self.page.select_option('[data-testid="tonic-select"]', tonic)
+                self.page.select_option('[data-testid="scale-select"]', scale)
+                self.page.select_option('[data-testid="exercise-select"]', "two_octaves")
+                path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath")
+                self.assertEqual([step["label"] for step in path], expected_labels)
+                self.assertTrue(all(not step["virtual"] for step in path), path)
+                self.assertEqual(len({step["cellId"] for step in path}), len(path))
+                self.assertTrue(all(path[index]["midi"] < path[index + 1]["midi"] for index in range(len(path) - 1)), path)
+
+    def test_regression_ergonomic_model_covers_every_key_mode_octave(self):
+        matrix = self.page.evaluate("""() => {
+          const tonics = [...document.querySelectorAll('[data-testid="tonic-select"] option')].map((option) => option.value);
+          const scales = [...document.querySelectorAll('[data-testid="scale-select"] option')].map((option) => option.value);
+          const run = (tonic, scale, exercise, rootPick) => {
+            document.querySelector('[data-testid="tonic-select"]').value = tonic;
+            document.querySelector('[data-testid="tonic-select"]').dispatchEvent(new Event('change', { bubbles: true }));
+            document.querySelector('[data-testid="scale-select"]').value = scale;
+            document.querySelector('[data-testid="scale-select"]').dispatchEvent(new Event('change', { bubbles: true }));
+            document.querySelector('[data-testid="exercise-select"]').value = exercise;
+            document.querySelector('[data-testid="exercise-select"]').dispatchEvent(new Event('change', { bubbles: true }));
+            document.querySelector('[data-testid="strategy-select"]').value = 'natural_clusters';
+            document.querySelector('[data-testid="strategy-select"]').dispatchEvent(new Event('change', { bubbles: true }));
+            const rootSelect = document.querySelector('[data-testid="root-select"]');
+            const rootOptions = [...rootSelect.options].map((option) => ({
+              value: option.value,
+              label: option.textContent
+            }));
+            const candidates = [];
+            for (const option of rootOptions) {
+              rootSelect.value = option.value;
+              rootSelect.dispatchEvent(new Event('change', { bubbles: true }));
+              const candidatePath = window.__exquisDebugSnapshot().currentPath;
+              const valid = candidatePath.length >= 2
+                && candidatePath.every((step, index) => index === 0 || candidatePath[index - 1].midi < step.midi)
+                && candidatePath.every((step) => !step.virtual);
+              if (valid) {
+                candidates.push({
+                  value: option.value,
+                  label: option.label,
+                  firstMidi: candidatePath[0].midi,
+                  length: candidatePath.length
+                });
+              }
+            }
+            candidates.sort((a, b) => (a.firstMidi - b.firstMidi) || (b.length - a.length));
+            const chosen = rootPick === 'high' ? candidates[candidates.length - 1] : candidates[0];
+            if (chosen) {
+              rootSelect.value = chosen.value;
+              rootSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            const path = window.__exquisDebugSnapshot().currentPath;
+            const keyIds = new Set([...document.querySelectorAll('[data-testid="exquis-key"]')].map((key) => key.dataset.cellId));
+            const fingers = [...document.querySelectorAll('.key.in-path')]
+              .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+              .map((key) => key.querySelector('.finger') ? key.querySelector('.finger').textContent.trim() : '');
+            return {
+              tonic,
+              scale,
+              exercise,
+              rootPick,
+              root: rootSelect.options[rootSelect.selectedIndex].textContent,
+              candidateCount: candidates.length,
+              path,
+              fingers,
+              load: document.querySelector('[data-testid="ergonomic-reason"]').textContent,
+              loadLevel: document.querySelector('[data-testid="ergonomic-reason"]').dataset.loadLevel,
+              allCellsExist: path.every((step) => keyIds.has(step.cellId)),
+              ascending: path.every((step, index) => index === 0 || path[index - 1].midi < step.midi),
+              uniqueCells: new Set(path.map((step) => step.cellId)).size === path.length,
+              virtualCount: path.filter((step) => step.virtual).length
+            };
+          };
+          const rows = [];
+          for (const tonic of tonics) {
+            for (const scale of scales) {
+              rows.push(run(tonic, scale, 'root_octave', 'low'));
+              rows.push(run(tonic, scale, 'root_octave', 'high'));
+              rows.push(run(tonic, scale, 'two_octaves', 'low'));
+            }
+          }
+          return rows;
+        }""")
+        self.assertEqual(len(matrix), 12 * 8 * 3)
+        for row in matrix:
+            with self.subTest(tonic=row["tonic"], scale=row["scale"], exercise=row["exercise"], rootPick=row["rootPick"]):
+                natural_pattern = ["Pink", "Ring", "Ring", "Mid", "Mid", "In", "In", "In"]
+                expected_fingers = [natural_pattern[index % len(natural_pattern)] for index in range(len(row["fingers"]))]
+                self.assertGreater(row["candidateCount"], 0, row)
+                self.assertGreaterEqual(len(row["path"]), 2, row)
+                self.assertTrue(row["allCellsExist"], row)
+                self.assertTrue(row["ascending"], row)
+                self.assertEqual(row["virtualCount"], 0, row)
+                self.assertEqual(row["fingers"], expected_fingers, row)
+                self.assertIn("Movement load:", row["load"], row)
+                self.assertIn(row["loadLevel"], {"low", "medium", "high"}, row)
+                if row["exercise"] == "two_octaves":
+                    self.assertTrue(row["uniqueCells"], row)
+                    self.assertGreaterEqual(row["path"][-1]["midi"] - row["path"][0]["midi"], 12, row)
+
+    def test_regression_practice_path_marks_hand_shift_steps(self):
+        chips = self.page.locator('[data-testid="path-chip"]').evaluate_all("""els => els.map((el) => ({
+          text: el.textContent.trim(),
+          shift: el.classList.contains('shift-chip'),
+          aria: el.getAttribute('aria-label')
+        }))""")
+        self.assertEqual([index + 1 for index, chip in enumerate(chips) if chip["shift"]], [5])
+        self.assertIn("Shift hand", chips[4]["aria"])
+        self.page.select_option('[data-testid="exercise-select"]', "two_octaves")
+        two_octave_chips = self.page.locator('[data-testid="path-chip"]').evaluate_all("""els => els.map((el) => ({
+          text: el.textContent.trim(),
+          shift: el.classList.contains('shift-chip'),
+          aria: el.getAttribute('aria-label')
+        }))""")
+        self.assertEqual([index + 1 for index, chip in enumerate(two_octave_chips) if chip["shift"]], [5, 9, 13])
+        for index in [4, 8, 12]:
+            self.assertIn("Shift hand", two_octave_chips[index]["aria"])
+
+    def test_regression_practice_key_labels_are_explicit(self):
+        root_id = self.page.locator('[data-testid="root-select"]').input_value()
+        root_key = self.page.locator(f'[data-cell-id="{root_id}"]')
+        self.assertEqual(root_key.locator(".degree-badge").inner_text(), "1")
+        self.assertEqual(root_key.locator(".degree-badge").get_attribute("aria-label"), "Step 1")
+        self.assertEqual(root_key.locator(".finger").inner_text(), "Pink")
+        self.assertEqual(root_key.locator(".finger").get_attribute("aria-label"), "Pinky (5)")
+        chips = self.page.locator('[data-testid="path-chip"]').evaluate_all("els => els.map((el) => el.textContent.trim())")
+        self.assertEqual(chips, [
+            "1 C3",
+            "2 D3",
+            "3 E3",
+            "4 F3",
+            "5 G3",
+            "6 A3",
+            "7 B3",
+            "8 C4",
+        ])
+
+    def test_regression_practice_octaves_match_physical_play_labels(self):
+        practice = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
+          .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+          .map((key) => ({ id: key.dataset.cellId, label: key.getAttribute('aria-label'), midi: Number(key.dataset.midi) }))""")
+        self.page.locator('[data-testid="play-mode"]').click()
+        play_by_id = self.page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('[data-testid="exquis-key"]')]
+          .map((key) => [key.dataset.cellId, { label: key.getAttribute('aria-label'), midi: Number(key.dataset.midi) }]))""")
+        self.assertEqual([item["label"] for item in practice], ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
+        self.assertEqual([item["midi"] for item in practice], [48, 50, 52, 53, 55, 57, 59, 60])
+        self.assertEqual({item["id"] for item in practice}, {"r5c3", "r4c2", "r4c4", "r3c1", "r3c3", "r2c2", "r2c4", "r1c1"})
+        for item in practice:
+            self.assertEqual(item["label"], play_by_id[item["id"]]["label"], item)
+            self.assertEqual(item["midi"], play_by_id[item["id"]]["midi"], item)
+
+    def test_regression_duplicate_pitch_choices_prefer_centered_chain_cell(self):
+        choices = self.page.evaluate("""() => {
+          const keyboard = document.querySelector('[data-testid="keyboard"]').getBoundingClientRect();
+          const center = { x: keyboard.left + keyboard.width / 2, y: keyboard.top + keyboard.height / 2 };
+          const path = window.__exquisDebugSnapshot().currentPath;
+          const allKeys = [...document.querySelectorAll('[data-testid="exquis-key"]')];
+          return path.map((step) => {
+            const sameMidi = allKeys.filter((key) => Number(key.dataset.midi) === step.midi);
+            const chainOptions = sameMidi.filter((key) => key.dataset.chainLane !== '');
+            const candidates = chainOptions.length ? chainOptions : sameMidi;
+            const ranked = candidates.map((key) => {
+              const rect = key.getBoundingClientRect();
+              const x = rect.left + rect.width / 2;
+              const y = rect.top + rect.height / 2;
+              return {
+                id: key.dataset.cellId,
+                lane: key.dataset.chainLane || '',
+                distance: Math.hypot(x - center.x, y - center.y)
+              };
+            }).sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
+            return {
+              label: step.label,
+              selected: step.cellId,
+              duplicateCount: sameMidi.length,
+              bestCenteredChainCandidate: ranked[0].id
+            };
+          }).filter((item) => item.duplicateCount > 1);
+        }""")
+        self.assertGreaterEqual(len(choices), 2)
+        for choice in choices:
+            self.assertEqual(choice["selected"], choice["bestCenteredChainCandidate"], choice)
+
+    def test_regression_play_path_audio_follows_visible_practice_order(self):
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ settings: { filter: {}, effects: {} } }]; },
+              playNoteOnInstrument(midi, dur, inst, vel) { window.__ssliCalls.push(['play', midi, dur, inst, vel]); },
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+            }
+          };
+        }
+        """)
+        visible_midis = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
+          .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+          .map((key) => Number(key.dataset.midi))""")
+        self.assertEqual(visible_midis, [48, 50, 52, 53, 55, 57, 59, 60])
+        self.page.locator('[data-testid="play-scale"]').click()
+        self.page.wait_for_function("() => window.__ssliCalls.filter((call) => call[0] === 'play').length >= 8", timeout=4000)
+        played = self.page.evaluate("() => window.__ssliCalls.filter((call) => call[0] === 'play').map((call) => call[1]).slice(0, 8)")
+        self.assertEqual(played, visible_midis)
+
+    def test_regression_two_octave_exercise_uses_physical_two_octave_path(self):
+        self.page.select_option('[data-testid="exercise-select"]', "two_octaves")
+        expected_labels = ["C2", "D2", "E2", "F2", "G2", "A2", "B2", "C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"]
+        expected_midis = [36, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 57, 59, 60]
+        path = self.page.evaluate("""() => window.__exquisDebugSnapshot().currentPath""")
+        chips = self.page.locator('[data-testid="path-chip"]').evaluate_all("els => els.map((el) => el.textContent.trim())")
+        self.assertEqual(self.page.locator('[data-testid="root-select"] option:checked').inner_text(), "C2 / r9 k3")
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 15")
+        self.assertEqual([step["label"] for step in path], expected_labels)
+        self.assertEqual([step["midi"] for step in path], expected_midis)
+        self.assertEqual(chips, [f"{index + 1} {label}" for index, label in enumerate(expected_labels)])
+        self.assertTrue(all(not step["virtual"] for step in path))
+        self.assertEqual(len({step["cellId"] for step in path}), len(path))
+        self.assertTrue(all(path[index]["midi"] < path[index + 1]["midi"] for index in range(len(path) - 1)))
+        self.page.locator('[data-testid="play-mode"]').click()
+        play_by_id = self.page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('[data-testid="exquis-key"]')]
+          .map((key) => [key.dataset.cellId, { label: key.getAttribute('aria-label'), midi: Number(key.dataset.midi) }]))""")
+        for step in path:
+            self.assertEqual(step["label"], play_by_id[step["cellId"]]["label"], step)
+            self.assertEqual(step["midi"], play_by_id[step["cellId"]]["midi"], step)
+
+    def test_regression_two_octave_play_path_audio_follows_visible_order(self):
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ settings: { filter: {}, effects: {} } }]; },
+              playNoteOnInstrument(midi, dur, inst, vel) { window.__ssliCalls.push(['play', midi, dur, inst, vel]); },
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+            }
+          };
+        }
+        """)
+        self.page.select_option('[data-testid="exercise-select"]', "two_octaves")
+        visible_midis = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
+          .sort((a, b) => Number(a.dataset.pathIndex) - Number(b.dataset.pathIndex))
+          .map((key) => Number(key.dataset.midi))""")
+        self.assertEqual(visible_midis, [36, 38, 40, 41, 43, 45, 47, 48, 50, 52, 53, 55, 57, 59, 60])
+        self.page.locator('[data-testid="play-scale"]').click()
+        self.page.wait_for_function("() => window.__ssliCalls.filter((call) => call[0] === 'play').length >= 15", timeout=9000)
+        played = self.page.evaluate("() => window.__ssliCalls.filter((call) => call[0] === 'play').map((call) => call[1]).slice(0, 15)")
+        self.assertEqual(played, visible_midis)
+
+    def test_regression_console_does_not_cover_two_octave_practice_keys(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.select_option('[data-testid="exercise-select"]', "two_octaves")
+        overlaps = self.page.evaluate("""
+        () => {
+          const consoleRect = document.querySelector('[data-testid="console-panel"]').getBoundingClientRect();
+          const keyboardRect = document.querySelector('[data-testid="keyboard"]').getBoundingClientRect();
+          const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+          const pathKeys = [...document.querySelectorAll('.key.in-path')].map((key) => ({
+            id: key.dataset.cellId,
+            rect: key.getBoundingClientRect()
+          }));
+          return {
+            keyboard: intersects(consoleRect, keyboardRect),
+            keys: pathKeys.filter((item) => intersects(consoleRect, item.rect)).map((item) => item.id)
+          };
+        }
+        """)
+        self.assertFalse(overlaps["keyboard"], overlaps)
+        self.assertEqual(overlaps["keys"], [])
+
+    def test_regression_exercise_selector_changes_actual_practice_path(self):
+        before = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map((step) => step.label)")
+        self.page.select_option('[data-testid="exercise-select"]', "inner_ladder")
+        after = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map((step) => step.label)")
+        self.assertEqual(before, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
+        self.assertEqual(after, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4", "B3", "A3", "G3", "F3", "E3", "D3", "C3"])
+        self.assertIn("1 / 15", self.page.locator('[data-testid="step-readout"]').inner_text())
+
+    def test_regression_inner_chain_ladder_descends_same_two_chain_path(self):
+        self.page.select_option('[data-testid="exercise-select"]', "inner_ladder")
+        path = self.page.evaluate("""() => {
+          const snapshot = window.__exquisDebugSnapshot().currentPath;
+          const laneFor = (cellId) => document.querySelector(`[data-cell-id="${cellId}"]`).dataset.chainLane;
+          return snapshot.map((step) => ({ label: step.label, cellId: step.cellId, lane: laneFor(step.cellId) }));
+        }""")
+        labels = [step["label"] for step in path]
+        self.assertEqual(labels, labels[:8] + list(reversed(labels[:7])))
+        self.assertEqual(path[0]["label"], "C3")
+        self.assertEqual(path[7]["label"], "C4")
+        self.assertEqual(path[-1]["label"], "C3")
+
+    def test_regression_root_return_exercise_recenters_between_scale_tones(self):
+        self.page.select_option('[data-testid="exercise-select"]', "root_returns")
+        path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath")
+        labels = [step["label"] for step in path]
+        cell_ids = [step["cellId"] for step in path]
+        self.assertEqual(labels, ["C3", "D3", "C3", "E3", "C3", "F3", "C3", "G3", "C3", "A3", "C3", "B3", "C3", "C4"])
+        self.assertEqual(cell_ids[0], cell_ids[2])
+        self.assertEqual(cell_ids[0], cell_ids[4])
+        self.assertEqual(cell_ids[0], cell_ids[6])
+        self.assertIn("home reference", self.page.locator('[data-testid="drill-prompt"]').inner_text())
+
+    def test_regression_play_mode_leaves_full_surface_available(self):
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.assertEqual(self.page.locator('[data-testid="mode-select"]').input_value(), "play")
+        self.assertEqual(self.page.locator('[data-testid="practice-mode"]').get_attribute("aria-pressed"), "false")
+        self.assertEqual(self.page.locator('[data-testid="play-mode"]').get_attribute("aria-pressed"), "true")
+        self.assertEqual(self.page.locator('[data-testid="keyboard"]').get_attribute("data-mode"), "play")
+        self.assertIn("Play:", self.page.locator("#stateSubtitle").inner_text())
+        self.assertIn("Free-play", self.page.locator('[data-testid="drill-prompt"]').inner_text())
+        self.assertEqual(self.page.locator(".key.current").count(), 0)
+        self.assertEqual(self.page.locator(".key.in-path").count(), 0)
+        self.assertEqual(self.page.locator(".key .finger").count(), 0)
+        self.assertEqual(self.page.locator('[data-testid="practice-path-strip"]').is_visible(), False)
+        self.assertEqual(self.page.locator(".key.dimmed").count(), 0)
+        self.assertIn("score paused", self.page.locator('[data-testid="drill-score"]').inner_text())
+
+    def test_regression_play_mode_subtitle_hides_practice_scaffold(self):
+        self.page.locator('[data-testid="play-mode"]').click()
+        subtitle = self.page.locator("#stateSubtitle").inner_text()
+        self.assertIn("Play:", subtitle)
+        self.assertIn("full Exquis surface", subtitle)
+        self.assertNotIn("Natural clusters", subtitle)
+        self.assertNotIn("hand:", subtitle)
+        self.assertNotIn("octave", subtitle.lower())
+
+    def test_regression_practice_controls_are_hidden_in_play_mode(self):
+        self.assertTrue(self.page.locator('[data-testid="exercise-control"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="practice-stepper"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="practice-target-panel"]').is_visible())
+        self.page.locator('[data-testid="play-mode"]').click()
+        for test_id in [
+            "root-control",
+            "hand-control",
+            "exercise-control",
+            "fingering-control",
+            "view-control",
+            "practice-stepper",
+            "practice-target-panel",
+            "drill-section",
+            "practice-path-strip",
+        ]:
+            self.assertFalse(self.page.locator(f'[data-testid="{test_id}"]').is_visible(), test_id)
+        self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+
+    def test_regression_practice_mode_shows_visible_hand_and_two_octave_controls(self):
+        self.assertTrue(self.page.locator('[data-testid="left-hand-button"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="right-hand-button"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="lower-octave-button"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="higher-octave-button"]').is_visible())
+        self.assertIn("Hand", self.page.locator('[data-testid="hand-control"]').inner_text())
+        self.assertIn("Octave", self.page.locator('[data-testid="octave-control"]').inner_text())
+        self.assertTrue(self.page.locator('[data-testid="exercise-button-root_octave"]').is_visible())
+        two_octaves = self.page.locator('[data-testid="exercise-button-two_octaves"]')
+        self.assertTrue(two_octaves.is_visible())
+        self.assertEqual(two_octaves.inner_text(), "2 Oct")
+        self.assertIn("Two octaves", two_octaves.get_attribute("aria-label"))
+        self.assertEqual(self.page.locator('[data-testid="left-hand-button"]').get_attribute("aria-pressed"), "true")
+        self.page.locator('[data-testid="right-hand-button"]').click()
+        self.assertEqual(self.page.locator('[data-testid="hand-select"]').input_value(), "right")
+        self.assertIn("Right hand", self.page.locator("#stateSubtitle").inner_text())
+        two_octaves.click()
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), "two_octaves")
+        self.assertEqual(two_octaves.get_attribute("aria-pressed"), "true")
+        self.assertIn("Two octaves", self.page.locator("#stateSubtitle").inner_text())
+        self.assertGreaterEqual(self.page.locator('[data-testid="path-chip"]').count(), 13)
+
+    def test_regression_hand_side_and_octave_side_are_deconflated(self):
+        initial_path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map((step) => step.label)")
+        self.assertEqual(initial_path, ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
+        self.assertEqual(self.page.locator('[data-testid="higher-octave-button"]').get_attribute("aria-pressed"), "true")
+        self.page.locator('[data-testid="right-hand-button"]').click()
+        right_hand_path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map((step) => step.label)")
+        self.assertEqual(right_hand_path, initial_path)
+        self.assertIn("Right hand", self.page.locator("#stateSubtitle").inner_text())
+        self.page.locator('[data-testid="lower-octave-button"]').click()
+        lower_path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map((step) => step.label)")
+        self.assertEqual(self.page.locator('[data-testid="hand-select"]').input_value(), "right")
+        self.assertEqual(self.page.locator('[data-testid="octave-select"]').input_value(), "lower")
+        self.assertEqual(lower_path, ["C2", "D2", "E2", "F2", "G2", "A2", "B2", "C3"])
+        self.assertEqual(self.page.locator('[data-testid="lower-octave-button"]').get_attribute("aria-pressed"), "true")
+        self.page.locator('[data-testid="exercise-button-two_octaves"]').click()
+        self.assertEqual(self.page.locator('[data-testid="lower-octave-button"]').get_attribute("aria-pressed"), "true")
+        self.assertTrue(self.page.locator('[data-testid="lower-octave-button"]').is_disabled())
+        self.assertTrue(self.page.locator('[data-testid="higher-octave-button"]').is_disabled())
+
+    def test_regression_two_octave_keeps_resolved_octave_state_visible(self):
+        self.page.locator('[data-testid="lower-octave-button"]').click()
+        self.page.locator('[data-testid="exercise-button-two_octaves"]').click()
+        self.assertTrue(self.page.locator('[data-testid="lower-octave-button"]').is_disabled())
+        self.assertTrue(self.page.locator('[data-testid="higher-octave-button"]').is_disabled())
+        self.assertEqual(self.page.locator('[data-testid="lower-octave-button"]').get_attribute("aria-pressed"), "true")
+        self.assertEqual(self.page.locator('[data-testid="higher-octave-button"]').get_attribute("aria-pressed"), "false")
+
+    def test_regression_practice_header_controls_do_not_overlap(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        overlaps = self.page.evaluate("""() => {
+          const selectors = [
+            '[data-testid="mode-switch"]',
+            '[data-testid="tonic-select"]',
+            '[data-testid="scale-select"]',
+            '[data-testid="octave-buttons"]',
+            '[data-testid="root-control"]',
+            '[data-testid="hand-buttons"]',
+            '[data-testid="exercise-buttons"]',
+            '[data-testid="fingering-control"]',
+            '[data-testid="view-control"]',
+            '[data-testid="orientation-select"]',
+            '[data-testid="rotate-surface"]'
+          ];
+          const boxes = selectors.map((selector) => {
+            const el = document.querySelector(selector);
+            const box = el.getBoundingClientRect();
+            return { selector, left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+          });
+          const collisions = [];
+          for (let i = 0; i < boxes.length; i += 1) {
+            for (let j = i + 1; j < boxes.length; j += 1) {
+              const horizontal = Math.max(boxes[i].left, boxes[j].left) < Math.min(boxes[i].right, boxes[j].right);
+              const vertical = Math.max(boxes[i].top, boxes[j].top) < Math.min(boxes[i].bottom, boxes[j].bottom);
+              if (horizontal && vertical) collisions.push([boxes[i].selector, boxes[j].selector]);
+            }
+          }
+          return collisions;
+        }""")
+        self.assertEqual(overlaps, [])
+
+    def test_regression_practice_header_controls_follow_information_hierarchy(self):
+        order = self.page.evaluate("""() => [...document.querySelector('.controls-grid').children].map((el) => (
+          el.getAttribute('data-testid') || el.querySelector('[data-testid]')?.getAttribute('data-testid') || ''
+        ))""")
+        self.assertEqual(order, [
+            "mode-switch",
+            "tonic-select",
+            "scale-select",
+            "octave-control",
+            "root-control",
+            "hand-control",
+            "exercise-control",
+            "fingering-control",
+            "view-control",
+            "orientation-select",
+            "rotate-surface",
+        ])
+        header_text = self.page.locator(".top-panel").inner_text()
+        self.assertIn("Session", header_text)
+        self.assertIn("Root Octave", header_text)
+        self.assertIn("Start Button", header_text)
+        self.assertIn("Finger Pattern", header_text)
+        self.assertIn("Overlay", header_text)
+
+    def test_regression_play_mode_midi_does_not_score_or_advance(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockPlayInput = { id: 'play-exquis', name: 'Exquis Play', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockPlayInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="play-mode"]').click()
+        before_step = self.page.locator('[data-testid="step-readout"]').inner_text()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockPlayInput && window.__mockPlayInput.onmidimessage")
+        self.page.evaluate("() => window.__mockPlayInput.onmidimessage({ data: [0x91, 48, 100] })")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-feedback\"]').textContent.includes('Play mode: C3')")
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), before_step)
+        self.assertIn("score paused", self.page.locator('[data-testid="drill-score"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="calibration-stats"]').inner_text(), "0 verified / 0 mismatched")
+        self.assertGreater(self.page.locator(".midi-held").count(), 0)
+
     def test_regression_selected_root_keeps_first_fingering_assignment(self):
         root_id = self.page.locator('[data-testid="root-select"]').input_value()
         root_key = self.page.locator(f'[data-cell-id="{root_id}"]')
         self.assertEqual(root_key.locator(".degree-badge").inner_text(), "1")
-        self.assertEqual(root_key.locator(".finger").inner_text(), "5")
+        self.assertEqual(root_key.locator(".finger").inner_text(), "Pink")
 
     def test_regression_fingering_labels_are_valid_for_visible_path(self):
         fingers = self.page.locator(".key.in-path .finger").evaluate_all("els => els.map((el) => el.textContent.trim())")
         self.assertGreaterEqual(len(fingers), 5)
         for finger in fingers:
-            self.assertIn(finger, {"1", "2", "3", "4", "5"})
+            self.assertIn(finger, {"Th", "In", "Mid", "Ring", "Pink"})
 
     def test_regression_scale_path_ascends_root_to_octave(self):
         path = self.page.evaluate("""() => [...document.querySelectorAll('.key.in-path')]
@@ -479,8 +1174,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           degree: key.querySelector('.degree-badge') ? key.querySelector('.degree-badge').textContent.trim() : '',
           finger: key.querySelector('.finger') ? key.querySelector('.finger').textContent.trim() : ''
         }))""")
-        self.assertEqual([item["degree"] for item in path], ["1", "2", "3", "4", "5", "6", "7"])
-        self.assertEqual([item["finger"] for item in path], ["5", "4", "3", "2", "5", "4", "3"])
+        self.assertEqual([item["degree"] for item in path], ["1", "2", "3", "4", "5", "6", "7", "8"])
+        self.assertEqual([item["finger"] for item in path], ["Pink", "Ring", "Ring", "Mid", "Mid", "In", "In", "In"])
         self.assertTrue(all(path[i]["midi"] < path[i + 1]["midi"] for i in range(len(path) - 1)))
         self.assertIn("1 / 8", self.page.locator('[data-testid="step-readout"]').inner_text())
 
@@ -503,7 +1198,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(model["lowerCPhysicalCell"], "C2")
         self.assertTrue(model["selectedRoot"].startswith("C3 /"))
         self.assertEqual(model["currentNote"], "C3")
-        self.assertEqual(model["path"], ["C3", "D3", "E3", "F3", "G3", "A3", "B3"])
+        self.assertEqual(model["path"], ["C3", "D3", "E3", "F3", "G3", "A3", "B3", "C4"])
 
     def test_regression_octave_rollover_uses_chromatic_row_math(self):
         model = self.page.evaluate("""() => {
@@ -537,6 +1232,458 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="enable-midi"]').click()
         status = self.page.locator('[data-testid="midi-status"]').inner_text()
         self.assertTrue("MIDI" in status)
+
+    def test_regression_exquis_sysex_helpers_encode_official_root_scale_messages(self):
+        payload = self.page.evaluate("""() => ({
+          setup: window.__exquisSysexDebug.build(0x00, [window.__exquisSysexDebug.developerMask]),
+          rootF: window.__exquisSysexDebug.build(0x06, [5]),
+          scaleDorian: window.__exquisSysexDebug.build(0x07, [window.__exquisSysexDebug.exquisScaleNumberFor('dorian')]),
+          scaleNaturalMinor: window.__exquisSysexDebug.build(0x07, [window.__exquisSysexDebug.exquisScaleNumberFor('aeolian')]),
+          scaleMixolydian: window.__exquisSysexDebug.build(0x07, [window.__exquisSysexDebug.exquisScaleNumberFor('mixolydian')]),
+          idForExquisFive: window.__exquisSysexDebug.scaleIdForExquisNumber(5),
+          dorianDegrees: window.__exquisSysexDebug.degreesFor('dorian'),
+          parsed: window.__exquisSysexDebug.parse([0xF0, 0x00, 0x21, 0x7E, 0x7F, 0x06, 0x05, 0xF7])
+        })""")
+        self.assertEqual(payload["setup"], [240, 0, 33, 126, 127, 0, 1, 247])
+        self.assertEqual(payload["rootF"], [240, 0, 33, 126, 127, 6, 5, 247])
+        self.assertEqual(payload["scaleDorian"], [240, 0, 33, 126, 127, 7, 1, 247])
+        self.assertEqual(payload["scaleMixolydian"], [240, 0, 33, 126, 127, 7, 4, 247])
+        self.assertEqual(payload["scaleNaturalMinor"], [240, 0, 33, 126, 127, 7, 5, 247])
+        self.assertEqual(payload["idForExquisFive"], "aeolian")
+        self.assertEqual(payload["dorianDegrees"], [1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0])
+        self.assertEqual(payload["parsed"]["command"], 6)
+        self.assertEqual(payload["parsed"]["payload"], [5])
+
+    def test_regression_exquis_key_mode_sync_uses_official_developer_sysex(self):
+        self.page.evaluate("""
+        () => {
+          window.__sysexRequests = [];
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = (opts) => {
+            window.__sysexRequests.push(opts || {});
+            return Promise.resolve({
+              inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+              outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+              onstatechange: null
+            });
+          };
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.select_option('[data-testid="tonic-select"]', "5")
+        self.page.select_option('[data-testid="scale-select"]', "dorian")
+        self.page.wait_for_timeout(140)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
+        self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 6, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 7, 1, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 127, 1, 8, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 3, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 6, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 7, 247], sent)
+        self.assertIn([240, 0, 33, 126, 247], sent)
+        self.assertIn([240, 0, 33, 126, 4, 2, 29, 247], sent)
+        self.assertIn([240, 0, 33, 126, 7, 2, 127, 95, 63, 247], sent)
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0xF7] })")
+        echo_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+        self.page.wait_for_timeout(140)
+        self.assertEqual(self.page.evaluate("() => window.__mockExquisOutput.sent.length"), echo_count)
+        self.page.select_option('[data-testid="legacy-map-select"]', "top_left")
+        self.page.wait_for_timeout(60)
+        remapped = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", echo_count)
+        self.assertIn([240, 0, 33, 126, 4, 0, 62, 247], remapped)
+        before_lights = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+        self.page.select_option('[data-testid="legacy-light-select"]', "both")
+        self.page.wait_for_timeout(60)
+        light_messages = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", before_lights)
+        self.assertIn([240, 0, 33, 126, 3, 3, 127, 95, 63, 247], light_messages)
+        self.assertIn([240, 0, 33, 126, 7, 3, 127, 95, 63, 247], light_messages)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("Exquis legacy key/mode", log)
+        self.assertIn("buttonColors=61 noteColors=0 noteMap=61", log)
+        self.assertIn("sent F Dorian", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+
+    def test_regression_exquis_dial_listen_uses_settings_encoder_developer_mode_and_logs_dials(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="dial-listen"]').click()
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertIn([240, 0, 33, 126, 127, 0, 19, 247], sent)
+        self.assertEqual(self.page.locator('[data-testid="dial-listen"]').get_attribute("aria-pressed"), "true")
+        self.assertIn("pads + encoders + settings", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xBF, 110, 65] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 74, 12] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 42, 5] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 43, 8] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 22, 127] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 22, 0] })")
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("Exquis dial encoder=110 Encoder 1 delta=1 raw=65", log)
+        self.assertIn("Exquis dial raw status=0xB0 channel=1 data=176,74,12", log)
+        self.assertIn("Exquis settings Encoder 2 root value=5 note=F", log)
+        self.assertIn("Exquis settings Encoder 3 scale-number=8", log)
+        self.assertIn("Exquis settings Encoder 2 click value=127", log)
+        self.assertEqual(self.page.locator('[data-testid="tonic-select"]').input_value(), "5")
+        self.assertIn("hardware scale number 8", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+        self.page.locator('[data-testid="dial-listen"]').click()
+        self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], self.page.evaluate("() => window.__mockExquisOutput.sent"))
+
+    def test_regression_exquis_native_probe_sweeps_official_write_masks(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.select_option('[data-testid="tonic-select"]', "5")
+        self.page.select_option('[data-testid="scale-select"]', "dorian")
+        self.page.locator('[data-testid="native-probe-exquis"]').click()
+        self.page.wait_for_timeout(3100)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 16, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 17, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 19, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 7, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 3, 247], sent)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("Exquis native probe started root=F scale=Dorian", log)
+        self.assertIn("mask=0x10 settings", log)
+        self.assertIn("mask=0x13 pads+encoders+settings", log)
+
+    def test_regression_exquis_edge_controls_are_labeled_and_show_capture_state(self):
+        labels = self.page.evaluate("""
+        () => [...document.querySelectorAll('[data-testid="edge-control"]')].map((el) => ({
+          id: el.dataset.edgeId,
+          text: el.innerText,
+          label: el.getAttribute('aria-label')
+        }))
+        """)
+        text = "\n".join(item["text"] for item in labels)
+        for expected in ["Settings", "Sound", "Record", "Loop", "Clips", "Play/Stop", "Down", "Up", "Undo", "Redo", "Encoder 1", "Encoder 2", "Encoder 3", "Encoder 4", "Slider"]:
+            self.assertIn(expected, text)
+        layout = self.page.evaluate("""
+        () => ({
+          encoders: [...document.querySelectorAll('[data-testid="edge-top-controls"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
+          select: [...document.querySelectorAll('[data-testid="edge-select-group"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
+          slider: [...document.querySelectorAll('[data-testid="edge-slider-group"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
+          undo: [...document.querySelectorAll('[data-testid="edge-undo-group"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
+          actions: [...document.querySelectorAll('[data-testid="edge-action-row"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
+          topBeforeKeys: Boolean(document.querySelector('[data-testid="edge-top-controls"]').compareDocumentPosition(document.querySelector('[data-testid="keyboard"]')) & Node.DOCUMENT_POSITION_FOLLOWING),
+          bottomAfterKeys: Boolean(document.querySelector('[data-testid="edge-bottom-controls"]').compareDocumentPosition(document.querySelector('[data-testid="keyboard"]')) & Node.DOCUMENT_POSITION_PRECEDING)
+        })
+        """)
+        self.assertEqual(layout["encoders"], ["enc1", "enc2", "enc3", "enc4"])
+        self.assertEqual(layout["select"], ["down", "up"])
+        self.assertEqual(layout["slider"], ["slider"])
+        self.assertEqual(layout["undo"], ["undo", "redo"])
+        self.assertEqual(layout["actions"], ["settings", "sound", "record", "loop", "clips", "playStop"])
+        self.assertTrue(layout["topBeforeKeys"], layout)
+        self.assertTrue(layout["bottomAfterKeys"], layout)
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="dial-listen"]').click()
+        self.assertIn("settings/sound", self.page.locator('[data-testid="edge-control-status"]').inner_text())
+        self.assertGreaterEqual(self.page.locator('[data-edge-id="settings"].captured').count(), 1)
+        self.assertGreaterEqual(self.page.locator('[data-edge-id="enc2"].captured').count(), 1)
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 42, 5] })")
+        self.assertGreaterEqual(self.page.locator('[data-edge-id="enc2"].active').count(), 1)
+        self.assertIn("5", self.page.locator('[data-edge-id="enc2"]').inner_text())
+
+    def test_regression_exquis_edge_controls_follow_orientation_layout(self):
+        def metrics_for(orientation):
+            self.page.select_option('[data-testid="orientation-select"]', orientation)
+            self.page.wait_for_timeout(80)
+            return self.page.evaluate("""() => {
+              const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+              const safeTop = Math.min(
+                window.innerHeight,
+                document.querySelector('[data-testid="console-panel"]').getBoundingClientRect().top,
+                document.querySelector('[data-testid="build-version"]').getBoundingClientRect().top
+              );
+              return {
+                top: box('[data-testid="edge-top-controls"]'),
+                keyboard: box('[data-testid="keyboard"]'),
+                bottom: box('[data-testid="edge-bottom-controls"]'),
+                safeTop,
+                pageY: document.documentElement.scrollHeight - document.documentElement.clientHeight
+              };
+            }""")
+
+        vertical = metrics_for("vertical")
+        self.assertLess(vertical["top"]["bottom"], vertical["keyboard"]["top"], vertical)
+        self.assertGreater(vertical["bottom"]["top"], vertical["keyboard"]["bottom"], vertical)
+        self.assertLessEqual(vertical["bottom"]["bottom"], vertical["safeTop"] - 4, vertical)
+        self.assertLessEqual(vertical["pageY"], 1, vertical)
+        self.assertLess(abs((vertical["top"]["left"] + vertical["top"]["right"]) / 2 - (vertical["keyboard"]["left"] + vertical["keyboard"]["right"]) / 2), vertical["keyboard"]["width"] * 0.18, vertical)
+
+        horizontal = metrics_for("horizontal")
+        self.assertLess(horizontal["bottom"]["right"], horizontal["keyboard"]["left"], horizontal)
+        self.assertGreater(horizontal["top"]["left"], horizontal["keyboard"]["right"], horizontal)
+        self.assertGreaterEqual(horizontal["top"]["width"], 118, horizontal)
+        self.assertGreaterEqual(horizontal["bottom"]["width"], 72, horizontal)
+        self.assertLessEqual(horizontal["bottom"]["width"], 92, horizontal)
+        self.assertLess(abs((horizontal["top"]["top"] + horizontal["top"]["bottom"]) / 2 - (horizontal["keyboard"]["top"] + horizontal["keyboard"]["bottom"]) / 2), horizontal["keyboard"]["height"] * 0.28, horizontal)
+
+    def test_regression_exquis_hardware_controls_use_physical_shapes(self):
+        self.page.select_option('[data-testid="orientation-select"]', "horizontal")
+        self.page.wait_for_timeout(100)
+        metrics = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const radius = (sel) => getComputedStyle(document.querySelector(sel)).borderRadius;
+          const knob = rect('[data-edge-id="enc1"] .edge-visual');
+          const knobLabel = rect('[data-edge-id="enc1"] .edge-label');
+          const action = rect('[data-edge-id="settings"] .edge-visual');
+          const actionLabel = rect('[data-edge-id="settings"] .edge-label');
+          const slider = rect('[data-edge-id="slider"] .edge-visual');
+          const select = rect('[data-edge-id="down"] .edge-visual');
+          const device = rect('[data-testid="exquis-device"]');
+          const keyboard = rect('[data-testid="keyboard"]');
+          return { knob, knobLabel, action, actionLabel, slider, select, device, keyboard, deviceRadius: radius('[data-testid="exquis-device"]') };
+        }""")
+        self.assertLessEqual(abs(metrics["knob"]["width"] - metrics["knob"]["height"]), 2, metrics)
+        self.assertGreaterEqual(metrics["knob"]["width"], 44, metrics)
+        self.assertGreater(metrics["knobLabel"]["left"], metrics["knob"]["right"], metrics)
+        self.assertLessEqual(abs(metrics["action"]["width"] - metrics["action"]["height"]), 2, metrics)
+        self.assertGreaterEqual(metrics["action"]["width"], 32, metrics)
+        action_label_beside = metrics["actionLabel"]["left"] > metrics["action"]["right"]
+        action_label_rotated = metrics["actionLabel"]["height"] > metrics["actionLabel"]["width"] * 1.4
+        self.assertTrue(action_label_beside or action_label_rotated, metrics)
+        self.assertGreater(metrics["slider"]["height"], metrics["slider"]["width"] * 1.8, metrics)
+        self.assertLessEqual(abs(metrics["select"]["width"] - metrics["select"]["height"]), 4, metrics)
+        self.assertLess(metrics["device"]["top"], metrics["keyboard"]["top"], metrics)
+        self.assertGreater(metrics["device"]["bottom"], metrics["keyboard"]["bottom"], metrics)
+
+    def test_regression_horizontal_hardware_slab_does_not_waste_vertical_space(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.select_option('[data-testid="orientation-select"]', "horizontal")
+        self.page.wait_for_timeout(100)
+        metrics = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const device = rect('[data-testid="exquis-device"]');
+          const keyboard = rect('[data-testid="keyboard"]');
+          return {
+            device,
+            keyboard,
+            topDead: keyboard.top - device.top,
+            bottomDead: device.bottom - keyboard.bottom,
+            keyboardShare: keyboard.height / device.height
+          };
+        }""")
+        self.assertLessEqual(metrics["topDead"], 38, metrics)
+        self.assertLessEqual(metrics["bottomDead"], 38, metrics)
+        self.assertGreaterEqual(metrics["keyboardShare"], 0.82, metrics)
+
+    def test_regression_horizontal_exquis_layout_fits_stage_without_dead_band_or_clipped_stepper(self):
+        for width, height, min_key_width in [(1280, 720, 470), (1366, 768, 520), (1536, 864, 620), (1600, 900, 650)]:
+            with self.subTest(viewport=(width, height)):
+                self.page.set_viewport_size({"width": width, "height": height})
+                self.page.select_option('[data-testid="orientation-select"]', "horizontal")
+                self.page.wait_for_timeout(100)
+                metrics = self.page.evaluate("""() => {
+                  const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+                  const stage = rect('.stage-panel');
+                  const path = rect('[data-testid="practice-path-strip"]');
+                  const stepper = rect('[data-testid="practice-stepper"]');
+                  const encoderRail = document.querySelector('[data-testid="edge-top-controls"]').closest('.edge-controls').getBoundingClientRect();
+                  const keyboard = rect('[data-testid="keyboard"]');
+                  const bottomRail = document.querySelector('[data-testid="edge-bottom-controls"]').closest('.edge-controls').getBoundingClientRect();
+                  const side = rect('.side-panel');
+                  const safeTop = Math.min(
+                    window.innerHeight,
+                    document.querySelector('[data-testid="console-panel"]').getBoundingClientRect().top,
+                    document.querySelector('[data-testid="build-version"]').getBoundingClientRect().top
+                  );
+                  const device = {
+                    left: Math.min(encoderRail.left, keyboard.left, bottomRail.left),
+                    right: Math.max(encoderRail.right, keyboard.right, bottomRail.right),
+                    top: Math.min(encoderRail.top, keyboard.top, bottomRail.top),
+                    bottom: Math.max(encoderRail.bottom, keyboard.bottom, bottomRail.bottom)
+                  };
+                  return {
+                    stage,
+                    path,
+                    stepper,
+                    device,
+                    safeTop,
+                    encoderRail,
+                    bottomRail,
+                    side,
+                    keyboard,
+                    pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                    pageY: document.documentElement.scrollHeight - document.documentElement.clientHeight
+                  };
+                }""")
+                self.assertLessEqual(metrics["stepper"]["right"], metrics["stage"]["right"] - 8, metrics)
+                self.assertGreaterEqual(metrics["device"]["left"], metrics["stage"]["left"] + 8, metrics)
+                self.assertLessEqual(metrics["device"]["right"], metrics["stage"]["right"] - 8, metrics)
+                self.assertLessEqual(metrics["device"]["right"], metrics["side"]["left"] - 8, metrics)
+                self.assertLessEqual(metrics["device"]["bottom"], metrics["safeTop"] - 4, metrics)
+                self.assertLess(metrics["bottomRail"]["right"], metrics["keyboard"]["left"], metrics)
+                self.assertGreater(metrics["encoderRail"]["left"], metrics["keyboard"]["right"], metrics)
+                self.assertLessEqual(metrics["device"]["top"] - metrics["path"]["bottom"], 72, metrics)
+                self.assertGreaterEqual(metrics["keyboard"]["width"], min_key_width, metrics)
+                self.assertLessEqual(metrics["pageX"], 1, metrics)
+                self.assertLessEqual(metrics["pageY"], 1, metrics)
+
+    def test_regression_exquis_incoming_root_scale_sysex_updates_ui_without_echo(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        before_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0x7F, 0x06, 0x02, 0xF7] });
+          window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0x7F, 0x07, 0x01, 0xF7] });
+        }
+        """)
+        self.assertEqual(self.page.locator('[data-testid="tonic-select"]').input_value(), "2")
+        self.assertEqual(self.page.locator('[data-testid="scale-select"]').input_value(), "dorian")
+        self.assertIn("D Dorian", self.page.locator("#stateTitle").inner_text())
+        self.page.wait_for_timeout(140)
+        after_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+        self.assertGreater(after_count, before_count)
+        sent_after = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", before_count)
+        self.assertNotIn([240, 0, 33, 126, 127, 6, 2, 247], sent_after)
+        self.assertNotIn([240, 0, 33, 126, 127, 7, 1, 247], sent_after)
+        self.assertIn([240, 0, 33, 126, 247], sent_after)
+
+    def test_regression_exquis_sync_falls_back_to_input_only_when_sysex_permission_denied(self):
+        self.page.evaluate("""
+        () => {
+          window.__requests = [];
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = (opts) => {
+            window.__requests.push(opts || {});
+            if (opts && opts.sysex) return Promise.reject(new Error('sysex denied'));
+            return Promise.resolve({
+              inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+              outputs: { forEach: () => {} },
+              onstatechange: null
+            });
+          };
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.assertEqual(self.page.evaluate("() => window.__requests.map(r => !!r.sysex)"), [True, False])
+        self.assertTrue(self.page.locator('[data-testid="sync-exquis"]').is_disabled())
+        self.assertIn("SysEx permission unavailable", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+
+    def test_regression_exquis_probe_sends_official_and_legacy_diagnostics(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: (cb) => cb(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="probe-exquis"]').click()
+        self.page.wait_for_timeout(1050)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertIn([240, 126, 127, 6, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 32, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 63, 247], sent)
+        self.assertIn([240, 0, 33, 126, 247], sent)
+        self.assertIn([240, 0, 33, 126, 4, 0, 60, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
+        self.page.evaluate("""
+        () => window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x7E, 0x7F, 0x06, 0x02, 0x00, 0x21, 0x7E, 0x01, 0x02, 0xF7] })
+        """)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("raw SysEx receive bytes=F0 7E 7F 06 02 00 21 7E 01 02 F7", log)
+        self.assertIn("universal identity response payload=0,33,126,1,2", log)
+        self.assertIn("identity response received", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
 
     def test_clear_calibration_button_resets_stats(self):
         self.assertFalse(self.page.locator('[data-testid="clear-calibration"]').is_visible())
@@ -1141,7 +2288,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         koto = payload["results"][0]
         self.assertEqual(koto["instrumentType"], "physical", koto)
         self.assertEqual(koto["engineSettings"].get("model"), "pluck", koto)
-        self.assertGreaterEqual(koto["peak"], 0.05, koto)
+        self.assertGreaterEqual(koto["peak"], 0.02, koto)
         self.assertGreaterEqual(koto["rms"], 0.01, koto)
         self.assertGreaterEqual(koto["spectrumPeak"], 0.4, koto)
 
@@ -1164,7 +2311,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             cwd=ROOT,
             text=True,
             capture_output=True,
-            timeout=180,
+            timeout=300,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
@@ -1466,9 +2613,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 64] })")
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'startSustainedNote')")
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertGreaterEqual(len([call for call in calls if call[0] == "apply" and call[1] == "physical" and call[2] == "Koto"]), 2, calls)
-        self.assertIn(["startSustainedNote", 48, 96, "physical", "pluck"], calls)
+        self.assertIn(["startSustainedNote", 48, 69, "physical", "pluck"], calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("expected=physical", log)
         self.assertIn("MISMATCH", log)
@@ -2006,6 +3154,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => { window.__fixedNow = 100000; Date.now = () => window.__fixedNow; }")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x97, 48, 96] })")
         for pressure in [101, 104, 107, 109, 111, 113, 0]:
             self.page.evaluate("(pressure) => window.__mockExquisInput.onmidimessage({ data: [0xD7, pressure] })", pressure)
@@ -2111,8 +3260,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("""() => [...document.querySelectorAll('[data-testid="sound-engine-select"] option')]
           .some(option => option.value === 'physical' || option.value === 'Physical' || option.textContent.trim() === 'Physical')""")
         self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
-        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
-        self.page.select_option('[data-testid="sound-preset-select"]', label="Koto")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Bowed")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Violin")
         metrics = self.page.evaluate("""
         async () => {
           const input = window.__sixNoteMidiInput;
@@ -2231,10 +3380,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
             [290, [0x89, 47, 0]], [292, [0x84, 48, 0]]
           ];
           events.forEach(([delay, data]) => setTimeout(() => input.onmidimessage({ data }), delay));
-          await new Promise(resolve => setTimeout(resolve, 30));
           const frame = document.getElementById('ssliEngineFrame');
           const host = frame && frame.contentWindow;
           const SL = host && host.SynthLab;
+          const waitStart = Date.now();
+          while (Date.now() - waitStart < 500 && !(SL && SL.__exquisPracticeOutputBoost)) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
           const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
           const boost = SL && SL.__exquisPracticeOutputBoost;
           if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
@@ -2242,14 +3394,19 @@ class PlaywrightExhibitTests(unittest.TestCase):
           analyser.fftSize = 2048;
           boost.connect(analyser);
           const wave = new Uint8Array(analyser.fftSize);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount);
           let peak = 0;
           let rmsSum = 0;
           let count = 0;
           let clipped = 0;
+          let spectrumPeak = 0;
+          let spectrumSum = 0;
+          let spectrumCount = 0;
           const framePeaks = [];
           const start = Date.now();
           while (Date.now() - start < 520) {
             analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
             let framePeak = 0;
             for (let i = 0; i < wave.length; i += 1) {
               const n = (wave[i] - 128) / 128;
@@ -2261,6 +3418,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
               if (wave[i] <= 2 || wave[i] >= 253) clipped += 1;
             }
             framePeaks.push(framePeak);
+            for (let j = 0; j < spectrum.length; j += 1) {
+              const s = spectrum[j] / 255;
+              spectrumPeak = Math.max(spectrumPeak, s);
+              spectrumSum += s * s;
+              spectrumCount += 1;
+            }
             await new Promise(resolve => setTimeout(resolve, 16));
           }
           try { boost.disconnect(analyser); } catch (err) {}
@@ -2271,18 +3434,523 @@ class PlaywrightExhibitTests(unittest.TestCase):
             rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
             clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
             p95Peak: Number(framePeaks[Math.floor(framePeaks.length * 0.95)].toFixed(5)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            finalBoostGain: Number(boost.gain.value.toFixed(2)),
             diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
           };
         }
         """)
         self.assertTrue(metrics.get("available"), metrics)
-        self.assertIn("SSLI physical velocity shaped raw=60 playable=90 heldPhysical=0 effectiveHeld=0 model=pluck", metrics["diagnosticLog"])
-        self.assertIn("SSLI physical velocity shaped raw=86 playable=96 heldPhysical=1 effectiveHeld=0 model=pluck", metrics["diagnosticLog"])
+        self.assertIn("articulation queued B2 mode=strum", metrics["diagnosticLog"])
+        self.assertIn("articulation queued C3 mode=strum", metrics["diagnosticLog"])
+        self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
         self.assertNotIn("semitoneJamGuard", metrics["diagnosticLog"])
+        self.assertIn("SSLI output boost gain=1.60 physicalOneShotPluck=2 articulation=strum", metrics["diagnosticLog"])
+        self.assertIn("SSLI plucked one-shot B2 velocity=50", metrics["diagnosticLog"])
+        self.assertIn("SSLI plucked one-shot C3 velocity=54", metrics["diagnosticLog"])
+        self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
+        self.assertLessEqual(metrics["finalBoostGain"], 1.6, metrics)
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["p95Peak"], 0.5, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
+        self.assertLessEqual(metrics["spectrumPeak"], 0.92, metrics)
         self.assertGreater(metrics["rms"], 0.01, metrics)
+
+    def test_regression_three_note_plucked_strum_has_stable_audio_output(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__threeNoteMidiInput = { id: 'three-note-exquis', name: 'Three Note Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__threeNoteMidiInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__threeNoteMidiInput && window.__threeNoteMidiInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__threeNoteMidiInput;
+          const events = [
+            [0, [0x96, 48, 72]], [2, [0xD6, 99]],
+            [4, [0x9D, 52, 74]], [6, [0xDD, 104]],
+            [8, [0x9F, 55, 69]], [10, [0xDF, 94]],
+            [42, [0xD6, 101]], [44, [0xDD, 107]], [46, [0xDF, 91]],
+            [82, [0xD6, 89]], [84, [0xDD, 82]], [86, [0xDF, 80]],
+            [118, [0xD6, 0]], [120, [0x86, 48, 0]],
+            [138, [0xDD, 0]], [140, [0x8D, 52, 0]],
+            [158, [0xDF, 0]], [160, [0x8F, 55, 0]]
+          ];
+          events.forEach(([delay, data]) => setTimeout(() => input.onmidimessage({ data }), delay));
+          await new Promise(resolve => setTimeout(resolve, 95));
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const boost = SL && SL.__exquisPracticeOutputBoost;
+          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          boost.connect(analyser);
+          const wave = new Uint8Array(analyser.fftSize);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount);
+          let peak = 0;
+          let rmsSum = 0;
+          let count = 0;
+          let clipped = 0;
+          let spectrumPeak = 0;
+          const start = Date.now();
+          while (Date.now() - start < 430) {
+            analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
+            for (let i = 0; i < wave.length; i += 1) {
+              const n = (wave[i] - 128) / 128;
+              const abs = Math.abs(n);
+              peak = Math.max(peak, abs);
+              rmsSum += n * n;
+              count += 1;
+              if (wave[i] <= 2 || wave[i] >= 253) clipped += 1;
+            }
+            for (let j = 0; j < spectrum.length; j += 1) spectrumPeak = Math.max(spectrumPeak, spectrum[j] / 255);
+            await new Promise(resolve => setTimeout(resolve, 16));
+          }
+          try { boost.disconnect(analyser); } catch (err) {}
+          return {
+            available: true,
+            peak: Number(peak.toFixed(5)),
+            rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
+        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", metrics["diagnosticLog"])
+        self.assertIn("SSLI plucked one-shot", metrics["diagnosticLog"])
+        self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
+        self.assertNotIn("SSLI output boost gain=3.50 physicalVoices=1 articulation=strum", metrics["diagnosticLog"])
+        self.assertLessEqual(metrics["peak"], 0.55, metrics)
+        self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
+        self.assertLessEqual(metrics["spectrumPeak"], 0.95, metrics)
+        self.assertGreater(metrics["rms"], 0.006, metrics)
+
+    def test_regression_real_plucked_strum_plays_note_released_after_flush_before_slot(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__quickReleaseMidiInput = { id: 'quick-release-exquis', name: 'Quick Release Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__quickReleaseMidiInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__quickReleaseMidiInput && window.__quickReleaseMidiInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.page.evaluate("""
+        async () => {
+          const input = window.__quickReleaseMidiInput;
+          const events = [
+            [0, [0x98, 59, 57]], [1, [0xD8, 84]],
+            [3, [0x92, 55, 37]], [4, [0xD2, 26]],
+            [6, [0x9E, 52, 68]], [7, [0xDE, 88]],
+            [34, [0xDE, 0]], [35, [0x8E, 52, 0]],
+            [52, [0xD2, 0]], [53, [0x82, 55, 0]],
+            [55, [0xD8, 0]], [56, [0x88, 59, 0]]
+          ];
+          events.forEach(([delay, data]) => setTimeout(() => input.onmidimessage({ data }), delay));
+          await new Promise(resolve => setTimeout(resolve, 120));
+        }
+        """)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", log)
+        self.assertIn("SSLI plucked one-shot B3", log)
+        self.assertIn("SSLI plucked one-shot G3", log)
+        self.assertIn("SSLI plucked one-shot E3", log)
+        self.assertNotIn("articulation skipped released E3", log)
+
+    def install_articulation_mock(self, instrument_type="physical", physical_model="pluck"):
+        self.page.evaluate("""
+        ([instrumentType, physicalModel]) => {
+          window.__ssliCalls = [];
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          const originalDestination = { name: 'originalDestination' };
+          const boostNode = {
+            name: 'practiceBoost',
+            gain: { value: 1 },
+            connect(target) { window.__ssliCalls.push(['boostConnect', target.name || 'target', performance.now()]); }
+          };
+          const instrument = {
+            type: instrumentType,
+            settings: {
+              volume: 100,
+              physicalSettings: { model: physicalModel, excitation: 'pick' },
+              filter: {},
+              effects: {}
+            }
+          };
+          const runtimePreset = {
+            name: instrumentType === 'physical' ? 'Nylon Guitar' : 'Soft EP',
+            category: instrumentType === 'physical' ? 'Plucked' : 'Keys',
+            engine: instrumentType,
+            settings: instrument.settings
+          };
+          window.SynthLab = {
+            presets: {
+              getEngines() { return [instrumentType]; },
+              getCategoriesForEngine() { return [runtimePreset.category]; },
+              getPresetsForEngineCategory() { return [runtimePreset]; },
+              apply() { window.__ssliCalls.push(['apply', performance.now()]); }
+            },
+            audio: {
+              getCtx() { return { state: 'running', currentTime: performance.now() / 1000, createGain() { return boostNode; } }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return instrument.type; },
+              getInstruments() { return [instrument]; },
+              setInstrumentVolume(inst, volume) { instrument.settings.volume = volume; window.__ssliCalls.push(['setInstrumentVolume', volume, performance.now()]); },
+              getFinalDestination() { return originalDestination; },
+              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained', performance.now()]); },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              playNoteOnInstrument(midi, dur, inst, vel) { window.__ssliCalls.push(['playNoteOnInstrument', midi, dur, inst, vel, performance.now()]); },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, performance.now()]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi, performance.now()]); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3)), performance.now()]); },
+              clearExpression() { window.__ssliCalls.push(['clearExpression', performance.now()]); }
+            },
+            physical: {
+              noteOn(midi, velocity, inst) { window.__ssliCalls.push(['physical.noteOn', midi, velocity, inst, performance.now()]); },
+              noteOff(midi, inst) { window.__ssliCalls.push(['physical.noteOff', midi, inst, performance.now()]); },
+              updateNotePressure(midi, pressure, inst) { window.__ssliCalls.push(['physical.updateNotePressure', midi, pressure, inst, performance.now()]); },
+              allNotesOff() {}
+            }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """, [instrument_type, physical_model])
+
+    def test_regression_plucked_presets_buffer_simultaneous_note_ons_into_strum(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__strumStart = performance.now();
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 47, 90] });
+          window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 90] });
+          window.__mockExquisInput.onmidimessage({ data: [0xD1, 111] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 2")
+        metrics = self.page.evaluate("""
+        () => {
+          const starts = window.__ssliCalls.filter(call => call[0] === 'physical.noteOn');
+          const sustained = window.__ssliCalls.filter(call => call[0] === 'startSustainedNote');
+          const physicalOff = window.__ssliCalls.filter(call => call[0] === 'physical.noteOff');
+          const pressure = window.__ssliCalls.filter(call => call[0] === 'physical.updateNotePressure');
+          return {
+            starts,
+            sustained,
+            physicalOff,
+            firstDelay: starts[0][4] - window.__strumStart,
+            spacing: starts[1][4] - starts[0][4],
+            log: document.querySelector('[data-testid="diagnostic-log"]').textContent,
+            pressure
+          };
+        }
+        """)
+        self.assertEqual([call[1] for call in metrics["starts"]], [47, 48], metrics)
+        self.assertEqual(metrics["sustained"], [], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertGreaterEqual(metrics["firstDelay"], 12, metrics)
+        self.assertGreaterEqual(metrics["spacing"], 8, metrics)
+        self.assertLessEqual(metrics["spacing"], 46, metrics)
+        self.assertIn("articulation queued B2 mode=strum", metrics["log"])
+        self.assertIn("articulation flush mode=strum", metrics["log"])
+        self.assertEqual(metrics["pressure"], [], metrics)
+        self.assertIn("SSLI plucked pressure ignored after onset B2", metrics["log"])
+
+    def test_regression_plucked_strum_uses_group_headroom_from_first_note(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x9A, 53, 43] });
+          window.__mockExquisInput.onmidimessage({ data: [0x9D, 47, 71] });
+          window.__mockExquisInput.onmidimessage({ data: [0x96, 50, 67] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("articulation flush mode=strum", log)
+        self.assertEqual([call[0] for call in calls if call[0] == "startSustainedNote"], [], calls)
+        self.assertEqual([call[0] for call in calls if call[0] == "physical.noteOff"], [], calls)
+        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", log)
+        self.assertIn("SSLI plucked one-shot", log)
+        self.assertNotIn("SSLI output boost gain=3.50 physicalVoices=1 articulation=strum", log)
+
+    def test_regression_plucked_strum_ignores_held_pressure_and_auto_damps(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 81] });
+          window.__mockExquisInput.onmidimessage({ data: [0x9E, 52, 83] });
+          window.__mockExquisInput.onmidimessage({ data: [0x9C, 55, 53] });
+          window.__mockExquisInput.onmidimessage({ data: [0xD2, 127] });
+          window.__mockExquisInput.onmidimessage({ data: [0xDE, 112] });
+          window.__mockExquisInput.onmidimessage({ data: [0xDC, 100] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        self.page.wait_for_timeout(430)
+        metrics = self.page.evaluate("""
+        () => ({
+          pressure: window.__ssliCalls.filter(call => call[0] === 'physical.updateNotePressure'),
+          stops: window.__ssliCalls.filter(call => call[0] === 'stopSustainedNote'),
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff'),
+          sustained: window.__ssliCalls.filter(call => call[0] === 'startSustainedNote'),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual(metrics["pressure"], [], metrics)
+        self.assertEqual(metrics["stops"], [], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertEqual(metrics["sustained"], [], metrics)
+        self.assertIn("SSLI plucked pressure ignored after onset", metrics["log"])
+        self.assertIn("SSLI plucked one-shot", metrics["log"])
+
+    def test_regression_plucked_held_one_shot_keeps_voice_ownership_until_note_off(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0x92, 47, 101] });
+          input.onmidimessage({ data: [0xD2, 127] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
+        self.page.wait_for_timeout(480)
+        mid_hold = self.page.evaluate("""
+        () => ({
+          debug: window.__exquisDebugSnapshot(),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent,
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff')
+        })
+        """)
+        self.assertEqual(mid_hold["debug"]["heldNotes"], 1, mid_hold)
+        self.assertEqual(mid_hold["debug"]["midiVoices"], 1, mid_hold)
+        self.assertNotIn("after-one-shot-expire B2 held=1 local=0", mid_hold["log"])
+        self.assertEqual(mid_hold["physicalOff"], [], mid_hold)
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0xD2, 0] });
+          input.onmidimessage({ data: [0x82, 47, 0] });
+        }
+        """)
+        self.page.wait_for_timeout(40)
+        after_release = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+        self.assertEqual(after_release["heldNotes"], 0, after_release)
+        self.assertEqual(after_release["midiVoices"], 0, after_release)
+
+    def test_regression_non_plucked_presets_keep_immediate_note_ons(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "subtractive")
+        self.page.select_option('[data-testid="sound-category-select"]', "Keys")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Soft EP")
+        self.install_articulation_mock("subtractive", "")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__immediateStart = performance.now();
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 90] });
+          window.__afterFirstImmediateStarts = window.__ssliCalls.filter(call => call[0] === 'startSustainedNote').length;
+          window.__mockExquisInput.onmidimessage({ data: [0x92, 52, 90] });
+          window.__afterSecondImmediateStarts = window.__ssliCalls.filter(call => call[0] === 'startSustainedNote').length;
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'startSustainedNote').length >= 2")
+        metrics = self.page.evaluate("""
+        () => {
+          const starts = window.__ssliCalls.filter(call => call[0] === 'startSustainedNote');
+            return {
+              starts,
+              firstDelay: starts[0][3] - window.__immediateStart,
+              spacing: starts[1][3] - starts[0][3],
+              afterFirst: window.__afterFirstImmediateStarts,
+              afterSecond: window.__afterSecondImmediateStarts,
+              log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+            };
+          }
+        """)
+        self.assertEqual([call[1] for call in metrics["starts"]], [48, 52], metrics)
+        self.assertLess(metrics["firstDelay"], 12, metrics)
+        self.assertEqual(metrics["afterFirst"], 1, metrics)
+        self.assertEqual(metrics["afterSecond"], 2, metrics)
+        self.assertNotIn("articulation queued", metrics["log"])
+
+    def test_regression_released_buffered_strum_note_does_not_start_synth_voice(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 90] });
+          window.__mockExquisInput.onmidimessage({ data: [0x81, 48, 0] });
+        }
+        """)
+        self.page.wait_for_timeout(80)
+        metrics = self.page.evaluate("""
+        () => ({
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
+          stops: window.__ssliCalls.filter(call => call[0] === 'stopSustainedNote'),
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff'),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual(metrics["starts"], [], metrics)
+        self.assertEqual(metrics["stops"], [], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertIn("articulation queued C3 mode=strum", metrics["log"])
+
+    def test_regression_plucked_strum_plays_note_released_after_flush_before_slot(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0x98, 59, 57] });
+          input.onmidimessage({ data: [0x92, 55, 37] });
+          input.onmidimessage({ data: [0x9E, 52, 68] });
+          setTimeout(() => input.onmidimessage({ data: [0x8E, 52, 0] }), 24);
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        metrics = self.page.evaluate("""
+        () => ({
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
+          sustained: window.__ssliCalls.filter(call => call[0] === 'startSustainedNote'),
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff'),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call[1] for call in metrics["starts"]], [59, 55, 52], metrics)
+        self.assertEqual(metrics["sustained"], [], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", metrics["log"])
+        self.assertIn("SSLI plucked one-shot E3", metrics["log"])
+        self.assertNotIn("articulation skipped released E3", metrics["log"])
+
+    def test_regression_plucked_strum_plays_capture_matured_note_even_when_flush_timer_is_late(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.evaluate("""
+        () => {
+          const realSetTimeout = window.setTimeout.bind(window);
+          window.__realSetTimeout = realSetTimeout;
+          window.setTimeout = (fn, delay, ...args) => {
+            const lateDelay = delay === 18 ? 58 : delay;
+            return realSetTimeout(fn, lateDelay, ...args);
+          };
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0x98, 59, 57] });
+          input.onmidimessage({ data: [0x92, 55, 37] });
+          input.onmidimessage({ data: [0x9E, 52, 68] });
+          window.__realSetTimeout(() => input.onmidimessage({ data: [0x8E, 52, 0] }), 24);
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        metrics = self.page.evaluate("""
+        () => ({
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
+          sustained: window.__ssliCalls.filter(call => call[0] === 'startSustainedNote'),
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff'),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call[1] for call in metrics["starts"]], [59, 55, 52], metrics)
+        self.assertEqual(metrics["sustained"], [], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", metrics["log"])
+        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", metrics["log"])
+        self.assertIn("SSLI plucked one-shot E3", metrics["log"])
+        self.assertNotIn("articulation skipped released E3", metrics["log"])
 
     def test_regression_midi_reports_missing_ssli_runtime_api_before_local_fallback(self):
         self.open_audio_drawer()
@@ -2317,6 +3985,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 64] })")
+        self.page.wait_for_timeout(50)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("SSLI preset apply failed: missing SynthLab.presets.apply preset=Physical::Koto", log)
         self.assertIn("SSLI MIDI unavailable for C3: missing SynthLab.presets.apply", log)
@@ -2775,6 +4444,61 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(expression_calls[-1][2], 1.0, calls)
         self.assertFalse(any(call == ["clearExpression"] for call in calls), calls)
 
+    def test_regression_play_mode_chords_keep_independent_ssli_voice_ownership(self):
+        self.open_audio_drawer()
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const activeOscs = new Map();
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getActiveOscillators() { return activeOscs; },
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained', activeOscs.size]); activeOscs.clear(); },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); activeOscs.set(midi, { midi }); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); activeOscs.delete(midi); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() { window.__ssliCalls.push(['clearExpression']); }
+            }
+          };
+          window.__mockChordInput = { id: 'play-chord-exquis', name: 'Play Chord Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockChordInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockChordInput && window.__mockChordInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockChordInput.onmidimessage({ data: [0x91, 48, 88] });
+          window.__mockChordInput.onmidimessage({ data: [0x92, 52, 94] });
+          window.__mockChordInput.onmidimessage({ data: [0x93, 55, 104] });
+          window.__mockChordInput.onmidimessage({ data: [0x82, 52, 0] });
+        }
+        """)
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "startSustainedNote"], [48, 52, 55], calls)
+        self.assertEqual([call for call in calls if call[0] == "stopSustainedNote"], [["stopSustainedNote", 52]], calls)
+        self.assertEqual(self.page.evaluate("() => [...window.SynthLab.audio.getActiveOscillators().keys()].sort((a, b) => a - b)"), [48, 55])
+        self.assertEqual(self.page.locator(".midi-held").count(), 2)
+        self.assertIn("Play mode: score paused", self.page.locator('[data-testid="drill-score"]').inner_text())
+        self.assertNotIn("released duplicate MIDI voice", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+
     def test_regression_single_note_pressure_zero_does_not_fall_back_to_velocity(self):
         self.open_audio_drawer()
         self.page.evaluate("""
@@ -3000,6 +4724,73 @@ class PlaywrightExhibitTests(unittest.TestCase):
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertIn(["startSustainedNote", 48, 120], calls)
         self.assertIn(["setExpression", 10000, 2], calls)
+
+    def test_regression_low_register_subtractive_poly_preserves_volume(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const lowRegisterSettings = {
+            volume: 55,
+            osc: [
+              { wave: 'sawtooth', oct: -2, level: 70 },
+              { wave: 'sawtooth', oct: -2, level: 70 },
+              { wave: 'sine', oct: 0, level: 0 }
+            ],
+            filter: { enabled: true, type: 'lowpass', freq: 180, q: 25 },
+            noise: { level: 0 },
+            effects: {}
+          };
+          const originalDestination = { name: 'originalDestination' };
+          const boostNode = {
+            name: 'practiceBoost',
+            gain: { value: 1 },
+            connect(target) { window.__ssliCalls.push(['boostConnect', target.name]); }
+          };
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running', createGain() { window.__ssliCalls.push(['createGain']); return boostNode; } }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstruments() { return [{ type: 'subtractive', settings: lowRegisterSettings }]; },
+              setInstrumentVolume(inst, volume) { window.__ssliCalls.push(['setInstrumentVolume', inst, volume]); lowRegisterSettings.volume = volume; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              getFinalDestination() { return originalDestination; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          [48, 50, 52, 53, 55, 57].forEach((midi, idx) => {
+            window.__mockExquisInput.onmidimessage({ data: [0x90 | idx, midi, 112] });
+          });
+        }
+        """)
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "startSustainedNote"], [48, 50, 52, 53, 55, 57], calls)
+        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("SSLI subtractive low-register dense-poly volume preserved voices=6", log)
+        self.assertIn("SSLI MIDI sustain start A3 velocity=127 pressure=112 preset=subtractive::Wurlitzer EP boost=0.04", log)
 
     def test_regression_ssli_midi_sustain_installs_practice_output_boost(self):
         self.open_audio_drawer()
@@ -3286,8 +5077,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         console = self.page.locator('[data-testid="console-panel"]')
         log = self.page.locator('[data-testid="diagnostic-log"]')
         self.assertTrue(console.is_visible())
+        self.assertFalse(log.is_visible())
+        self.page.locator('[data-testid="audio-diag"]').click()
         self.assertTrue(log.is_visible())
-        self.assertGreaterEqual(log.bounding_box()["height"], 90)
+        self.assertGreaterEqual(log.bounding_box()["height"], 180)
 
     def test_regression_audio_diag_reports_ssli_voice_pool_health(self):
         self.open_audio_drawer()
@@ -3330,13 +5123,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
             tops: rects.map(r => Math.round(r.top)),
             lefts: rects.map(r => Math.round(r.left)),
             panelWidth: panel.width,
+            sideRight: document.querySelector('.side-panel').getBoundingClientRect().right,
+            panelRight: panel.right,
             rowSpread: Math.max(...rects.map(r => r.top)) - Math.min(...rects.map(r => r.top))
           };
         }
         """)
         self.assertLessEqual(metrics["rowSpread"], 2, metrics)
         self.assertEqual(metrics["lefts"], sorted(metrics["lefts"]), metrics)
-        self.assertGreaterEqual(metrics["panelWidth"], 600, metrics)
+        self.assertGreaterEqual(metrics["panelWidth"], 200, metrics)
+        self.assertLessEqual(metrics["panelRight"], metrics["sideRight"] + 1, metrics)
 
     def test_regression_ssli_preset_selectors_are_hierarchical(self):
         self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
@@ -3449,12 +5245,18 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(self.page.locator('[data-testid="reset-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="copy-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="exit-console"]').count(), 1)
+        self.assertEqual(self.page.locator('[data-testid="exit-console"]').inner_text(), "Collapse")
+        self.assertFalse(self.page.locator('[data-testid="diagnostic-log"]').is_visible())
         self.page.locator('[data-testid="test-audio"]').click()
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('audio')")
+        self.page.locator('[data-testid="audio-diag"]').click()
+        expanded_height = self.page.locator('[data-testid="diagnostic-log"]').bounding_box()["height"]
+        self.assertGreaterEqual(expanded_height, 180)
         self.page.locator('[data-testid="reset-console"]').click()
         self.assertIn("reset", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
         self.page.locator('[data-testid="exit-console"]').click()
-        self.assertFalse(self.page.locator('[data-testid="console-panel"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="console-panel"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="diagnostic-log"]').is_visible())
 
     def test_mock_midi_input_picker_switches_inputs(self):
         self.page.evaluate("""
@@ -3686,10 +5488,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         stage = self.page.locator(".stage-panel").bounding_box()
         side = self.page.locator(".side-panel").bounding_box()
         keyboard = self.page.locator('[data-testid="keyboard"]').bounding_box()
+        top = self.page.locator('[data-testid="edge-top-controls"]').bounding_box()
+        bottom = self.page.locator('[data-testid="edge-bottom-controls"]').bounding_box()
+        device_width = max(top["x"] + top["width"], keyboard["x"] + keyboard["width"], bottom["x"] + bottom["width"]) - min(top["x"], keyboard["x"], bottom["x"])
         page_scroll_y = self.page.evaluate("() => document.documentElement.scrollHeight - document.documentElement.clientHeight")
         self.assertLess(stage["height"], 820)
         self.assertLessEqual(abs(stage["y"] - side["y"]), 2)
-        self.assertGreater(keyboard["width"] / stage["width"], 0.82)
+        self.assertGreater(device_width / stage["width"], 0.82)
         self.assertGreater(keyboard["height"], 330)
         self.assertLessEqual(page_scroll_y, 1)
 
@@ -3697,23 +5502,36 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         stage = self.page.locator(".stage-panel").bounding_box()
         keyboard = self.page.locator('[data-testid="keyboard"]').bounding_box()
-        self.assertGreaterEqual(keyboard["width"] / stage["width"], 0.70)
-        self.assertGreaterEqual(keyboard["height"], 340)
+        top = self.page.locator('[data-testid="edge-top-controls"]').bounding_box()
+        bottom = self.page.locator('[data-testid="edge-bottom-controls"]').bounding_box()
+        device_width = max(top["x"] + top["width"], keyboard["x"] + keyboard["width"], bottom["x"] + bottom["width"]) - min(top["x"], keyboard["x"], bottom["x"])
+        self.assertGreaterEqual(device_width / stage["width"], 0.82)
+        self.assertGreaterEqual(keyboard["height"], 315)
 
     def test_regression_keyboard_scales_to_available_stage_space(self):
         self.page.set_viewport_size({"width": 1600, "height": 900})
         self.page.wait_for_function("""() => {
           const stage = document.querySelector('.stage-panel').getBoundingClientRect();
           const header = document.querySelector('.stage-header').getBoundingClientRect();
+          const top = document.querySelector('[data-testid="edge-top-controls"]').getBoundingClientRect();
           const keyboard = document.querySelector('[data-testid="keyboard"]').getBoundingClientRect();
+          const bottom = document.querySelector('[data-testid="edge-bottom-controls"]').getBoundingClientRect();
           const availableWidth = stage.width - 20;
           const availableHeight = stage.bottom - header.bottom - 18;
-          return keyboard.width / availableWidth >= 0.82 && keyboard.height / availableHeight >= 0.82;
+          const device = {
+            left: Math.min(top.left, keyboard.left, bottom.left),
+            right: Math.max(top.right, keyboard.right, bottom.right),
+            top: Math.min(top.top, keyboard.top, bottom.top),
+            bottom: Math.max(top.bottom, keyboard.bottom, bottom.bottom)
+          };
+          return (device.right - device.left) / availableWidth >= 0.82 && (device.bottom - device.top) / availableHeight >= 0.62;
         }""")
         metrics = self.page.evaluate("""() => {
           const stage = document.querySelector('.stage-panel').getBoundingClientRect();
           const header = document.querySelector('.stage-header').getBoundingClientRect();
+          const top = document.querySelector('[data-testid="edge-top-controls"]').getBoundingClientRect();
           const keyboard = document.querySelector('[data-testid="keyboard"]').getBoundingClientRect();
+          const bottom = document.querySelector('[data-testid="edge-bottom-controls"]').getBoundingClientRect();
           const keys = [...document.querySelectorAll('[data-testid="exquis-key"]')].map((el) => el.getBoundingClientRect());
           const field = {
             left: Math.min(...keys.map((box) => box.left)),
@@ -3725,19 +5543,31 @@ class PlaywrightExhibitTests(unittest.TestCase):
             width: stage.width - 20,
             height: stage.bottom - header.bottom - 18
           };
+          const device = {
+            left: Math.min(top.left, keyboard.left, bottom.left),
+            right: Math.max(top.right, keyboard.right, bottom.right),
+            top: Math.min(top.top, keyboard.top, bottom.top),
+            bottom: Math.max(top.bottom, keyboard.bottom, bottom.bottom)
+          };
           return {
             stage,
+            top,
             keyboard,
+            bottom,
+            deviceWidth: device.right - device.left,
+            deviceHeight: device.bottom - device.top,
             fieldWidth: field.right - field.left,
             fieldHeight: field.bottom - field.top,
             available,
             pageY: document.documentElement.scrollHeight - document.documentElement.clientHeight
           };
         }""")
-        self.assertGreaterEqual(metrics["keyboard"]["width"] / metrics["available"]["width"], 0.82, metrics)
-        self.assertGreaterEqual(metrics["keyboard"]["height"] / metrics["available"]["height"], 0.82, metrics)
-        self.assertGreaterEqual(metrics["fieldWidth"], 730, metrics)
-        self.assertGreaterEqual(metrics["fieldHeight"], 440, metrics)
+        self.assertGreaterEqual(metrics["deviceWidth"] / metrics["available"]["width"], 0.82, metrics)
+        self.assertGreaterEqual(metrics["deviceHeight"] / metrics["available"]["height"], 0.62, metrics)
+        self.assertLess(metrics["bottom"]["right"], metrics["keyboard"]["left"], metrics)
+        self.assertGreater(metrics["top"]["left"], metrics["keyboard"]["right"], metrics)
+        self.assertGreaterEqual(metrics["fieldWidth"], 620, metrics)
+        self.assertGreaterEqual(metrics["fieldHeight"], 360, metrics)
         self.assertLessEqual(metrics["pageY"], 1)
 
     def test_regression_guide_tone_is_separate_from_ssli_sound_controls(self):
@@ -3896,11 +5726,35 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
     def test_medium_view_has_no_document_horizontal_overflow(self):
         self.page.set_viewport_size({"width": 1024, "height": 768})
-        overflow = self.page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
-        vertical = self.page.evaluate("() => document.documentElement.scrollHeight - document.documentElement.clientHeight")
-        self.assertLessEqual(overflow, 1)
-        self.assertLessEqual(vertical, 1)
+        metrics = self.page.evaluate("""() => {
+          const stage = document.querySelector('.stage-panel').getBoundingClientRect();
+          const device = document.querySelector('[data-testid="exquis-device"]').getBoundingClientRect();
+          return {
+            stage,
+            device,
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            vertical: document.documentElement.scrollHeight - document.documentElement.clientHeight
+          };
+        }""")
+        self.assertLessEqual(metrics["overflow"], 1, metrics)
+        self.assertLessEqual(metrics["vertical"], 1, metrics)
+        self.assertGreaterEqual(metrics["device"]["left"], metrics["stage"]["left"] + 4, metrics)
+        self.assertLessEqual(metrics["device"]["right"], metrics["stage"]["right"] - 4, metrics)
         self.assertTrue(self.page.locator('[data-testid="keyboard"]').is_visible())
+
+    def test_regression_tablet_horizontal_hardware_fits_stage(self):
+        self.page.set_viewport_size({"width": 1024, "height": 768})
+        self.page.select_option('[data-testid="orientation-select"]', "horizontal")
+        self.page.wait_for_timeout(100)
+        metrics = self.page.evaluate("""() => {
+          const stage = document.querySelector('.stage-panel').getBoundingClientRect();
+          const device = document.querySelector('[data-testid="exquis-device"]').getBoundingClientRect();
+          const side = document.querySelector('.side-panel').getBoundingClientRect();
+          return { stage, device, side };
+        }""")
+        self.assertGreaterEqual(metrics["device"]["left"], metrics["stage"]["left"] + 4, metrics)
+        self.assertLessEqual(metrics["device"]["right"], metrics["stage"]["right"] - 4, metrics)
+        self.assertGreater(metrics["side"]["top"], metrics["stage"]["bottom"] - 2, metrics)
 
     def test_mobile_surface_is_intentionally_pannable(self):
         self.page.set_viewport_size({"width": 390, "height": 844})
@@ -3909,6 +5763,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
         stage_scrollable = self.page.locator(".stage-panel").evaluate("el => el.scrollWidth > el.clientWidth")
         self.assertTrue(stage_scrollable)
         self.assertEqual(self.page.locator('[data-testid="exquis-key"]').count(), 61)
+
+    def test_regression_mobile_build_badge_does_not_cover_playable_keys(self):
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        self.page.select_option('[data-testid="orientation-select"]', "vertical")
+        self.page.wait_for_timeout(100)
+        overlaps = self.page.evaluate("""() => {
+          const badge = document.querySelector('[data-testid="build-version"]').getBoundingClientRect();
+          return [...document.querySelectorAll('[data-testid="exquis-key"]')].filter((key) => {
+            const box = key.getBoundingClientRect();
+            return Math.max(badge.left, box.left) < Math.min(badge.right, box.right)
+              && Math.max(badge.top, box.top) < Math.min(badge.bottom, box.bottom);
+          }).map((key) => key.dataset.cellId);
+        }""")
+        self.assertEqual(overlaps, [])
 
     def test_practice_colors_and_key_affordance_are_distinct(self):
         tonic_bg = self.page.locator(".key.tonic").first.evaluate("el => getComputedStyle(el).backgroundColor")

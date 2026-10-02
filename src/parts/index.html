@@ -1,36 +1,71 @@
 <main class="app-shell" data-testid="app-shell">
-  <iframe id="ssliEngineFrame" class="ssli-engine-frame" title="SSLI audio engine" src="ssli/index.html?v=exquis-poly-aftertouch-v2" aria-hidden="true" tabindex="-1"></iframe>
+  <iframe id="ssliEngineFrame" class="ssli-engine-frame" title="SSLI audio engine" src="ssli/index.html?v={{BUILD_TIMESTAMP_UTC}}" aria-hidden="true" tabindex="-1"></iframe>
   <section class="top-panel" aria-label="Practice controls">
     <div class="brand-block">
       <p class="eyebrow">Exquis Fingering Lab</p>
       <h1>Scale map</h1>
+      <p class="build-version" data-testid="build-version" title="Built {{BUILD_TIMESTAMP}}">
+        <span>Build</span>
+        <b>{{BUILD_VERSION}}</b>
+      </p>
     </div>
     <div class="controls-grid primary-controls">
-      <label>
+      <fieldset class="mode-switch" data-testid="mode-switch" aria-label="Session">
+        <legend>Session</legend>
+        <select id="modeSelect" hidden data-testid="mode-select" aria-hidden="true" tabindex="-1">
+          <option value="practice">Practice</option>
+          <option value="play">Play</option>
+        </select>
+        <div class="mode-buttons" role="group" aria-label="Session">
+          <button id="practiceMode" type="button" class="mode-button active" data-testid="practice-mode">Practice</button>
+          <button id="playMode" type="button" class="mode-button" data-testid="play-mode">Play</button>
+        </div>
+      </fieldset>
+      <label class="control-break">
         <span>Tonic</span>
         <select id="tonicSelect" data-testid="tonic-select"></select>
-      </label>
-      <label>
-        <span>Center Root</span>
-        <select id="rootSelect" data-testid="root-select"></select>
       </label>
       <label>
         <span>Scale</span>
         <select id="scaleSelect" data-testid="scale-select"></select>
       </label>
-      <label>
-        <span>Hand</span>
-        <select id="handSelect" data-testid="hand-select">
+      <fieldset class="practice-control choice-switch octave-switch control-break" data-testid="octave-control">
+        <legend>Root Octave</legend>
+        <div class="choice-buttons" id="octaveButtons" data-testid="octave-buttons">
+          <button id="lowerOctaveButton" type="button" class="choice-button" data-value="lower" data-testid="lower-octave-button">Lower</button>
+          <button id="higherOctaveButton" type="button" class="choice-button" data-value="higher" data-testid="higher-octave-button">Higher</button>
+        </div>
+        <select id="octaveSelect" class="sr-only" data-testid="octave-select" aria-hidden="true" tabindex="-1">
+          <option value="lower">Lower</option>
+          <option value="higher">Higher</option>
+        </select>
+      </fieldset>
+      <label class="practice-control" data-testid="root-control">
+        <span>Start Button</span>
+        <select id="rootSelect" data-testid="root-select"></select>
+      </label>
+      <fieldset class="practice-control choice-switch hand-switch control-break" data-testid="hand-control">
+        <legend>Hand</legend>
+        <div class="choice-buttons" id="handButtons" data-testid="hand-buttons">
+          <button id="leftHandButton" type="button" class="choice-button" data-value="left" data-testid="left-hand-button">Left</button>
+          <button id="rightHandButton" type="button" class="choice-button" data-value="right" data-testid="right-hand-button">Right</button>
+        </div>
+        <select id="handSelect" class="sr-only" data-testid="hand-select" aria-hidden="true" tabindex="-1">
           <option value="left">Left</option>
           <option value="right">Right</option>
         </select>
-      </label>
-      <label>
-        <span>Fingering</span>
+      </fieldset>
+      <fieldset class="practice-control choice-switch exercise-switch" data-testid="exercise-control">
+        <legend>Exercise</legend>
+        <div class="exercise-buttons" id="exerciseButtons" data-testid="exercise-buttons"></div>
+        <select id="exerciseSelect" class="sr-only" data-testid="exercise-select" aria-hidden="true" tabindex="-1"></select>
+      </fieldset>
+      <label class="practice-control" data-testid="fingering-control">
+        <span>Finger Pattern</span>
         <select id="strategySelect" data-testid="strategy-select"></select>
       </label>
-      <label>
-        <span>View</span>
+      <label class="practice-control control-break" data-testid="view-control">
+        <span>Overlay</span>
         <select id="viewSelect" data-testid="view-select">
           <option value="practice">Practice path</option>
           <option value="scale">All scale tones</option>
@@ -46,7 +81,7 @@
         </select>
       </label>
       <label class="rotation-control">
-        <span>Surface</span>
+        <span>Rotate</span>
         <button id="rotateSurface" type="button" data-testid="rotate-surface">Rotate 90</button>
       </label>
     </div>
@@ -56,23 +91,42 @@
     <div class="stage-header">
       <div>
         <h2 id="stateTitle">C Major</h2>
-        <p id="stateSubtitle">Left hand: 4-finger ladder</p>
+        <p id="stateSubtitle">Left hand: Natural clusters</p>
       </div>
-      <div class="stepper" aria-label="Practice note stepper">
+      <div class="stepper practice-control" aria-label="Practice note stepper" data-testid="practice-stepper">
         <button id="prevStep" type="button" aria-label="Previous note" data-testid="prev-step">Prev</button>
         <output id="stepReadout" data-testid="step-readout">1 / 8</output>
         <button id="nextStep" type="button" aria-label="Next note" data-testid="next-step">Next</button>
         <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
       </div>
     </div>
-    <div id="keyboard" class="keyboard" data-testid="keyboard"></div>
+    <div id="practicePathStrip" class="practice-path-strip practice-control" data-testid="practice-path-strip" aria-label="Practice path"></div>
+    <div id="exquisDevice" class="exquis-device" data-testid="exquis-device">
+      <section class="edge-controls edge-controls-top" aria-label="Exquis top edge controls" data-testid="edge-controls">
+        <div class="edge-controls-header">
+          <h3>Edge controls</h3>
+          <p id="edgeControlStatus" data-testid="edge-control-status">Developer zones: normal</p>
+        </div>
+        <div id="edgeTopControls" class="edge-top-controls" data-testid="edge-top-controls"></div>
+      </section>
+      <div id="keyboard" class="keyboard" data-testid="keyboard"></div>
+      <section class="edge-controls edge-controls-bottom" aria-label="Exquis bottom edge controls">
+        <div id="edgeBottomControls" class="edge-bottom-controls" data-testid="edge-bottom-controls"></div>
+      </section>
+    </div>
   </section>
 
   <aside class="side-panel" aria-label="Practice guidance">
     <section class="midi-coach-section" data-testid="midi-coach-section">
       <h2>MIDI Coach</h2>
       <p id="midiStatus" role="status" aria-live="polite" data-testid="midi-status">Connect your Exquis to start live coaching.</p>
-      <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
+      <div class="midi-action-row">
+        <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
+        <button id="syncExquis" type="button" data-testid="sync-exquis" disabled>Sync Key/Mode</button>
+        <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Probe</button>
+        <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" title="Probe native Exquis root/scale write masks" disabled>Native</button>
+        <button id="dialListen" type="button" data-testid="dial-listen" disabled>Dial Listen</button>
+      </div>
       <label class="midi-picker">
         <span>MIDI Input</span>
         <select id="midiInputSelect" data-testid="midi-input-select" disabled>
@@ -80,19 +134,47 @@
         </select>
       </label>
       <p id="midiDevices" data-testid="midi-devices">Devices: not scanned</p>
+      <div class="legacy-control-row">
+        <label class="legacy-map-picker">
+          <span>Map</span>
+          <select id="legacyMapSelect" data-testid="legacy-map-select" aria-label="Legacy pad map">
+            <option value="bottom_left">Bottom-left</option>
+            <option value="bottom_right">Bottom-right</option>
+            <option value="top_left">Top-left</option>
+            <option value="top_right">Top-right</option>
+          </select>
+        </label>
+        <label class="legacy-light-picker">
+          <span>Lights</span>
+          <select id="legacyLightSelect" data-testid="legacy-light-select" aria-label="Legacy light target">
+            <option value="buttons">Buttons</option>
+            <option value="notes">Notes</option>
+            <option value="both">Both</option>
+          </select>
+        </label>
+      </div>
+      <p id="exquisSyncStatus" data-testid="exquis-sync-status">Exquis sync: off</p>
       <p id="midiActivity" class="feedback-neutral" role="status" aria-live="polite" data-testid="midi-activity">Activity: none</p>
       <p id="lastMidi" data-testid="last-midi">Last input: --</p>
       <p id="coachFeedback" role="status" aria-live="polite" data-testid="coach-feedback">Enable MIDI to compare the physical Exquis against the current target.</p>
       <p id="drillScore" role="status" aria-live="polite" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
     </section>
-    <section>
-      <h2>Current Note</h2>
+    <section class="practice-target-section practice-control" data-testid="practice-target-panel">
+      <h2>Target</h2>
       <p class="current-note" id="currentNote" data-testid="current-note">C4</p>
       <p id="currentDegree">Scale degree 1</p>
+      <p id="targetFinger" class="target-finger" data-testid="target-finger">Pinky (5)</p>
+      <p id="targetStep" class="target-step" data-testid="target-step">Step 1</p>
+      <div class="target-rationale" data-testid="target-rationale">
+        <p><b>Button</b><span id="buttonReason" data-testid="button-reason">Exact pitch on the two-chain path.</span></p>
+        <p><b>Finger</b><span id="fingerReason" data-testid="finger-reason">Current fingering scaffold.</span></p>
+        <p><b>Motion</b><span id="motionReason" data-testid="motion-reason">Keep the hand relaxed inside the shape.</span></p>
+        <p><b>Load</b><span id="ergonomicReason" data-testid="ergonomic-reason">Movement load: not scored yet.</span></p>
+      </div>
     </section>
-    <section data-testid="drill-section">
+    <section class="practice-control" data-testid="drill-section">
       <h2>Drill</h2>
-      <p id="drillPrompt">Play the current note, then advance. Listen before moving if the shape feels uncertain.</p>
+      <p id="drillPrompt" data-testid="drill-prompt">Play the current note, then advance. Listen before moving if the shape feels uncertain.</p>
       <p id="audioStatus" role="status" aria-live="polite" data-testid="audio-status">Audio: locked until Play/Test.</p>
       <div class="scope-panel" aria-label="Audio output scope">
         <canvas id="audioScope" width="260" height="96" data-testid="audio-scope"></canvas>
@@ -159,14 +241,16 @@
           <b>Auto</b>
         </label>
       </div>
-      <label>
-        <span>Cutoff <output id="filterCutoffValue">2200 Hz</output></span>
-        <input id="filterCutoff" type="range" min="80" max="12000" step="1" value="2200" data-testid="filter-cutoff">
-      </label>
-      <label>
-        <span>Resonance <output id="filterResonanceValue">0.8</output></span>
-        <input id="filterResonance" type="range" min="0.3" max="18" step="0.1" value="0.8" data-testid="filter-resonance">
-      </label>
+      <div class="filter-slider-row">
+        <label>
+          <span>Cutoff <output id="filterCutoffValue">2200 Hz</output></span>
+          <input id="filterCutoff" type="range" min="80" max="12000" step="1" value="2200" data-testid="filter-cutoff">
+        </label>
+        <label>
+          <span>Resonance <output id="filterResonanceValue">0.8</output></span>
+          <input id="filterResonance" type="range" min="0.3" max="18" step="0.1" value="0.8" data-testid="filter-resonance">
+        </label>
+      </div>
     </section>
     <section class="finger-rule-section">
       <h2>Finger Rule</h2>
@@ -179,7 +263,7 @@
           <button id="audioDiag" type="button" data-testid="audio-diag">Audio Diag</button>
           <button id="resetConsole" type="button" data-testid="reset-console">Reset</button>
           <button id="copyConsole" type="button" data-testid="copy-console">Copy</button>
-          <button id="exitConsole" type="button" data-testid="exit-console">Exit</button>
+          <button id="exitConsole" type="button" data-testid="exit-console">Collapse</button>
         </div>
       </div>
       <pre id="diagnosticLog" data-testid="diagnostic-log">Ready.</pre>

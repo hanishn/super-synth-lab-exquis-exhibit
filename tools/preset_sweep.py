@@ -167,7 +167,7 @@ def diagnostic_tail(page, since_length=0):
 
 
 def clear_diagnostics(page):
-    page.locator('[data-testid="reset-console"]').click(timeout=1000)
+    page.locator('[data-testid="reset-console"]').evaluate("button => button.click()")
     page.wait_for_timeout(25)
 
 
@@ -320,7 +320,7 @@ def reset_runtime_audio(page):
           try {
             const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
             [
-              'fm', 'physical', 'additive', 'granular', 'vocoderSynth',
+              'subtractive', 'fm', 'physical', 'additive', 'granular', 'vocoderSynth',
               'wavefolder', 'formant', 'modal', 'ringmod', 'chord',
               'superwave', 'wavetableSynth', 'phasedist', 'chip',
               'bytebeat', 'vector', 'drumsyn', 'pulsar', 'bodyResonance', 'reed'
@@ -332,7 +332,7 @@ def reset_runtime_audio(page):
         }
         """
     )
-    page.wait_for_timeout(80)
+    page.wait_for_timeout(180)
 
 
 def enable_mock_midi(page):

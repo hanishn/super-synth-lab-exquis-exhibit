@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="ssli-exquis-build-version" content="{{BUILD_VERSION}}">
+  <meta name="ssli-exquis-build-timestamp" content="{{BUILD_TIMESTAMP}}">
+  <meta name="ssli-exquis-build-timestamp-utc" content="{{BUILD_TIMESTAMP_UTC}}">
   <title>{{TITLE}}</title>
   <style>
 {{CSS}}
@@ -11,6 +14,7 @@
 <body>
 {{HTML}}
   <script>
+window.SSLI_EXQUIS_BUILD = {"version":"{{BUILD_VERSION}}","timestamp":"{{BUILD_TIMESTAMP}}","timestampUtc":"{{BUILD_TIMESTAMP_UTC}}"};
 window.SSLI_VENDOR = {{SSLI_VENDOR_JSON}};
   </script>
   <script>

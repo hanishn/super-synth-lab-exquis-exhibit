@@ -15,6 +15,46 @@
     { name: 'A', pc: 9 }, { name: 'Bb', pc: 10 }, { name: 'B', pc: 11 }
   ];
   var SCALE_KEYS = ['ionian', 'aeolian', 'penta_min', 'penta_maj', 'chromatic', 'dorian', 'mixolydian', 'blues'];
+  var EXQUIS_SCALE_NUMBER_BY_ID = {
+    ionian: 0,
+    dorian: 1,
+    mixolydian: 4,
+    aeolian: 5
+  };
+  var EXQUIS_SCALE_ID_BY_NUMBER = {
+    0: 'ionian',
+    1: 'dorian',
+    4: 'mixolydian',
+    5: 'aeolian'
+  };
+  var EXQUIS_EDGE_CONTROLS = [
+    { id: 'settings', zone: 'settings', kind: 'button', led: 100, label: 'Settings', detail: 'Hold: settings menu' },
+    { id: 'sound', zone: 'settings', kind: 'button', led: 101, label: 'Sound', detail: 'Hold: compatibility/menu' },
+    { id: 'record', zone: 'other', kind: 'button', led: 102, label: 'Record', detail: 'Action button' },
+    { id: 'loop', zone: 'other', kind: 'button', led: 103, label: 'Loop', detail: 'Action button' },
+    { id: 'clips', zone: 'other', kind: 'button', led: 104, label: 'Clips', detail: 'Action button' },
+    { id: 'playStop', zone: 'other', kind: 'button', led: 105, label: 'Play/Stop', detail: 'MIDI clock play/stop' },
+    { id: 'down', zone: 'updown', kind: 'button', led: 106, label: 'Down', detail: 'Octave down' },
+    { id: 'up', zone: 'updown', kind: 'button', led: 107, label: 'Up', detail: 'Octave up' },
+    { id: 'undo', zone: 'other', kind: 'button', led: 108, label: 'Undo', detail: 'Action button' },
+    { id: 'redo', zone: 'other', kind: 'button', led: 109, label: 'Redo', detail: 'Action button' },
+    { id: 'enc1', zone: 'encoders', kind: 'encoder', led: 110, clickCc: 21, cc: 41, label: 'Encoder 1', detail: 'CC41 / click CC21' },
+    { id: 'enc2', zone: 'encoders', kind: 'encoder', led: 111, clickCc: 22, cc: 42, label: 'Encoder 2', detail: 'CC42 / root in Settings' },
+    { id: 'enc3', zone: 'encoders', kind: 'encoder', led: 112, clickCc: 23, cc: 43, label: 'Encoder 3', detail: 'CC43 / scale in Settings' },
+    { id: 'enc4', zone: 'encoders', kind: 'encoder', led: 113, clickCc: 24, cc: 44, label: 'Encoder 4', detail: 'CC44 / brightness/sensitivity' },
+    { id: 'slider', zone: 'slider', kind: 'slider', led: 90, label: 'Slider', detail: 'Arpeggiator speed/pattern, portions 80-85' }
+  ];
+  var EXQUIS_EDGE_BY_CC = {};
+  var EXQUIS_EDGE_BY_CLICK_CC = {};
+  var EXQUIS_EDGE_BY_OFFICIAL_ID = {};
+  var EXQUIS_EDGE_BY_ID = {};
+  for (var edgeIndex = 0; edgeIndex < EXQUIS_EDGE_CONTROLS.length; edgeIndex++) {
+    var edgeControl = EXQUIS_EDGE_CONTROLS[edgeIndex];
+    EXQUIS_EDGE_BY_ID[edgeControl.id] = edgeControl;
+    if (typeof edgeControl.cc === 'number') EXQUIS_EDGE_BY_CC[edgeControl.cc] = edgeControl;
+    if (typeof edgeControl.clickCc === 'number') EXQUIS_EDGE_BY_CLICK_CC[edgeControl.clickCc] = edgeControl;
+    EXQUIS_EDGE_BY_OFFICIAL_ID[edgeControl.led] = edgeControl;
+  }
   var NOTE_PC = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
   // Official Exquis-style printed note grid, top to bottom. The hardware is
   // 61 keys in alternating 6/5 rows; live MIDI calibration supplies exact MIDI.
@@ -60,11 +100,47 @@
       rule: 'Use the thumb for the upper turn only. Avoid piano-style thumb-under as your default.'
     },
     {
+      id: 'wrist_pairs',
+      name: 'Wrist-led pairs',
+      leftFingers: [5, 4, 4, 3, 5, 4, 4, 3],
+      rightFingers: [2, 3, 3, 4, 2, 3, 3, 4],
+      rule: 'Pair nearby steps under one finger when it lets the wrist carry the motion. Do not lock the arm or drag pressure sideways.'
+    },
+    {
+      id: 'natural_clusters',
+      name: 'Natural clusters',
+      leftFingers: [5, 4, 4, 3, 3, 2, 2, 2],
+      rightFingers: [2, 3, 3, 4, 4, 5, 5, 5],
+      rule: 'Start with the pinky, let ring and middle carry nearby pairs, then let the index handle the upper cluster.'
+    },
+    {
       id: 'position_shift',
       name: 'Position shift',
       leftFingers: [4, 3, 2, 1, 4, 3, 2, 1],
       rightFingers: [1, 2, 3, 4, 1, 2, 3, 4],
       rule: 'Use 4-3-2-1 in compact positions and move the whole hand between groups.'
+    }
+  ];
+  var EXERCISES = [
+    {
+      id: 'root_octave',
+      name: 'Root to octave',
+      prompt: 'Play the centered root-to-octave scale path. Keep the shape on the inner two Exquis chains.'
+    },
+    {
+      id: 'two_octaves',
+      name: 'Two octaves',
+      prompt: 'Continue the same Exquis chain shape through the second octave without switching into piano-style fingering.'
+    },
+    {
+      id: 'inner_ladder',
+      name: 'Inner-chain ladder',
+      prompt: 'Climb the inner two chains, then reverse the same physical path back to the centered root.'
+    },
+    {
+      id: 'root_returns',
+      name: 'Root returns',
+      prompt: 'Return to the centered root between every scale tone so the hand keeps its home reference.'
     }
   ];
   var ROW_COUNTS = [6, 5, 6, 5, 6, 5, 6, 5, 6, 5, 6];
@@ -85,9 +161,17 @@
   var SSLI_EXPRESSION_GAIN_SCALE_MID = 0.22;
   var SSLI_EXPRESSION_GAIN_SCALE_POLY = 0.02;
   var SSLI_FM_EXPRESSION_GAIN_SCALE_POLY = 0.025;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_SOLO = 3.5;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_MID = 2.5;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_POLY = 0.35;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_SOLO = 4.5;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_DUO = 2.2;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_MID = 1.6;
+  var SSLI_PHYSICAL_OUTPUT_GAIN_POLY = 0.42;
+  var SSLI_PHYSICAL_PLUCK_CHORD_GAIN_DUO = 1.05;
+  var SSLI_PHYSICAL_PLUCK_CHORD_GAIN_MULTI = 0.72;
+  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_SOLO = 4.5;
+  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_DUO = 1.6;
+  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_MULTI = 1.15;
+  var SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS = 360;
+  var SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS = 320;
   var EXQUIS_BOTTOM_LEFT_MIDI = 27;
   var VERTICAL_THIRD = 4;
   var audioCtx = null;
@@ -103,12 +187,22 @@
   var currentPath = [];
   var midiAccess = null;
   var midiInput = null;
+  var midiOutput = null;
   var midiHitTimer = null;
   var midiActivityTimer = null;
+  var exquisLegacyKeepaliveTimer = null;
+  var exquisLegacySyncTimer = null;
+  var lastExquisLegacySyncAt = 0;
+  var lastExquisLegacyKeepaliveLogAt = 0;
+  var exquisLegacyNoteMapSent = false;
+  var exquisSyncSuppressUntil = 0;
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
   var midiVoices = {};
+  var articulationQueue = [];
+  var articulationFlushTimer = null;
+  var articulationSequence = 0;
   var lastAppliedSsliPresetKey = '';
   var lastSsliExpressionPressure = null;
   var skippedSsliExpressionUpdates = 0;
@@ -122,9 +216,12 @@
   var state = {
     tonicPc: 0,
     rootCellId: '',
+    octaveSide: 'higher',
+    mode: 'practice',
     hand: 'left',
+    exerciseId: 'root_octave',
     scaleId: 'ionian',
-    strategyId: 'ladder4',
+    strategyId: 'natural_clusters',
     view: 'practice',
     tone: 'soft_wurli',
     soundPresetId: 'subtractive::Wurlitzer EP',
@@ -149,8 +246,21 @@
     rawMidiFlash: false,
     lastMidiAt: 0,
     midiInputs: [],
+    midiOutputs: [],
     selectedMidiId: '',
+    selectedMidiOutputId: '',
     midiStatus: 'MIDI is off.',
+    exquisSyncEnabled: false,
+    exquisSyncStatus: 'Exquis sync: off',
+    exquisSysexAvailable: false,
+    exquisProtocol: 'auto',
+    exquisDialListenEnabled: false,
+    exquisDeveloperMask: 0,
+    activeEdgeControlId: '',
+    lastEdgeControlId: '',
+    lastEdgeControlValue: '',
+    legacyMap: 'bottom_left',
+    legacyLightTarget: 'buttons',
     midiActivity: 'Activity: none',
     audioStatus: 'Audio: locked until Play/Test.',
     feedback: 'Enable MIDI to compare the physical Exquis against the current target.',
@@ -279,7 +389,19 @@
       midiVoices: objectKeyCount(midiVoices),
       ssliActiveOscillators: getSsliActiveOscillatorCount(),
       lastAppliedSsliPresetKey: lastAppliedSsliPresetKey,
-      soundPresetId: state.soundPresetId
+      soundPresetId: state.soundPresetId,
+      mode: state.mode,
+      exerciseId: state.exerciseId,
+      currentPath: currentPath.map(function(cell, index) {
+        return {
+          index: index,
+          id: cell.id,
+          cellId: cell.id.replace('-octave', ''),
+          midi: cell.midi,
+          label: noteLabelFromMidi(cell.midi),
+          virtual: !!cell.virtual
+        };
+      })
     };
   }
 
@@ -307,6 +429,123 @@
     };
   }
 
+  var EXQUIS_SYSEX_HEADER = [0xF0, 0x00, 0x21, 0x7E, 0x7F];
+  var EXQUIS_DEVELOPER_PADS_MASK = 0x01;
+  var EXQUIS_DEVELOPER_ENCODERS_MASK = 0x02;
+  var EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK = 0x10;
+  var EXQUIS_DEVELOPER_DIAL_LISTEN_MASK = EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_ENCODERS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK;
+  var EXQUIS_DEVELOPER_LEGACY_PROBE_MASK = 0x20;
+
+  function clamp7Bit(value) {
+    return Math.max(0, Math.min(127, Math.round(Number(value) || 0)));
+  }
+
+  function buildExquisSysex(command, payload) {
+    var bytes = EXQUIS_SYSEX_HEADER.slice();
+    bytes.push(clamp7Bit(command));
+    payload = payload || [];
+    for (var i = 0; i < payload.length; i++) bytes.push(clamp7Bit(payload[i]));
+    bytes.push(0xF7);
+    return bytes;
+  }
+
+  function buildExquisLegacySysex(command, payload) {
+    var bytes = [0xF0, 0x00, 0x21, 0x7E];
+    if (typeof command === 'number') bytes.push(clamp7Bit(command));
+    payload = payload || [];
+    for (var i = 0; i < payload.length; i++) bytes.push(clamp7Bit(payload[i]));
+    bytes.push(0xF7);
+    return bytes;
+  }
+
+  function bytesToHex(bytes) {
+    return Array.prototype.slice.call(bytes || []).map(function(byte) {
+      return byte.toString(16).padStart(2, '0').toUpperCase();
+    }).join(' ');
+  }
+
+  function parseExquisSysex(data) {
+    var bytes = Array.prototype.slice.call(data || []);
+    if (bytes.length < 7) return null;
+    for (var i = 0; i < EXQUIS_SYSEX_HEADER.length; i++) {
+      if (bytes[i] !== EXQUIS_SYSEX_HEADER[i]) return null;
+    }
+    if (bytes[bytes.length - 1] !== 0xF7) return null;
+    return {
+      command: bytes[5],
+      payload: bytes.slice(6, -1),
+      bytes: bytes
+    };
+  }
+
+  function scaleDegreesFor(scaleId) {
+    var key = scaleId || state.scaleId;
+    var scaleData = SSLI_MODES[key] || SSLI_MODES.ionian || {};
+    var intervals = scaleData.scale || [0, 2, 4, 5, 7, 9, 11];
+    var degrees = [];
+    for (var pc = 0; pc < 12; pc++) degrees.push(intervals.indexOf(pc) >= 0 ? 1 : 0);
+    return degrees;
+  }
+
+  function scaleIndexFor(scaleId) {
+    var index = SCALE_KEYS.indexOf(scaleId);
+    return index >= 0 ? index : 0;
+  }
+
+  function scaleIdForIndex(index) {
+    index = clamp7Bit(index);
+    return SCALE_KEYS[index] || '';
+  }
+
+  function exquisScaleNumberForScaleId(scaleId) {
+    if (Object.prototype.hasOwnProperty.call(EXQUIS_SCALE_NUMBER_BY_ID, scaleId)) return EXQUIS_SCALE_NUMBER_BY_ID[scaleId];
+    return 0;
+  }
+
+  function scaleIdForExquisNumber(scaleNumber) {
+    scaleNumber = clamp7Bit(scaleNumber);
+    return EXQUIS_SCALE_ID_BY_NUMBER[scaleNumber] || '';
+  }
+
+  function updateTonicFromHardwareRoot(rootPc, source) {
+    var incomingPc = mod(rootPc, 12);
+    exquisSyncSuppressUntil = Date.now() + 250;
+    if (incomingPc !== state.tonicPc) {
+      state.tonicPc = incomingPc;
+      state.rootCellId = '';
+      state.step = 0;
+    }
+    state.exquisSyncStatus = 'Exquis sync: received root ' + getTonicName() + ' from ' + source;
+    render();
+  }
+
+  function updateScaleFromHardwareNumber(scaleNumber, source) {
+    var scaleId = scaleIdForExquisNumber(scaleNumber);
+    exquisSyncSuppressUntil = Date.now() + 250;
+    if (scaleId) {
+      if (scaleId !== state.scaleId) {
+        state.scaleId = scaleId;
+        state.step = 0;
+      }
+      state.exquisSyncStatus = 'Exquis sync: received scale ' + getScale().name + ' from ' + source + ' number=' + scaleNumber;
+    } else {
+      state.exquisSyncStatus = 'Exquis sync: received hardware scale number ' + scaleNumber + ' from ' + source + ' (unmapped)';
+    }
+    render();
+  }
+
+  window.__exquisSysexDebug = {
+    build: buildExquisSysex,
+    parse: parseExquisSysex,
+    degreesFor: scaleDegreesFor,
+    scaleIndexFor: scaleIndexFor,
+    scaleIdForIndex: scaleIdForIndex,
+    exquisScaleNumberFor: exquisScaleNumberForScaleId,
+    scaleIdForExquisNumber: scaleIdForExquisNumber,
+    developerMask: EXQUIS_DEVELOPER_PADS_MASK,
+    legacy: buildExquisLegacySysex
+  };
+
   function getStrategy() {
     for (var i = 0; i < STRATEGIES.length; i++) {
       if (STRATEGIES[i].id === state.strategyId) return STRATEGIES[i];
@@ -314,8 +553,49 @@
     return STRATEGIES[0];
   }
 
+  function getExercise() {
+    for (var i = 0; i < EXERCISES.length; i++) {
+      if (EXERCISES[i].id === state.exerciseId) return EXERCISES[i];
+    }
+    return EXERCISES[0];
+  }
+
+  function exerciseButtonLabel(exercise) {
+    if (exercise.id === 'root_octave') return '1 Oct';
+    if (exercise.id === 'two_octaves') return '2 Oct';
+    if (exercise.id === 'inner_ladder') return 'Chain';
+    if (exercise.id === 'root_returns') return 'Root';
+    return exercise.name;
+  }
+
   function getStrategyFingers(strategy) {
     return state.hand === 'right' ? strategy.rightFingers : strategy.leftFingers;
+  }
+
+  function fingerName(finger) {
+    var names = {
+      1: 'Thumb',
+      2: 'Index',
+      3: 'Middle',
+      4: 'Ring',
+      5: 'Pinky'
+    };
+    return names[finger] || 'Finger ' + String(finger);
+  }
+
+  function fingerShortName(finger) {
+    var names = {
+      1: 'Th',
+      2: 'In',
+      3: 'Mid',
+      4: 'Ring',
+      5: 'Pink'
+    };
+    return names[finger] || 'F' + String(finger);
+  }
+
+  function fingerDisplayName(finger) {
+    return fingerName(finger) + ' (' + String(finger) + ')';
   }
 
   function getHandRule(strategy) {
@@ -323,6 +603,121 @@
       return strategy.rule.replace('5-4-3-2', '2-3-4-5').replace('4-3-2-1', '1-2-3-4');
     }
     return strategy.rule;
+  }
+
+  function describeButtonChoice(cells, current, root) {
+    if (!current) return 'No target selected.';
+    var exactMatches = [];
+    var chainMatches = [];
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].midi !== current.midi) continue;
+      exactMatches.push(cells[i]);
+      if (!root || isInnerChainCell(cells[i], root)) chainMatches.push(cells[i]);
+    }
+    var note = noteName(current.midi) + octave(current.midi);
+    if (exactMatches.length > 1) {
+      return 'Exact ' + note + '; duplicates -> two-chain, then center.';
+    }
+    return 'Exact ' + note + '; on the two-chain path.';
+  }
+
+  function describeFingerChoice(strategy, stepIndex, finger, fingers) {
+    var hand = state.hand === 'right' ? 'right' : 'left';
+    var groupSize = strategy.id === 'ladder4' || strategy.id === 'position_shift' || strategy.id === 'wrist_pairs' || strategy.id === 'natural_clusters' ? 4 : Math.max(1, fingers.length);
+    var groupPosition = mod(stepIndex, groupSize) + 1;
+    var groupNumber = Math.floor(stepIndex / groupSize) + 1;
+    if (strategy.id === 'ladder4') {
+      return fingerDisplayName(finger) + ' = ' + hand + ' group ' + groupNumber + ', step ' + groupPosition + '; shape scaffold, not piano law.';
+    }
+    if (strategy.id === 'position_shift') {
+      return fingerDisplayName(finger) + ' inside a compact position; move the whole hand between groups.';
+    }
+    if (strategy.id === 'wrist_pairs') {
+      return fingerDisplayName(finger) + ' may cover a pair; the wrist moves the hand, not a finger stretch.';
+    }
+    if (strategy.id === 'natural_clusters') {
+      return fingerDisplayName(finger) + ' follows the hand cluster: pinky start, paired middle area, index-led top.';
+    }
+    return fingerDisplayName(finger) + ' supports the turn; avoid default piano thumb-under.';
+  }
+
+  function describeMotionChoice(strategy, stepIndex, fingers) {
+    var groupSize = strategy.id === 'ladder4' || strategy.id === 'position_shift' || strategy.id === 'wrist_pairs' || strategy.id === 'natural_clusters' ? 4 : Math.max(1, fingers.length);
+    var groupPosition = mod(stepIndex, groupSize) + 1;
+    if (strategy.id === 'position_shift') {
+      return groupPosition === 1 && stepIndex > 0 ? 'Shift wrist/hand to a fresh compact position.' : 'Stay inside the current compact position.';
+    }
+    if (strategy.id === 'wrist_pairs') {
+      return groupPosition === 2 || groupPosition === 3 ? 'Let the wrist carry this pair; keep pressure vertical.' : 'Reset hand shape before the next pair.';
+    }
+    if (strategy.id === 'natural_clusters') {
+      return groupPosition === 1 ? 'Anchor the hand shape gently; no reaching.' : 'Let the hand roll through the cluster with vertical pressure.';
+    }
+    if (strategy.id === 'ladder4') {
+      return groupPosition === 1 && stepIndex > 0 ? 'Move wrist/hand; repeat the Exquis shape.' : 'Relax wrist; finger change is not a stretch command.';
+    }
+    return groupPosition >= groupSize - 1 ? 'Use thumb as assist, then release tension.' : 'Stay shape-centered; let the hand float.';
+  }
+
+  function isHandShiftStep(strategy, stepIndex) {
+    if (stepIndex <= 0) return false;
+    if (strategy.id !== 'ladder4' && strategy.id !== 'position_shift' && strategy.id !== 'wrist_pairs' && strategy.id !== 'natural_clusters') return false;
+    return mod(stepIndex, 4) === 0;
+  }
+
+  function distanceBetweenCells(a, b) {
+    if (!a || !b) return 0;
+    var dx = a.x - b.x;
+    var dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function fittsMovementCost(distance, targetWidth) {
+    var width = Math.max(1, targetWidth || CELL_W);
+    return Math.log(distance / width + 1) / Math.log(2);
+  }
+
+  function fingerWeaknessCost(finger) {
+    if (finger === 4) return 0.8;
+    if (finger === 5) return 0.7;
+    if (finger === 3) return 0.35;
+    if (finger === 1) return 0.25;
+    return 0.1;
+  }
+
+  function repeatedFingerCost(previousFinger, currentFinger, distance) {
+    if (!previousFinger || previousFinger !== currentFinger) return 0;
+    if (distance < CELL_W * 0.8) return 0.4;
+    if (distance < CELL_W * 1.8) return 1.1;
+    return 2.2;
+  }
+
+  function scoreErgonomicStep(path, fingers, strategy, stepIndex) {
+    var current = path[stepIndex] || null;
+    if (!current) return { score: 0, level: 'unscored', text: 'Movement load: no target.' };
+    var previousIndex = stepIndex > 0 ? stepIndex - 1 : -1;
+    var previous = previousIndex >= 0 ? path[previousIndex] : null;
+    var currentFinger = fingers[mod(stepIndex, fingers.length)];
+    var previousFinger = previous ? fingers[mod(previousIndex, fingers.length)] : 0;
+    var distance = previous ? distanceBetweenCells(previous, current) : 0;
+    var travel = previous ? fittsMovementCost(distance, CELL_W) : 0;
+    var repeated = repeatedFingerCost(previousFinger, currentFinger, distance);
+    var weak = fingerWeaknessCost(currentFinger);
+    var shift = isHandShiftStep(strategy, stepIndex) ? 0.9 : 0;
+    var pressure = (currentFinger === 4 || currentFinger === 5 ? 0.55 : 0.2);
+    var score = travel + repeated + weak + shift + pressure;
+    var level = score < 2.0 ? 'low' : (score < 3.6 ? 'medium' : 'high');
+    var reasons = [];
+    if (previous) reasons.push('travel ' + String(Math.round(distance)) + 'px');
+    if (repeated) reasons.push('same ' + fingerName(currentFinger).toLowerCase());
+    if (shift) reasons.push('hand shift');
+    if (weak > 0.6) reasons.push(fingerName(currentFinger).toLowerCase() + ' pressure risk');
+    if (!reasons.length) reasons.push('anchor');
+    return {
+      score: score,
+      level: level,
+      text: 'Movement load: ' + level + ' (' + reasons.join(', ') + ').'
+    };
   }
 
   function getSoundPresetOptions() {
@@ -464,7 +859,7 @@
   function ensureFreshSsliFrame() {
     var frame = document.getElementById('ssliEngineFrame');
     if (!frame) return;
-    var freshSrc = 'ssli/index.html?v=exquis-poly-aftertouch-v2';
+    var freshSrc = 'ssli/index.html?v={{BUILD_TIMESTAMP_UTC}}';
     if (frame.getAttribute('src') !== freshSrc) frame.setAttribute('src', freshSrc);
     if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistrations) return;
     navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -997,7 +1392,7 @@
   function heldSsliVoiceCount() {
     var count = 0;
     Object.keys(midiVoices).forEach(function(key) {
-      if (midiVoices[key] && midiVoices[key].ssli) count += 1;
+      if (midiVoices[key] && midiVoices[key].ssli && !midiVoices[key].oneShot) count += 1;
     });
     return count;
   }
@@ -1024,6 +1419,196 @@
     var cap = Math.max(42, Math.round(96 * voiceLoadScale));
     var floor = Math.max(32, Math.round(48 * voiceLoadScale));
     return Math.max(floor, Math.min(cap, Math.round(raw * 1.5 * voiceLoadScale)));
+  }
+
+  function immediateArticulation() {
+    return {
+      family: 'sustained',
+      onsetMode: 'immediate',
+      captureWindowMs: 0,
+      minInterOnsetMs: 0,
+      maxSpreadMs: 0,
+      order: 'input',
+      pressurePolicy: 'live'
+    };
+  }
+
+  function defaultArticulationForPreset(engine, preset) {
+    var engineKey = soundEngineKey(engine || (preset && preset.engine));
+    var category = String((preset && preset.category) || '').toLowerCase();
+    var settings = (preset && preset.settings) || {};
+    var physical = settings.physicalSettings || {};
+    var physicalModel = String(settings.model || physical.model || '').toLowerCase();
+    if (engineKey === 'physical' && (category === 'plucked' || physicalModel === 'pluck')) {
+      return {
+        family: 'plucked',
+        onsetMode: 'strum',
+        captureWindowMs: 18,
+        minInterOnsetMs: 11,
+        maxSpreadMs: 46,
+        order: 'physical-low-to-high',
+        pressurePolicy: 'onset-only',
+        autoDampMs: SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS
+      };
+    }
+    if (engineKey === 'physical' && physicalModel === 'strike') {
+      return {
+        family: 'struck',
+        onsetMode: 'roll',
+        captureWindowMs: 10,
+        minInterOnsetMs: 5,
+        maxSpreadMs: 18,
+        order: 'physical-low-to-high',
+        pressurePolicy: 'capture-and-apply-at-onset'
+      };
+    }
+    return immediateArticulation();
+  }
+
+  function selectedArticulation() {
+    var option = getCurrentSoundPreset();
+    var preset = option && option.preset;
+    var articulation = preset && preset.articulation;
+    return articulation || defaultArticulationForPreset(option && option.family, preset);
+  }
+
+  function selectedArticulationMode() {
+    return selectedArticulation().onsetMode || 'immediate';
+  }
+
+  function physicalOrderValue(event) {
+    var cells = makeGrid();
+    var cell = event.cellId ? cells.find(function(candidate) { return candidate.id === event.cellId; }) : null;
+    if (!cell) cell = findCellByMidi(cells, event.midi);
+    if (!cell) return event.midi * 1000 + event.sequence;
+    return cell.row * 100 + cell.col;
+  }
+
+  function removePendingArticulation(key) {
+    var removed = false;
+    articulationQueue = articulationQueue.filter(function(event) {
+      if (event.key === key) {
+        if (event.timer) window.clearTimeout(event.timer);
+        removed = true;
+        return false;
+      }
+      return true;
+    });
+    if (!articulationQueue.length && articulationFlushTimer) {
+      window.clearTimeout(articulationFlushTimer);
+      articulationFlushTimer = null;
+    }
+    return removed;
+  }
+
+  function releasePendingArticulation(key) {
+    var removed = false;
+    var nowMs = Date.now();
+    articulationQueue = articulationQueue.filter(function(event) {
+      if (event.key !== key) return true;
+      var articulation = event.articulation || {};
+      var captureWindow = Math.max(0, Number(articulation.captureWindowMs || 0));
+      var elapsed = nowMs - (event.enqueuedAt || nowMs);
+      var isPluckedChordIntent = articulation.family === 'plucked' && articulationQueue.length > 1;
+      if (articulation.family === 'plucked' && (isPluckedChordIntent || elapsed >= captureWindow)) {
+        event.playAfterFlushRelease = true;
+        return true;
+      }
+      if (event.timer) window.clearTimeout(event.timer);
+      removed = true;
+      return false;
+    });
+    if (!articulationQueue.length && articulationFlushTimer) {
+      window.clearTimeout(articulationFlushTimer);
+      articulationFlushTimer = null;
+    }
+    return removed;
+  }
+
+  function sortArticulationEvents(events, articulation) {
+    if ((articulation.order || '') === 'physical-low-to-high') {
+      events.sort(function(a, b) {
+        return physicalOrderValue(a) - physicalOrderValue(b) || a.sequence - b.sequence;
+      });
+    } else if ((articulation.order || '') === 'physical-high-to-low') {
+      events.sort(function(a, b) {
+        return physicalOrderValue(b) - physicalOrderValue(a) || a.sequence - b.sequence;
+      });
+    } else {
+      events.sort(function(a, b) { return a.sequence - b.sequence; });
+    }
+    return events;
+  }
+
+  function startArticulatedVoice(event) {
+    var canPlayReleasedCommittedPluck = event.playAfterFlushRelease && event.articulation && event.articulation.family === 'plucked';
+    if (!state.heldNotes[event.key] && !canPlayReleasedCommittedPluck) {
+      logEvent('audio', 'articulation skipped released ' + noteLabelFromMidi(event.midi) + ' mode=' + event.articulation.onsetMode);
+      return;
+    }
+    startMidiVoice(event.key, event.midi, event.velocity, {
+      expectedVoiceCount: event.expectedVoiceCount || 0,
+      velocityLoadVoices: event.velocityLoadVoices || 0,
+      articulationMode: event.articulation.onsetMode || '',
+      articulationFamily: event.articulation.family || '',
+      pressurePolicy: event.articulation.pressurePolicy || '',
+      autoDampMs: event.articulation.autoDampMs || 0,
+      releasedBeforeStart: !state.heldNotes[event.key]
+    });
+    var held = state.heldNotes[event.key];
+    if (held && held.pressure !== event.velocity) {
+      updateMidiVoicePressure(event.key, held.pressure);
+    }
+  }
+
+  function flushArticulationQueue() {
+    if (articulationFlushTimer) {
+      window.clearTimeout(articulationFlushTimer);
+      articulationFlushTimer = null;
+    }
+    if (!articulationQueue.length) return;
+    var events = articulationQueue.slice();
+    articulationQueue = [];
+    var articulation = events[0].articulation || immediateArticulation();
+    sortArticulationEvents(events, articulation);
+    var spacing = Math.max(0, Number(articulation.minInterOnsetMs || 0));
+    var maxSpread = Math.max(0, Number(articulation.maxSpreadMs || 0));
+    if (events.length > 1 && maxSpread > 0) spacing = Math.min(spacing, maxSpread / (events.length - 1));
+    var labels = events.map(function(event) { return noteLabelFromMidi(event.midi); }).join(',');
+    logEvent('audio', 'articulation flush mode=' + (articulation.onsetMode || 'immediate') + ' family=' + (articulation.family || 'unknown') + ' notes=' + labels + ' spacing=' + Math.round(spacing * 10) / 10 + 'ms');
+    var activeAtFlush = heldSsliVoiceCount();
+    var expectedVoiceCount = activeAtFlush + events.length;
+    events.forEach(function(event, index) {
+      var delay = Math.round(index * spacing);
+      event.expectedVoiceCount = expectedVoiceCount;
+      event.velocityLoadVoices = Math.max(0, expectedVoiceCount);
+      event.playAfterFlushRelease = event.playAfterFlushRelease || articulation.family === 'plucked';
+      event.timer = window.setTimeout(function() {
+        startArticulatedVoice(event);
+      }, delay);
+    });
+  }
+
+  function scheduleMidiVoiceStart(key, midi, velocity, cellId) {
+    var articulation = selectedArticulation();
+    var mode = articulation.onsetMode || 'immediate';
+    if (mode === 'immediate' || mode === 'none') {
+      startMidiVoice(key, midi, velocity);
+      return;
+    }
+    removePendingArticulation(key);
+    articulationQueue.push({
+      key: key,
+      midi: midi,
+      velocity: velocity,
+      cellId: cellId || '',
+      articulation: articulation,
+      sequence: articulationSequence++,
+      enqueuedAt: Date.now()
+    });
+    if (articulationFlushTimer) window.clearTimeout(articulationFlushTimer);
+    articulationFlushTimer = window.setTimeout(flushArticulationQueue, Math.max(0, Number(articulation.captureWindowMs || 0)));
+    logEvent('audio', 'articulation queued ' + noteLabelFromMidi(midi) + ' mode=' + mode + ' family=' + (articulation.family || 'unknown') + ' capture=' + (articulation.captureWindowMs || 0) + 'ms');
   }
 
   function forgetHeldVoiceKey(key) {
@@ -1070,6 +1655,16 @@
     var expression = pressureToSsliExpression(pressure);
     var activeSsliVoices = heldSsliVoiceCount();
     var instrumentType = getCurrentSsliInstrumentType(SL);
+    if (instrumentType === 'subtractive') {
+      var preset = getSsliPresetPayload(SL);
+      var settings = preset && preset.settings ? preset.settings : {};
+      var inst = SL.audio && SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+      var liveInstruments = SL.audio && SL.audio.getInstruments ? SL.audio.getInstruments() || [] : [];
+      var liveSettings = liveInstruments[inst] && liveInstruments[inst].settings ? liveInstruments[inst].settings : {};
+      if (isHotResonantSubtractivePreset(settings, liveSettings)) {
+        expression.gain = Math.min(expression.gain, activeSsliVoices >= 3 ? 0.28 : 0.65);
+      }
+    }
     if (activeSsliVoices >= 5) {
       expression.gain = expression.gain * (instrumentType === 'fm' ? SSLI_FM_EXPRESSION_GAIN_SCALE_POLY : SSLI_EXPRESSION_GAIN_SCALE_POLY);
     } else if (activeSsliVoices >= 3) {
@@ -1212,7 +1807,48 @@
     });
   }
 
-  function startSustainedWithSsli(midi, velocity) {
+  function isLowRegisterFilteredSubtractive(settings) {
+    if (!settings) return false;
+    var osc = Array.isArray(settings.osc) ? settings.osc : [];
+    var activeOsc = osc.filter(function(partial) {
+      return partial && Number(partial.level || 0) > 0;
+    });
+    if (!activeOsc.length) return false;
+    var highestOctave = activeOsc.reduce(function(highest, partial) {
+      return Math.max(highest, Number(partial.oct || 0));
+    }, -Infinity);
+    var filter = settings.filter || {};
+    var noiseLevel = settings.noise ? Number(settings.noise.level || 0) : 0;
+    var filterFreq = Number(filter.freq || 0);
+    var filterQ = Number(filter.q || 0);
+    return highestOctave <= -2 && filter.enabled !== false && filter.type === 'lowpass' && filterFreq > 0 && filterFreq <= 450 && filterQ <= 50 && noiseLevel <= 20;
+  }
+
+  function preservesLowRegisterSubtractiveVolume(settings, liveSettings) {
+    return isLowRegisterFilteredSubtractive(settings) || isLowRegisterFilteredSubtractive(liveSettings);
+  }
+
+  function isHotResonantSubtractive(settings) {
+    if (!settings) return false;
+    var filter = settings.filter || {};
+    var filterEnv = settings.filterEnv || {};
+    var osc = Array.isArray(settings.osc) ? settings.osc : [];
+    var activeOscLevel = osc.reduce(function(sum, partial) {
+      return sum + Math.max(0, Number(partial && partial.level || 0));
+    }, 0);
+    var filterFreq = Number(filter.freq || 0);
+    var filterQ = Number(filter.q || 0);
+    var envAmount = filterEnv.enabled === false ? 0 : Math.abs(Number(filterEnv.amount || 0));
+    var slope = Number(filter.slope || 12);
+    return filter.enabled !== false && filterQ >= 55 && envAmount >= 35 && activeOscLevel >= 140 && filterFreq > 0 && filterFreq <= 1200 && slope >= 24;
+  }
+
+  function isHotResonantSubtractivePreset(settings, liveSettings) {
+    return isHotResonantSubtractive(settings) || isHotResonantSubtractive(liveSettings);
+  }
+
+  function startSustainedWithSsli(midi, velocity, options) {
+    options = options || {};
     var host = getSsliHost();
     if (!host) {
       logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': missing runtime host');
@@ -1238,10 +1874,13 @@
     var instrumentType = getCurrentSsliInstrumentType(SL);
     var heldPhysicalVoices = instrumentType === 'physical' ? heldSsliVoiceCount() : 0;
     if (instrumentType === 'physical') {
-      var physicalVoiceCount = heldPhysicalVoices + 1;
+      var physicalVoiceCount = Math.max(heldPhysicalVoices + 1, Math.round(options.expectedVoiceCount || 0));
       ensureSsliPracticeVolume(SL, inst, 100);
-      var targetPhysicalGain = physicalVoiceCount >= 5 ? SSLI_PHYSICAL_OUTPUT_GAIN_POLY : (physicalVoiceCount >= 3 ? SSLI_PHYSICAL_OUTPUT_GAIN_MID : SSLI_PHYSICAL_OUTPUT_GAIN_SOLO);
-      setSsliPracticeOutputGain(SL, targetPhysicalGain, 'physicalVoices=' + physicalVoiceCount);
+      var targetPhysicalGain = physicalVoiceCount >= 5 ? SSLI_PHYSICAL_OUTPUT_GAIN_POLY : (physicalVoiceCount >= 3 ? SSLI_PHYSICAL_OUTPUT_GAIN_MID : (physicalVoiceCount >= 2 ? SSLI_PHYSICAL_OUTPUT_GAIN_DUO : SSLI_PHYSICAL_OUTPUT_GAIN_SOLO));
+      if (options.articulationFamily === 'plucked' && physicalVoiceCount >= 2) {
+        targetPhysicalGain = physicalVoiceCount >= 3 ? SSLI_PHYSICAL_PLUCK_CHORD_GAIN_MULTI : SSLI_PHYSICAL_PLUCK_CHORD_GAIN_DUO;
+      }
+      setSsliPracticeOutputGain(SL, targetPhysicalGain, 'physicalVoices=' + physicalVoiceCount + (options.articulationMode ? ' articulation=' + options.articulationMode : ''));
     } else {
       var nonPhysicalVoiceCount = heldSsliVoiceCount() + 1;
       var targetInstrumentVolume = nonPhysicalVoiceCount >= 5 ? 55 : (nonPhysicalVoiceCount >= 3 ? 80 : 100);
@@ -1252,22 +1891,32 @@
       var liveNoiseLevel = liveSettings.noise ? Number(liveSettings.noise.level || 0) : 0;
       var selectedNoiseClass = /noise/i.test(String(state.soundCategory || '') + ' ' + String(state.soundPresetId || ''));
       var isHighNoisePreset = selectedNoiseClass || Math.max(presetNoiseLevel, liveNoiseLevel) >= 80;
+      var preserveLowRegisterVolume = instrumentType === 'subtractive' && nonPhysicalVoiceCount >= 5 && preservesLowRegisterSubtractiveVolume(settings, liveSettings);
+      var hotResonantSubtractive = instrumentType === 'subtractive' && isHotResonantSubtractivePreset(settings, liveSettings);
+      if (preserveLowRegisterVolume) targetInstrumentVolume = 100;
       if (isHighNoisePreset) targetInstrumentVolume = Math.min(targetInstrumentVolume, 24);
+      if (hotResonantSubtractive) targetInstrumentVolume = Math.min(targetInstrumentVolume, nonPhysicalVoiceCount >= 3 ? 18 : 28);
       ensureSsliPracticeVolume(SL, inst, targetInstrumentVolume);
       var targetPracticeGain = nonPhysicalVoiceCount >= 5 ? SSLI_PRACTICE_OUTPUT_GAIN_POLY : (nonPhysicalVoiceCount >= 2 ? SSLI_PRACTICE_OUTPUT_GAIN_MID : SSLI_PRACTICE_OUTPUT_GAIN);
       if (instrumentType === 'fm') targetPracticeGain = Math.min(targetPracticeGain, SSLI_PRACTICE_OUTPUT_GAIN_MID);
       if (instrumentType === 'fm' && nonPhysicalVoiceCount >= 5) targetPracticeGain = SSLI_FM_OUTPUT_GAIN_POLY;
       if (isHighNoisePreset) targetPracticeGain = Math.min(targetPracticeGain, 0.026);
+      if (hotResonantSubtractive && !isHighNoisePreset) targetPracticeGain = nonPhysicalVoiceCount >= 3 ? 0.08 : Math.min(targetPracticeGain, 0.7);
+      if (preserveLowRegisterVolume) logEvent('audio', 'SSLI subtractive low-register dense-poly volume preserved voices=' + nonPhysicalVoiceCount);
+      if (hotResonantSubtractive) logEvent('audio', 'SSLI subtractive resonant headroom voices=' + nonPhysicalVoiceCount);
       setSsliPracticeOutputGain(SL, targetPracticeGain, 'engine=' + instrumentType + ' voices=' + nonPhysicalVoiceCount);
     }
     var physicalModel = instrumentType === 'physical' ? getCurrentPhysicalModel(SL) : '';
-    var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices) : 0;
+    var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? (options.velocityLoadVoices || effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices)) : 0;
     var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(instrumentType);
     if (physicalModel === 'strike') {
       playableVelocity = Math.max(8, Math.round(playableVelocity * 0.25));
     }
+    if (instrumentType === 'physical' && options.articulationFamily === 'plucked' && physicalVoiceCount >= 2) {
+      playableVelocity = Math.max(24, Math.min(playableVelocity, physicalVoiceCount >= 3 ? 36 : 42));
+    }
     if (instrumentType === 'physical') {
-      logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel);
+      logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel + (options.expectedVoiceCount ? ' expectedVoices=' + options.expectedVoiceCount : ''));
     }
     SL.audio.startSustainedNote(midi, playableVelocity);
     if (instrumentType === 'physical') {
@@ -1277,6 +1926,50 @@
     }
     state.audioStatus = 'Audio: SSLI held ' + noteLabelFromMidi(midi) + '.';
     logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId + ' boost=' + ssliPracticeOutputGain(SL));
+    startAudioScope();
+    render();
+    return true;
+  }
+
+  function startPluckedOneShotWithSsli(midi, velocity, options) {
+    options = options || {};
+    var host = getSsliHost();
+    if (!host) {
+      logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': missing runtime host');
+      return false;
+    }
+    var SL = host.SynthLab;
+    var readiness = describeSsliReadiness(SL, 'midi');
+    if (readiness !== 'ready') {
+      logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': ' + readiness);
+      return false;
+    }
+    if (!SL.physical || !SL.physical.noteOn) {
+      logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': missing SynthLab.physical.noteOn');
+      return false;
+    }
+    ensureSsliAudioReady(SL);
+    if (!applySelectedSsliPreset()) {
+      logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
+      return false;
+    }
+    if (state.filterDirty) applySelectedSsliFilter();
+    if (state.fxDirty) applySelectedSsliFxChain();
+    var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    var preset = getSsliPresetPayload(SL);
+    verifySsliPresetRuntime(SL, preset, true);
+    ensureSsliPracticeOutputBoost(SL);
+    if (getCurrentSsliInstrumentType(SL) !== 'physical' || getCurrentPhysicalModel(SL) !== 'pluck') return false;
+    var expectedVoiceCount = Math.max(1, Math.round(options.expectedVoiceCount || 1));
+    ensureSsliPracticeVolume(SL, inst, 100);
+    var targetGain = expectedVoiceCount >= 3 ? SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_MULTI : (expectedVoiceCount >= 2 ? SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_DUO : SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_SOLO);
+    setSsliPracticeOutputGain(SL, targetGain, 'physicalOneShotPluck=' + expectedVoiceCount + (options.articulationMode ? ' articulation=' + options.articulationMode : ''));
+    var playableVelocity = playablePhysicalMidiVelocity(velocity, Math.max(0, options.velocityLoadVoices || expectedVoiceCount));
+    if (expectedVoiceCount >= 2) playableVelocity = Math.max(18, Math.min(playableVelocity, expectedVoiceCount >= 3 ? 48 : 56));
+    var duration = Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000));
+    SL.physical.noteOn(midi, playableVelocity, inst);
+    state.audioStatus = 'Audio: SSLI plucked ' + noteLabelFromMidi(midi) + '.';
+    logEvent('audio', 'SSLI plucked one-shot ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' decay=natural preset=' + state.soundPresetId + ' boost=' + ssliPracticeOutputGain(SL));
     startAudioScope();
     render();
     return true;
@@ -1683,13 +2376,55 @@
     if (!bus && audioAnalyser) audioAnalyser.connect(ctx.destination);
   }
 
-  function startMidiVoice(key, midi, velocity) {
+  function startMidiVoice(key, midi, velocity, options) {
+    options = options || {};
     releaseMidiVoice(key, true);
     pruneMidiVoiceBudget(key);
-    if (startSustainedWithSsli(midi, Math.max(1, velocity))) {
+    if (options.articulationFamily === 'plucked' && startPluckedOneShotWithSsli(midi, Math.max(1, velocity), options)) {
+      var oneShotHost = getSsliHost();
+      var oneShotSL = oneShotHost && oneShotHost.SynthLab;
+      midiVoices[key] = {
+        midi: midi,
+        ssli: true,
+        oneShot: true,
+        instrumentType: oneShotSL ? getCurrentSsliInstrumentType(oneShotSL) : 'physical',
+        startedAt: Date.now(),
+        pressurePolicy: options.pressurePolicy || 'onset-only',
+        articulationFamily: options.articulationFamily || 'plucked'
+      };
+      midiVoices[key].oneShotCleanupTimer = window.setTimeout(function() {
+        var voice = midiVoices[key];
+        if (!voice || !voice.oneShot) return;
+        if (state.heldNotes[key]) return;
+        delete midiVoices[key];
+        logMidiVoiceStats('after-one-shot-expire ' + noteLabelFromMidi(midi));
+      }, Math.max(160, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) + 120));
+      logMidiVoiceStats('after-one-shot ' + noteLabelFromMidi(midi));
+      logSsliAudioHealth('after-one-shot ' + noteLabelFromMidi(midi));
+      return;
+    }
+    if (startSustainedWithSsli(midi, Math.max(1, velocity), options)) {
       var host = getSsliHost();
       var SL = host && host.SynthLab;
-      midiVoices[key] = { midi: midi, ssli: true, instrumentType: SL ? getCurrentSsliInstrumentType(SL) : '', startedAt: Date.now() };
+      midiVoices[key] = {
+        midi: midi,
+        ssli: true,
+        instrumentType: SL ? getCurrentSsliInstrumentType(SL) : '',
+        startedAt: Date.now(),
+        pressurePolicy: options.pressurePolicy || '',
+        articulationFamily: options.articulationFamily || ''
+      };
+      if (options.articulationFamily === 'plucked' && options.autoDampMs > 0) {
+        midiVoices[key].autoDampTimer = window.setTimeout(function() {
+          var voice = midiVoices[key];
+          if (!voice || !voice.ssli || voice.articulationFamily !== 'plucked') return;
+          stopSustainedWithSsli(voice.midi);
+          voice.autoDampTimer = null;
+          logEvent('audio', 'SSLI plucked auto-damp ' + noteLabelFromMidi(voice.midi) + ' after ' + options.autoDampMs + 'ms');
+          reconcileSsliSustainedVoices('auto-damp ' + noteLabelFromMidi(voice.midi));
+          logMidiVoiceStats('after-auto-damp ' + noteLabelFromMidi(voice.midi));
+        }, Math.max(80, Number(options.autoDampMs || 0)));
+      }
       reconcileSsliSustainedVoices('start ' + noteLabelFromMidi(midi));
       logMidiVoiceStats('after-start ' + noteLabelFromMidi(midi));
       logSsliAudioHealth('after-start ' + noteLabelFromMidi(midi));
@@ -1733,6 +2468,13 @@
     var voice = midiVoices[key];
     if (!voice) return;
     if (voice.ssli) {
+      if (voice.pressurePolicy === 'onset-only') {
+        if (!voice.skippedOnsetOnlyPressure) {
+          voice.skippedOnsetOnlyPressure = true;
+          logEvent('audio', 'SSLI plucked pressure ignored after onset ' + noteLabelFromMidi(voice.midi));
+        }
+        return;
+      }
       var host = getSsliHost();
       if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
         updatePhysicalPerNotePressure(key, pressure);
@@ -1752,8 +2494,25 @@
   }
 
   function releaseMidiVoice(key, immediate) {
+    releasePendingArticulation(key);
     var voice = midiVoices[key];
     if (voice && voice.ssli) {
+      if (voice.oneShot) {
+        if (voice.oneShotCleanupTimer) {
+          window.clearTimeout(voice.oneShotCleanupTimer);
+          voice.oneShotCleanupTimer = null;
+        }
+        delete midiVoices[key];
+        cleanupSsliSustainedVoicesIfMidiIdle();
+        clearSsliMidiExpressionIfIdle();
+        logMidiVoiceStats('after-one-shot-release ' + noteLabelFromMidi(voice.midi));
+        logSsliAudioHealth('after-one-shot-release ' + noteLabelFromMidi(voice.midi));
+        return;
+      }
+      if (voice.autoDampTimer) {
+        window.clearTimeout(voice.autoDampTimer);
+        voice.autoDampTimer = null;
+      }
       stopSustainedWithSsli(voice.midi);
       delete midiVoices[key];
       reconcileSsliSustainedVoices('release ' + noteLabelFromMidi(voice.midi));
@@ -1796,7 +2555,7 @@
     state.activeMidiPc = cell.pc;
     state.rawMidiFlash = false;
     state.lastMidi = { midi: cell.midi, velocity: pressure, cellId: cell.id };
-    startMidiVoice(key, cell.midi, pressure);
+    scheduleMidiVoiceStart(key, cell.midi, pressure, cell.id);
     logEvent('ui', 'key down ' + noteLabelFromMidi(cell.midi) + ' midi=' + cell.midi);
     render();
   }
@@ -1838,6 +2597,7 @@
   function resetConsole() {
     logs = [];
     resetVisualMidi();
+    if (els.consolePanel) els.consolePanel.classList.add('expanded');
     if (els.diagnosticLog) els.diagnosticLog.textContent = 'Ready.';
     logEvent('console', 'reset');
     render();
@@ -1861,8 +2621,16 @@
 
   function exitConsole() {
     if (els.consolePanel) {
-      els.consolePanel.hidden = true;
-      logEvent('console', 'hidden');
+      els.consolePanel.classList.remove('expanded');
+      logEvent('console', 'collapsed');
+    }
+  }
+
+  function expandConsole() {
+    if (els.consolePanel) {
+      els.consolePanel.hidden = false;
+      els.consolePanel.classList.add('expanded');
+      if (els.diagnosticLog) els.diagnosticLog.scrollTop = els.diagnosticLog.scrollHeight;
     }
   }
 
@@ -1962,19 +2730,62 @@
   }
 
   function rootCandidates(cells) {
-    var preferredRootMidi = 48 + state.tonicPc;
-    return cells.filter(function(cell) {
+    var scale = getScale();
+    var candidates = cells.filter(function(cell) {
       return cell.pc === state.tonicPc;
-    }).sort(function(a, b) {
-      return Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
     });
+    if (state.exerciseId === 'two_octaves') {
+      var preferredTwoOctaveRootMidi = 36 + state.tonicPc;
+      return candidates.sort(function(a, b) {
+        var aSupported = supportsAscendingOctaves(cells, scale, a, 2);
+        var bSupported = supportsAscendingOctaves(cells, scale, b, 2);
+        return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || Math.abs(a.midi - preferredTwoOctaveRootMidi) - Math.abs(b.midi - preferredTwoOctaveRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
+      });
+    }
+    var supported = candidates.filter(function(cell) {
+      return supportsAscendingOctaves(cells, scale, cell, 1);
+    });
+    if (!supported.length) supported = candidates;
+    var byMidi = supported.slice().sort(function(a, b) {
+      return a.midi - b.midi || centerScore(a) - centerScore(b);
+    });
+    var preferredRootMidi = state.octaveSide === 'lower' ? byMidi[0].midi : byMidi[byMidi.length - 1].midi;
+    return supported.sort(function(a, b) {
+      var aSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, a, 2);
+      var bSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, b, 2);
+      return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
+    });
+  }
+
+  function hasCellForMidi(cells, midi) {
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].midi === midi) return true;
+    }
+    return false;
+  }
+
+  function supportsAscendingOctaves(cells, scale, root, octaveCount) {
+    var totalOctaves = Math.max(1, octaveCount || 1);
+    for (var octaveIndex = 0; octaveIndex < totalOctaves; octaveIndex++) {
+      for (var d = 0; d < scale.intervals.length; d++) {
+        if (!hasCellForMidi(cells, root.midi + scale.intervals[d] + octaveIndex * 12)) return false;
+      }
+    }
+    return hasCellForMidi(cells, root.midi + totalOctaves * 12);
+  }
+
+  function rootSupportsCurrentExercise(cells, scale, root) {
+    if (!root) return false;
+    if (state.exerciseId === 'two_octaves') return supportsAscendingOctaves(cells, scale, root, 2);
+    return supportsAscendingOctaves(cells, scale, root, 1);
   }
 
   function selectedRoot(cells) {
     var roots = rootCandidates(cells);
     if (!roots.length) return null;
+    var scale = getScale();
     for (var i = 0; i < roots.length; i++) {
-      if (roots[i].id === state.rootCellId) return roots[i];
+      if (roots[i].id === state.rootCellId && rootSupportsCurrentExercise(cells, scale, roots[i])) return roots[i];
     }
     state.rootCellId = roots[0].id;
     return roots[0];
@@ -1987,13 +2798,123 @@
     for (var i = 0; i < roots.length; i++) {
       var option = document.createElement('option');
       option.value = roots[i].id;
-      option.textContent = noteName(roots[i].midi) + octave(roots[i].midi) + ' / row ' + (roots[i].row + 1) + ', key ' + (roots[i].col + 1);
+      option.textContent = noteName(roots[i].midi) + octave(roots[i].midi) + ' / r' + (roots[i].row + 1) + ' k' + (roots[i].col + 1);
       els.root.appendChild(option);
     }
     if (roots.length) {
-      if (!roots.some(function(root) { return root.id === state.rootCellId; })) state.rootCellId = roots[0].id;
+      var scale = getScale();
+      if (!roots.some(function(root) { return root.id === state.rootCellId && rootSupportsCurrentExercise(cells, scale, root); })) state.rootCellId = roots[0].id;
       els.root.value = state.rootCellId;
     }
+  }
+
+  function developerZoneCaptured(zone) {
+    var mask = state.exquisDeveloperMask || 0;
+    if (zone === 'pads') return (mask & EXQUIS_DEVELOPER_PADS_MASK) !== 0;
+    if (zone === 'encoders') return (mask & EXQUIS_DEVELOPER_ENCODERS_MASK) !== 0;
+    if (zone === 'slider') return (mask & 0x04) !== 0;
+    if (zone === 'updown') return (mask & 0x08) !== 0;
+    if (zone === 'settings') return (mask & EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK) !== 0;
+    if (zone === 'other') return (mask & EXQUIS_DEVELOPER_LEGACY_PROBE_MASK) !== 0;
+    return false;
+  }
+
+  function developerMaskLabel(mask) {
+    mask = mask || 0;
+    if (!mask) return 'Developer zones: normal';
+    var labels = [];
+    if (mask & EXQUIS_DEVELOPER_PADS_MASK) labels.push('pads');
+    if (mask & EXQUIS_DEVELOPER_ENCODERS_MASK) labels.push('encoders');
+    if (mask & 0x04) labels.push('slider');
+    if (mask & 0x08) labels.push('up/down');
+    if (mask & EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK) labels.push('settings/sound');
+    if (mask & EXQUIS_DEVELOPER_LEGACY_PROBE_MASK) labels.push('other buttons');
+    return 'Developer zones: ' + labels.join(', ') + ' (0x' + mask.toString(16).toUpperCase().padStart(2, '0') + ')';
+  }
+
+  function renderEdgeControls() {
+    if (!els.edgeTopControls || !els.edgeBottomControls) return;
+    clearChildren(els.edgeTopControls);
+    clearChildren(els.edgeBottomControls);
+    if (els.edgeControlStatus) els.edgeControlStatus.textContent = developerMaskLabel(state.exquisDeveloperMask);
+
+    var encoderRow = document.createElement('div');
+    encoderRow.className = 'edge-encoder-row';
+    encoderRow.setAttribute('data-testid', 'edge-encoder-row');
+    ['enc1', 'enc2', 'enc3', 'enc4'].forEach(function(id) {
+      encoderRow.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID[id]));
+    });
+    els.edgeTopControls.appendChild(encoderRow);
+
+    var deck = document.createElement('div');
+    deck.className = 'edge-bottom-deck';
+    deck.setAttribute('data-testid', 'edge-bottom-deck');
+    var selectGroup = document.createElement('div');
+    selectGroup.className = 'edge-select-group';
+    selectGroup.setAttribute('data-testid', 'edge-select-group');
+    selectGroup.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID.down));
+    selectGroup.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID.up));
+    var sliderGroup = document.createElement('div');
+    sliderGroup.className = 'edge-slider-group';
+    sliderGroup.setAttribute('data-testid', 'edge-slider-group');
+    sliderGroup.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID.slider));
+    var undoGroup = document.createElement('div');
+    undoGroup.className = 'edge-undo-group';
+    undoGroup.setAttribute('data-testid', 'edge-undo-group');
+    undoGroup.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID.undo));
+    undoGroup.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID.redo));
+    deck.appendChild(selectGroup);
+    deck.appendChild(sliderGroup);
+    deck.appendChild(undoGroup);
+
+    var actionRow = document.createElement('div');
+    actionRow.className = 'edge-action-row';
+    actionRow.setAttribute('data-testid', 'edge-action-row');
+    ['settings', 'sound', 'record', 'loop', 'clips', 'playStop'].forEach(function(id) {
+      actionRow.appendChild(createEdgeControlElement(EXQUIS_EDGE_BY_ID[id]));
+    });
+
+    els.edgeBottomControls.appendChild(deck);
+    els.edgeBottomControls.appendChild(actionRow);
+  }
+
+  function createEdgeControlElement(control) {
+      var item = document.createElement('div');
+      var captured = developerZoneCaptured(control.zone);
+      var active = state.activeEdgeControlId === control.id || state.lastEdgeControlId === control.id;
+      item.className = 'edge-control edge-' + control.kind + (captured ? ' captured' : '') + (active ? ' active' : '');
+      item.setAttribute('data-testid', 'edge-control');
+      item.setAttribute('data-edge-id', control.id);
+      item.setAttribute('data-zone', control.zone);
+      item.setAttribute('aria-label', control.label + ', ' + control.detail + ', LED ' + control.led + (captured ? ', developer captured' : ', normal'));
+      var visual = document.createElement('span');
+      visual.className = 'edge-visual';
+      visual.setAttribute('aria-hidden', 'true');
+      var name = document.createElement('span');
+      name.className = 'edge-name';
+      name.textContent = control.label;
+      var meta = document.createElement('span');
+      meta.className = 'edge-meta';
+      var ccText = typeof control.cc === 'number' ? ' CC' + control.cc : '';
+      var clickText = typeof control.clickCc === 'number' ? ' / click ' + control.clickCc : '';
+      meta.textContent = 'LED ' + control.led + ccText + clickText;
+      var detail = document.createElement('span');
+      detail.className = 'edge-detail';
+      detail.textContent = control.detail;
+      var label = document.createElement('span');
+      label.className = 'edge-label';
+      label.appendChild(name);
+      label.appendChild(meta);
+      label.appendChild(detail);
+      item.appendChild(visual);
+      item.appendChild(label);
+      if (active && state.lastEdgeControlValue) {
+        var value = document.createElement('span');
+        value.className = 'edge-value';
+        value.textContent = state.lastEdgeControlValue;
+        label.appendChild(value);
+      }
+      return item;
   }
 
   function isScalePc(pc, scale) {
@@ -2088,15 +3009,18 @@
     return lit;
   }
 
-  function bestCellForTarget(cells, pc, targetMidi, anchor) {
+  function bestCellForTarget(cells, pc, targetMidi, anchor, preferredCellsById) {
     var best = null;
     var bestScore = Infinity;
     for (var i = 0; i < cells.length; i++) {
       if (cells[i].pc !== pc) continue;
-      var distance = Math.abs(cells[i].midi - targetMidi) * 4;
+      var exactMidiPenalty = cells[i].midi === targetMidi ? 0 : 10000;
+      var distance = Math.abs(cells[i].midi - targetMidi) * 24;
+      var preferredPenalty = preferredCellsById && !preferredCellsById[cells[i].id] ? 1000 : 0;
       var spatial = anchor ? (Math.abs(cells[i].row - anchor.row) + Math.abs(cells[i].col - anchor.col)) : centerScore(cells[i]) * 10;
       var chainPenalty = anchor && !isInnerChainCell(cells[i], anchor) ? 100 : 0;
-      var score = chainPenalty + distance + spatial;
+      var centerPreference = centerScore(cells[i]) * 12;
+      var score = exactMidiPenalty + distance + preferredPenalty + chainPenalty + spatial + centerPreference;
       if (score < bestScore) {
         best = cells[i];
         bestScore = score;
@@ -2105,33 +3029,66 @@
     return best;
   }
 
-  function getPracticePath(cells, scale) {
+  function buildAscendingScalePath(cells, scale, octaveCount) {
     var root = selectedRoot(cells);
     if (!root) return [];
     var path = [];
-    for (var d = 0; d < scale.intervals.length; d++) {
-      var interval = scale.intervals[d];
-      var targetMidi = root.midi + interval;
-      var pc = mod(state.tonicPc + interval, 12);
-      var cell = interval === 0 ? root : bestCellForTarget(cells, pc, targetMidi, root);
-      if (cell) {
-        var pathCell = {};
-        Object.keys(cell).forEach(function(key) { pathCell[key] = cell[key]; });
-        pathCell.midi = targetMidi;
-        path.push(pathCell);
+    var preferredCellsById = getLitPracticeCells(cells, scale, root);
+    var totalOctaves = Math.max(1, octaveCount || 1);
+    for (var octaveIndex = 0; octaveIndex < totalOctaves; octaveIndex++) {
+      for (var d = 0; d < scale.intervals.length; d++) {
+        var interval = scale.intervals[d] + octaveIndex * 12;
+        var targetMidi = root.midi + interval;
+        var pc = mod(state.tonicPc + interval, 12);
+        var cell = interval === 0 ? root : bestCellForTarget(cells, pc, targetMidi, root, preferredCellsById);
+        if (cell && cell.midi === targetMidi) {
+          var pathCell = {};
+          Object.keys(cell).forEach(function(key) { pathCell[key] = cell[key]; });
+          path.push(pathCell);
+        }
       }
     }
-    path.push({
-      id: root.id + '-octave',
-      row: root.row,
-      col: root.col,
-      x: root.x,
-      y: root.y,
-      midi: root.midi + 12,
-      pc: root.pc,
-      virtual: true
-    });
+    var octaveCell = bestCellForTarget(cells, root.pc, root.midi + totalOctaves * 12, root, preferredCellsById);
+    if (octaveCell && octaveCell.midi === root.midi + totalOctaves * 12) {
+      var octavePathCell = {};
+      Object.keys(octaveCell).forEach(function(key) { octavePathCell[key] = octaveCell[key]; });
+      path.push(octavePathCell);
+    }
     return path;
+  }
+
+  function buildRootToOctavePath(cells, scale) {
+    return buildAscendingScalePath(cells, scale, 1);
+  }
+
+  function clonePathCell(cell) {
+    var pathCell = {};
+    Object.keys(cell).forEach(function(key) { pathCell[key] = cell[key]; });
+    return pathCell;
+  }
+
+  function getPracticePath(cells, scale) {
+    var basePath = buildRootToOctavePath(cells, scale);
+    if (state.exerciseId === 'two_octaves') {
+      return buildAscendingScalePath(cells, scale, 2);
+    }
+    if (state.exerciseId === 'inner_ladder' && basePath.length > 1) {
+      var ladder = basePath.map(clonePathCell);
+      for (var i = basePath.length - 2; i >= 0; i--) {
+        ladder.push(clonePathCell(basePath[i]));
+      }
+      return ladder;
+    }
+    if (state.exerciseId === 'root_returns' && basePath.length > 1) {
+      var root = clonePathCell(basePath[0]);
+      var returns = [root];
+      for (var j = 1; j < basePath.length; j++) {
+        returns.push(clonePathCell(basePath[j]));
+        if (j < basePath.length - 1) returns.push(clonePathCell(root));
+      }
+      return returns;
+    }
+    return basePath;
   }
 
   function getScaleDegree(cell, scale) {
@@ -2181,16 +3138,37 @@
     if (!stage || !stage.getBoundingClientRect) return { width: 0, height: 0 };
     var stageBox = stage.getBoundingClientRect();
     var headerBox = header && header.getBoundingClientRect ? header.getBoundingClientRect() : { bottom: stageBox.top };
+    var safeBottom = stageBox.bottom;
+    ['[data-testid="console-panel"]', '[data-testid="build-version"]'].forEach(function(selector) {
+      var overlay = document.querySelector(selector);
+      if (!overlay || !overlay.getBoundingClientRect) return;
+      var box = overlay.getBoundingClientRect();
+      var overlapsStage = box.right > stageBox.left && box.left < stageBox.right && box.bottom > stageBox.top && box.top < stageBox.bottom;
+      if (overlapsStage && box.top > stageBox.top) safeBottom = Math.min(safeBottom, box.top - 8);
+    });
+    var topControls = els.edgeTopControls && els.edgeTopControls.closest ? els.edgeTopControls.closest('.edge-controls-top') : null;
+    var bottomControls = els.edgeBottomControls && els.edgeBottomControls.closest ? els.edgeBottomControls.closest('.edge-controls-bottom') : null;
+    var topHeight = topControls && topControls.getBoundingClientRect ? topControls.getBoundingClientRect().height : 0;
+    var bottomHeight = bottomControls && bottomControls.getBoundingClientRect ? bottomControls.getBoundingClientRect().height : 0;
+    var topWidth = topControls && topControls.getBoundingClientRect ? topControls.getBoundingClientRect().width : 0;
+    var bottomWidth = bottomControls && bottomControls.getBoundingClientRect ? bottomControls.getBoundingClientRect().width : 0;
+    if (state.orientation === 'horizontal') {
+      return {
+        width: Math.max(0, stageBox.width - topWidth - bottomWidth - 44),
+        height: Math.max(0, safeBottom - headerBox.bottom - 4)
+      };
+    }
     return {
       width: Math.max(0, stageBox.width - 20),
-      height: Math.max(0, stageBox.bottom - headerBox.bottom - 18)
+      height: Math.max(0, safeBottom - headerBox.bottom - topHeight - bottomHeight - 66)
     };
   }
 
   function getKeyboardScale(baseWidth, baseHeight) {
     var available = getKeyboardAvailableSpace();
     if (!available.width || !available.height) return 1;
-    return Math.max(1, Math.min(1.9, available.width / baseWidth, available.height / baseHeight));
+    var minScale = state.orientation === 'vertical' ? 0.52 : 0.72;
+    return Math.max(minScale, Math.min(1.9, available.width / baseWidth, available.height / baseHeight));
   }
 
   function findCellByMidi(cells, midi) {
@@ -2223,6 +3201,25 @@
   function setFeedback(message, kind) {
     state.feedback = message;
     state.feedbackKind = kind || 'neutral';
+  }
+
+  function setMode(mode) {
+    state.mode = mode === 'play' ? 'play' : 'practice';
+    state.step = 0;
+    if (els.mode) els.mode.value = state.mode;
+    if (els.practiceMode) {
+      els.practiceMode.classList.toggle('active', state.mode === 'practice');
+      els.practiceMode.setAttribute('aria-pressed', state.mode === 'practice' ? 'true' : 'false');
+    }
+    if (els.playMode) {
+      els.playMode.classList.toggle('active', state.mode === 'play');
+      els.playMode.setAttribute('aria-pressed', state.mode === 'play' ? 'true' : 'false');
+    }
+    if (state.mode === 'play') {
+      setFeedback('Play mode: free surface, scoring paused.', 'live');
+    } else {
+      setFeedback('Practice mode: follow the current target.', 'neutral');
+    }
   }
 
   function updateCalibrationStats() {
@@ -2316,10 +3313,12 @@
       channel: channel
     };
     if (channel !== null) state.channelNotes[channel] = midi;
-    startMidiVoice(heldKey, midi, velocity);
+    scheduleMidiVoiceStart(heldKey, midi, velocity, hitCell ? hitCell.id : '');
     logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only'));
 
-    if (expected && mod(midi, 12) === expected.pc) {
+    if (state.mode !== 'practice') {
+      setFeedback('Play mode: ' + noteLabelFromMidi(midi) + ' is sounding freely.', 'live');
+    } else if (expected && mod(midi, 12) === expected.pc) {
       state.correctCount += 1;
       state.streak += 1;
       state.calibrated[expectedKey] = {
@@ -2366,6 +3365,10 @@
   function onMidiMessage(event) {
     var data = event.data;
     if (!data || data.length < 2) return;
+    if (data[0] === 0xF0) {
+      handleExquisSysex(data);
+      return;
+    }
     var status = data[0] & 0xF0;
     var channel = data[0] & 0x0F;
     var midi = data[1];
@@ -2381,13 +3384,73 @@
     } else if (status === 0xD0) {
       var channelMidi = state.channelNotes[channel];
       if (typeof channelMidi === 'number') updateMidiPressure(channelMidi, midi, 'channel-pressure', channel);
+    } else if (status === 0xB0 && channel === 15) {
+      var officialEdge = EXQUIS_EDGE_BY_OFFICIAL_ID[midi];
+      if (midi >= 110 && midi <= 113) {
+        var delta = velocity - 64;
+        rememberEdgeControl(officialEdge || null, 'delta ' + delta);
+        logEvent('midi', 'Exquis dial encoder=' + midi + ' ' + (officialEdge ? officialEdge.label + ' ' : '') + 'delta=' + delta + ' raw=' + velocity);
+        state.midiActivity = 'Activity: ' + (officialEdge ? officialEdge.label : 'dial ' + midi) + ' delta ' + delta;
+        render();
+      } else if (officialEdge) {
+        rememberEdgeControl(officialEdge, velocity >= 64 ? 'on' : 'off');
+        logEvent('midi', 'Exquis edge control id=' + midi + ' ' + officialEdge.label + ' value=' + velocity);
+        state.midiActivity = 'Activity: ' + officialEdge.label + ' value ' + velocity;
+        render();
+      } else {
+        logEvent('midi', 'Exquis ch16 control id=' + midi + ' value=' + velocity);
+      }
+    } else if (state.exquisDialListenEnabled && status === 0xB0 && channel === 0 && handleExquisSettingsControl(midi, velocity)) {
+      return;
+    } else if (state.exquisDialListenEnabled) {
+      logEvent('midi', 'Exquis dial raw status=0x' + data[0].toString(16).toUpperCase().padStart(2, '0') + ' channel=' + (channel + 1) + ' data=' + Array.prototype.slice.call(data).join(','));
     }
+  }
+
+  function rememberEdgeControl(control, value) {
+    if (!control) return;
+    state.activeEdgeControlId = control.id;
+    state.lastEdgeControlId = control.id;
+    state.lastEdgeControlValue = value || '';
+  }
+
+  function handleExquisSettingsControl(cc, value) {
+    var control = EXQUIS_EDGE_BY_CC[cc];
+    if (control) {
+      rememberEdgeControl(control, String(value));
+      var dialIndex = cc - 40;
+      if (cc === 42 && value >= 0 && value <= 11) {
+        logEvent('midi', 'Exquis settings ' + control.label + ' root value=' + value + ' note=' + TONICS[value].name);
+        updateTonicFromHardwareRoot(value, 'Settings Encoder 2');
+      } else if (cc === 43) {
+        logEvent('midi', 'Exquis settings ' + control.label + ' scale-number=' + value);
+        updateScaleFromHardwareNumber(value, 'Settings Encoder 3');
+      } else {
+        logEvent('midi', 'Exquis settings ' + control.label + ' cc=' + cc + ' value=' + value);
+        state.midiActivity = 'Activity: ' + control.label + ' value ' + value;
+        render();
+      }
+      return true;
+    }
+    control = EXQUIS_EDGE_BY_CLICK_CC[cc];
+    if (control) {
+      rememberEdgeControl(control, value >= 64 ? 'click on' : 'click off');
+      logEvent('midi', 'Exquis settings ' + control.label + ' click value=' + value);
+      state.midiActivity = 'Activity: ' + control.label + ' click ' + value;
+      render();
+      return true;
+    }
+    return false;
   }
 
   function midiInputLabel(input) {
     var name = input && input.name ? input.name : 'Unnamed MIDI input';
     var manufacturer = input && input.manufacturer ? input.manufacturer : '';
     return manufacturer && name.indexOf(manufacturer) < 0 ? name + ' (' + manufacturer + ')' : name;
+  }
+
+  function midiDeviceLabel(device) {
+    return midiInputLabel(device);
   }
 
   function getMidiInputs(access) {
@@ -2400,6 +3463,18 @@
       return midiInputLabel(a).localeCompare(midiInputLabel(b));
     });
     return inputs;
+  }
+
+  function getMidiOutputs(access) {
+    var outputs = [];
+    if (!access || !access.outputs) return outputs;
+    access.outputs.forEach(function(output) {
+      outputs.push(output);
+    });
+    outputs.sort(function(a, b) {
+      return midiDeviceLabel(a).localeCompare(midiDeviceLabel(b));
+    });
+    return outputs;
   }
 
   function chooseMidiInput(access) {
@@ -2419,9 +3494,34 @@
     return chosen;
   }
 
+  function chooseMidiOutput(access) {
+    var chosen = null;
+    var outputs = getMidiOutputs(access);
+    for (var i = 0; i < outputs.length; i++) {
+      var output = outputs[i];
+      var name = ((output.name || '') + ' ' + (output.manufacturer || '')).toLowerCase();
+      if (state.selectedMidiOutputId && output.id === state.selectedMidiOutputId) {
+        chosen = output;
+        break;
+      }
+      if (!chosen || name.indexOf('exquis') >= 0 || name.indexOf('intuitive') >= 0) {
+        chosen = output;
+      }
+    }
+    return chosen;
+  }
+
   function disconnectMidiInput() {
     if (midiInput) midiInput.onmidimessage = null;
     midiInput = null;
+  }
+
+  function connectMidiOutput(output) {
+    midiOutput = output || null;
+    if (midiOutput) {
+      state.selectedMidiOutputId = midiOutput.id || '';
+      logEvent('midi', 'output ready ' + midiDeviceLabel(midiOutput) + ' id=' + (midiOutput.id || 'unknown'));
+    }
   }
 
   function connectMidiInput(input) {
@@ -2439,6 +3539,7 @@
 
   function refreshMidiInputs(access) {
     var inputs = getMidiInputs(access);
+    var outputs = getMidiOutputs(access);
     state.midiInputs = inputs.map(function(input) {
       return {
         id: input.id || midiInputLabel(input),
@@ -2447,11 +3548,341 @@
         connection: input.connection || ''
       };
     });
+    state.midiOutputs = outputs.map(function(output) {
+      return {
+        id: output.id || midiDeviceLabel(output),
+        label: midiDeviceLabel(output),
+        state: output.state || '',
+        connection: output.connection || ''
+      };
+    });
     if (inputs.length && !state.selectedMidiId) {
       var preferred = chooseMidiInput(access);
       state.selectedMidiId = preferred && preferred.id ? preferred.id : inputs[0].id;
     }
+    if (outputs.length && !state.selectedMidiOutputId) {
+      var preferredOutput = chooseMidiOutput(access);
+      state.selectedMidiOutputId = preferredOutput && preferredOutput.id ? preferredOutput.id : outputs[0].id;
+    }
     return inputs;
+  }
+
+  function sendExquisSysex(command, payload, reason) {
+    if (!state.exquisSyncEnabled || !midiOutput || !midiOutput.send) return false;
+    var bytes = buildExquisSysex(command, payload || []);
+    return sendRawMidi(bytes, 'Exquis sync send ' + (reason || ('cmd=' + command)));
+  }
+
+  function sendOfficialPadsDeveloperMode(enabled, reason) {
+    return sendRawMidi(buildExquisSysex(0x00, [enabled ? EXQUIS_DEVELOPER_PADS_MASK : 0x00]), 'Exquis sync send ' + reason);
+  }
+
+  function sendOfficialDialListenDeveloperMode(enabled, reason) {
+    return sendRawMidi(buildExquisSysex(0x00, [enabled ? EXQUIS_DEVELOPER_DIAL_LISTEN_MASK : 0x00]), 'Exquis sync send ' + reason);
+  }
+
+  function beginOfficialKeyModeTransaction(reason) {
+    return sendOfficialPadsDeveloperMode(true, (reason || 'native-keymode') + ' developer-mode pads=0x01');
+  }
+
+  function endOfficialKeyModeTransaction(reason) {
+    if (state.exquisDialListenEnabled) return true;
+    return sendOfficialPadsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
+  }
+
+  function sendRawMidi(bytes, reason) {
+    if (!midiOutput || !midiOutput.send) return false;
+    try {
+      midiOutput.send(bytes);
+      if (bytes && bytes.length >= 7 && bytes[0] === 0xF0 && bytes[1] === 0x00 && bytes[2] === 0x21 && bytes[3] === 0x7E && bytes[4] === 0x7F && bytes[5] === 0x00) {
+        state.exquisDeveloperMask = clamp7Bit(bytes[6]);
+      }
+      if (reason) logEvent('midi', reason + ' bytes=' + bytesToHex(bytes));
+      return true;
+    } catch (err) {
+      state.exquisSyncStatus = 'Exquis sync: send failed';
+      logEvent('midi', reason + ' failed: ' + (err && err.message ? err.message : err));
+      return false;
+    }
+  }
+
+  function sendOfficialProbeMask(mask, label) {
+    sendRawMidi(buildExquisSysex(0x00, [mask]), 'Exquis probe official setup ' + label);
+    sendRawMidi(buildExquisSysex(0x06, []), 'Exquis probe official root-readback ' + label);
+    sendRawMidi(buildExquisSysex(0x07, []), 'Exquis probe official scale-readback ' + label);
+    sendRawMidi(buildExquisSysex(0x03, []), 'Exquis probe official refresh ' + label);
+  }
+
+  function sendNativeWriteProbeMask(mask, label) {
+    var rootPc = mod(state.tonicPc, 12);
+    var scaleIndex = exquisScaleNumberForScaleId(state.scaleId);
+    sendRawMidi(buildExquisSysex(0x00, [mask]), 'Exquis native probe setup ' + label);
+    sendRawMidi(buildExquisSysex(0x06, [rootPc]), 'Exquis native probe root=' + getTonicName() + ' ' + label);
+    sendRawMidi(buildExquisSysex(0x07, [scaleIndex]), 'Exquis native probe scale=' + state.scaleId + ' index=' + scaleIndex + ' ' + label);
+    sendRawMidi(buildExquisSysex(0x03, []), 'Exquis native probe refresh ' + label);
+    sendRawMidi(buildExquisSysex(0x06, []), 'Exquis native probe root-readback ' + label);
+    sendRawMidi(buildExquisSysex(0x07, []), 'Exquis native probe scale-readback ' + label);
+    sendRawMidi(buildExquisSysex(0x00, [0x00]), 'Exquis native probe developer-mode off ' + label);
+  }
+
+  function exquisLegacyPadId(cell) {
+    var id = 0;
+    var count = EXQUIS_NOTE_ROWS[cell.row].length;
+    if (state.legacyMap === 'top_left' || state.legacyMap === 'top_right') {
+      for (var topRow = 0; topRow < cell.row; topRow++) id += EXQUIS_NOTE_ROWS[topRow].length;
+    } else {
+      for (var bottomRow = EXQUIS_NOTE_ROWS.length - 1; bottomRow > cell.row; bottomRow--) id += EXQUIS_NOTE_ROWS[bottomRow].length;
+    }
+    if (state.legacyMap === 'bottom_right' || state.legacyMap === 'top_right') return id + (count - 1 - cell.col);
+    return id + cell.col;
+  }
+
+  function exquisLegacyColorForCell(cell, scale) {
+    if (cell.pc === state.tonicPc) return [0x7F, 0x5F, 0x3F];
+    if (isScalePc(cell.pc, scale)) return [0x38, 0x1D, 0x41];
+    return [0x00, 0x00, 0x00];
+  }
+
+  function sendExquisLegacyKeepalive(reason) {
+    return sendRawMidi(buildExquisLegacySysex(null, []), reason || '');
+  }
+
+  function startExquisLegacyKeepalive() {
+    if (exquisLegacyKeepaliveTimer) return;
+    exquisLegacyKeepaliveTimer = window.setInterval(function() {
+      if (!state.exquisSyncEnabled || !midiOutput) {
+        stopExquisLegacyKeepalive();
+        return;
+      }
+      var now = Date.now();
+      var shouldLog = now - lastExquisLegacyKeepaliveLogAt > 5000;
+      if (shouldLog) lastExquisLegacyKeepaliveLogAt = now;
+      sendExquisLegacyKeepalive(shouldLog ? 'Exquis legacy keepalive tick' : '');
+    }, 380);
+  }
+
+  function stopExquisLegacyKeepalive() {
+    if (exquisLegacyKeepaliveTimer) {
+      window.clearInterval(exquisLegacyKeepaliveTimer);
+      exquisLegacyKeepaliveTimer = null;
+    }
+  }
+
+  function sendExquisLegacyKeyModeNow(reason, options) {
+    options = options || {};
+    if (!midiOutput || !midiOutput.send) return false;
+    lastExquisLegacySyncAt = Date.now();
+    var cells = makeGrid(1);
+    var scale = getScale();
+    var includeNoteMap = options.forceNoteMap || !exquisLegacyNoteMapSent;
+    var lightTarget = state.legacyLightTarget || 'buttons';
+    var ok = sendExquisLegacyKeepalive('');
+    var noteMapCount = 0;
+    var noteColorCount = 0;
+    var buttonColorCount = 0;
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var padId = exquisLegacyPadId(cell);
+      var color = exquisLegacyColorForCell(cell, scale);
+      if (includeNoteMap) {
+        ok = sendRawMidi(buildExquisLegacySysex(0x04, [padId, cell.midi]), options.verbose ? 'Exquis legacy note-map ' + cell.id + '=' + noteLabelFromMidi(cell.midi) : '') && ok;
+        noteMapCount += 1;
+      }
+      if (lightTarget === 'notes' || lightTarget === 'both') {
+        ok = sendRawMidi(buildExquisLegacySysex(0x03, [padId, color[0], color[1], color[2]]), options.verbose ? 'Exquis legacy note-color ' + cell.id : '') && ok;
+        noteColorCount += 1;
+      }
+      if (lightTarget === 'buttons' || lightTarget === 'both') {
+        ok = sendRawMidi(buildExquisLegacySysex(0x07, [padId, color[0], color[1], color[2]]), options.verbose ? 'Exquis legacy button-color ' + cell.id : '') && ok;
+        buttonColorCount += 1;
+      }
+    }
+    if (includeNoteMap) exquisLegacyNoteMapSent = true;
+    state.exquisProtocol = 'legacy';
+    state.exquisSyncStatus = 'Exquis sync: legacy lights sent ' + getTonicName() + ' ' + getScale().name;
+    logEvent('midi', (reason || 'Exquis legacy key/mode') + ' sent buttonColors=' + buttonColorCount + ' noteColors=' + noteColorCount + ' noteMap=' + noteMapCount + ' target=' + lightTarget + ' tonic=' + getTonicName() + ' scale=' + getScale().name);
+    startExquisLegacyKeepalive();
+    return ok;
+  }
+
+  function sendExquisLegacyKeyMode(reason, options) {
+    if (exquisLegacySyncTimer) window.clearTimeout(exquisLegacySyncTimer);
+    exquisLegacySyncTimer = window.setTimeout(function() {
+      exquisLegacySyncTimer = null;
+      sendExquisLegacyKeyModeNow(reason, options);
+      render();
+    }, options && options.immediate ? 0 : 80);
+    return true;
+  }
+
+  function probeExquisHardware() {
+    if (!midiOutput) {
+      state.exquisSyncStatus = 'Exquis probe: no MIDI output';
+      logEvent('midi', 'Exquis probe unavailable: no MIDI output');
+      render();
+      return;
+    }
+    state.exquisSyncStatus = 'Exquis probe: sent diagnostic messages';
+    logEvent('midi', 'Exquis probe started; watch for raw SysEx receive lines');
+    sendRawMidi([0xF0, 0x7E, 0x7F, 0x06, 0x01, 0xF7], 'Exquis probe universal identity request');
+    sendOfficialProbeMask(EXQUIS_DEVELOPER_LEGACY_PROBE_MASK, 'mask=0x20');
+    window.setTimeout(function() { sendOfficialProbeMask(0x3F, 'mask=0x3F'); }, 160);
+    window.setTimeout(function() {
+      sendRawMidi([0xF0, 0x00, 0x21, 0x7E, 0xF7], 'Exquis probe legacy keepalive');
+      sendRawMidi([0xF0, 0x00, 0x21, 0x7E, 0x04, 0x00, 0x3C, 0xF7], 'Exquis probe legacy note-map pad0 C4');
+      sendExquisLegacyKeyMode('Exquis probe legacy key/mode', { immediate: true, forceNoteMap: true, verbose: true });
+    }, 320);
+    window.setTimeout(function() {
+      sendRawMidi(buildExquisSysex(0x00, [0x00]), 'Exquis probe official developer-mode off');
+      state.exquisSyncStatus = 'Exquis probe: complete; inspect console';
+      render();
+    }, 900);
+    render();
+  }
+
+  function probeExquisNativeWrites() {
+    if (!midiOutput) {
+      state.exquisSyncStatus = 'Exquis native probe: no MIDI output';
+      logEvent('midi', 'Exquis native probe unavailable: no MIDI output');
+      render();
+      return;
+    }
+    var masks = [
+      { mask: EXQUIS_DEVELOPER_PADS_MASK, label: 'mask=0x01 pads' },
+      { mask: EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK, label: 'mask=0x10 settings' },
+      { mask: EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK, label: 'mask=0x11 pads+settings' },
+      { mask: EXQUIS_DEVELOPER_DIAL_LISTEN_MASK, label: 'mask=0x13 pads+encoders+settings' }
+    ];
+    state.exquisSyncStatus = 'Exquis native probe: running ' + getTonicName() + ' ' + getScale().name;
+    logEvent('midi', 'Exquis native probe started root=' + getTonicName() + ' scale=' + getScale().name + '; watch hardware after each labeled mask');
+    for (var i = 0; i < masks.length; i++) {
+      (function(entry, delayMs) {
+        window.setTimeout(function() {
+          sendNativeWriteProbeMask(entry.mask, entry.label);
+        }, delayMs);
+      })(masks[i], i * 900);
+    }
+    window.setTimeout(function() {
+      state.exquisSyncStatus = 'Exquis native probe: complete; inspect console';
+      render();
+    }, masks.length * 900 + 120);
+    render();
+  }
+
+  function sendExquisRoot() {
+    beginOfficialKeyModeTransaction('root=' + getTonicName());
+    var ok = sendExquisSysex(0x06, [mod(state.tonicPc, 12)], 'root=' + getTonicName());
+    endOfficialKeyModeTransaction('root=' + getTonicName());
+    return ok;
+  }
+
+  function sendExquisScale() {
+    var scaleIndex = exquisScaleNumberForScaleId(state.scaleId);
+    beginOfficialKeyModeTransaction('scale=' + state.scaleId);
+    var okNumber = sendExquisSysex(0x07, [scaleIndex], 'scale-index=' + scaleIndex);
+    endOfficialKeyModeTransaction('scale=' + state.scaleId);
+    return okNumber;
+  }
+
+  function requestExquisReadback() {
+    var okRoot = sendExquisSysex(0x06, [], 'request-root-readback');
+    var okScale = sendExquisSysex(0x07, [], 'request-scale-readback');
+    return okRoot && okScale;
+  }
+
+  function refreshExquisDisplay(reason) {
+    return sendExquisSysex(0x03, [], reason || 'refresh-display');
+  }
+
+  function syncExquisKeyModeToHardware() {
+    if (!state.exquisSyncEnabled) return;
+    sendExquisRoot();
+    sendExquisScale();
+    refreshExquisDisplay('refresh-after-sync');
+    requestExquisReadback();
+    sendExquisLegacyKeyMode('Exquis legacy key/mode after sync', { immediate: true });
+    state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name + ' / legacy lights';
+    render();
+  }
+
+  function handleExquisSysex(data) {
+    var bytes = Array.prototype.slice.call(data || []);
+    if (bytes.length === 5 && bytes[0] === 0xF0 && bytes[1] === 0x00 && bytes[2] === 0x21 && bytes[3] === 0x7E && bytes[4] === 0xF7) {
+      state.exquisProtocol = 'legacy';
+      state.exquisSyncStatus = 'Exquis sync: legacy protocol response';
+      render();
+      return;
+    }
+    logEvent('midi', 'raw SysEx receive bytes=' + bytesToHex(data));
+    if (bytes.length >= 6 && bytes[0] === 0xF0 && bytes[1] === 0x7E && bytes[3] === 0x06 && bytes[4] === 0x02) {
+      logEvent('midi', 'universal identity response payload=' + bytes.slice(5, -1).join(','));
+      state.exquisSyncStatus = 'Exquis probe: identity response received';
+      render();
+      return;
+    }
+    var parsed = parseExquisSysex(data);
+    if (!parsed) {
+      logEvent('midi', 'ignored non-official Exquis SysEx message');
+      return;
+    }
+    logEvent('midi', 'Exquis sync receive cmd=' + parsed.command.toString(16).padStart(2, '0').toUpperCase() + ' payload=' + parsed.payload.join(','));
+    if (parsed.command === 0x06 && parsed.payload.length >= 1) {
+      updateTonicFromHardwareRoot(parsed.payload[0], 'official SysEx');
+    } else if (parsed.command === 0x07 && parsed.payload.length >= 1) {
+      updateScaleFromHardwareNumber(parsed.payload[0], 'official SysEx');
+    } else if (parsed.command === 0x03) {
+      if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
+    }
+  }
+
+  function enableExquisSync() {
+    if (!midiOutput) {
+      state.exquisSyncStatus = 'Exquis sync: no MIDI output';
+      logEvent('midi', 'Exquis sync unavailable: no MIDI output');
+      render();
+      return;
+    }
+    state.exquisSyncEnabled = true;
+    state.exquisSyncStatus = 'Exquis sync: starting';
+    syncExquisKeyModeToHardware();
+  }
+
+  function disableExquisSync() {
+    if (exquisLegacySyncTimer) {
+      window.clearTimeout(exquisLegacySyncTimer);
+      exquisLegacySyncTimer = null;
+    }
+    stopExquisLegacyKeepalive();
+    if (state.exquisSyncEnabled && midiOutput && midiOutput.send) {
+      sendExquisSysex(0x00, [0x00], 'developer-mode off');
+      sendExquisLegacyKeepalive('Exquis legacy keepalive stop');
+    }
+    exquisLegacyNoteMapSent = false;
+    state.exquisSyncEnabled = false;
+    state.exquisSyncStatus = 'Exquis sync: off';
+    render();
+  }
+
+  function setExquisDialListen(enabled) {
+    if (!midiOutput) {
+      state.exquisSyncStatus = 'Exquis dial listen: no MIDI output';
+      render();
+      return;
+    }
+    state.exquisDialListenEnabled = !!enabled;
+    sendOfficialDialListenDeveloperMode(state.exquisDialListenEnabled, state.exquisDialListenEnabled ? 'dial-listen developer-mode pads+encoders+settings=0x13' : 'dial-listen developer-mode off');
+    state.exquisSyncStatus = state.exquisDialListenEnabled ? 'Exquis dial listen: on (pads + encoders + settings are in Developer Mode)' : 'Exquis dial listen: off';
+    logEvent('midi', state.exquisSyncStatus);
+    render();
+  }
+
+  function toggleExquisDialListen() {
+    setExquisDialListen(!state.exquisDialListenEnabled);
+  }
+
+  function toggleExquisSync() {
+    if (state.exquisSyncEnabled) disableExquisSync();
+    else enableExquisSync();
   }
 
   function enableMidi() {
@@ -2461,16 +3892,19 @@
       render();
       return;
     }
-    navigator.requestMIDIAccess({ sysex: false }).then(function(access) {
+    navigator.requestMIDIAccess({ sysex: true }).then(function(access) {
       midiAccess = access;
+      state.exquisSysexAvailable = true;
       midiAccess.onstatechange = function() {
         refreshMidiInputs(midiAccess);
         if (!midiInput || state.selectedMidiId) {
           connectMidiInput(chooseMidiInput(midiAccess));
         }
+        connectMidiOutput(chooseMidiOutput(midiAccess));
         render();
       };
       var inputs = refreshMidiInputs(access);
+      connectMidiOutput(chooseMidiOutput(access));
       if (inputs.length) {
         connectMidiInput(chooseMidiInput(access));
         logEvent('midi', 'visible inputs: ' + inputs.map(midiInputLabel).join(', '));
@@ -2482,10 +3916,30 @@
       }
       render();
     }).catch(function(err) {
-      state.midiStatus = 'MIDI permission denied.';
-      logEvent('midi', 'permission/access failed: ' + (err && err.message ? err.message : err));
-      setFeedback(err && err.message ? err.message : 'MIDI permission denied.', 'bad');
-      render();
+      logEvent('midi', 'sysex MIDI access failed, retrying input-only: ' + (err && err.message ? err.message : err));
+      state.exquisSysexAvailable = false;
+      state.exquisSyncStatus = 'Exquis sync: SysEx permission unavailable';
+      navigator.requestMIDIAccess({ sysex: false }).then(function(access) {
+        midiAccess = access;
+        midiAccess.onstatechange = function() {
+          refreshMidiInputs(midiAccess);
+          if (!midiInput || state.selectedMidiId) connectMidiInput(chooseMidiInput(midiAccess));
+          render();
+        };
+        var inputs = refreshMidiInputs(access);
+        if (inputs.length) connectMidiInput(chooseMidiInput(access));
+        else {
+          disconnectMidiInput();
+          state.midiStatus = 'No MIDI input found.';
+          setFeedback('No MIDI input found. Confirm the Exquis is connected and not held by another app.', 'bad');
+        }
+        render();
+      }).catch(function(fallbackErr) {
+        state.midiStatus = 'MIDI permission denied.';
+        logEvent('midi', 'permission/access failed: ' + (fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr));
+        setFeedback(fallbackErr && fallbackErr.message ? fallbackErr.message : 'MIDI permission denied.', 'bad');
+        render();
+      });
     });
   }
 
@@ -2557,6 +4011,22 @@
       fo.textContent = STRATEGIES[i].name;
       els.strategy.appendChild(fo);
     }
+    for (i = 0; i < EXERCISES.length; i++) {
+      var eo = document.createElement('option');
+      eo.value = EXERCISES[i].id;
+      eo.textContent = EXERCISES[i].name;
+      els.exercise.appendChild(eo);
+      if (els.exerciseButtons) {
+        var eb = document.createElement('button');
+        eb.type = 'button';
+        eb.className = 'exercise-button';
+        eb.dataset.value = EXERCISES[i].id;
+        eb.setAttribute('data-testid', 'exercise-button-' + EXERCISES[i].id);
+        eb.textContent = exerciseButtonLabel(EXERCISES[i]);
+        eb.setAttribute('aria-label', EXERCISES[i].name + ': ' + EXERCISES[i].prompt);
+        els.exerciseButtons.appendChild(eb);
+      }
+    }
     syncSoundSelectorsFromPreset();
     syncFxSelectorsFromPreset();
     renderSoundSelectorOptions();
@@ -2568,8 +4038,17 @@
     var cells = logicCells;
     var scale = getScale();
     var strategy = getStrategy();
+    var exercise = getExercise();
     var fingers = getStrategyFingers(strategy);
+    var isPracticeMode = state.mode === 'practice';
     renderRootOptions(logicCells);
+    if (els.tonic) els.tonic.value = String(state.tonicPc);
+    if (els.scale) els.scale.value = state.scaleId;
+    if (els.strategy) els.strategy.value = state.strategyId;
+    if (els.hand) els.hand.value = state.hand;
+    if (els.exercise) els.exercise.value = state.exerciseId;
+    if (els.octave) els.octave.value = state.octaveSide;
+    if (els.view) els.view.value = state.view;
     var path = getPracticePath(logicCells, scale);
     currentPath = path;
     var current = path.length ? path[mod(state.step, path.length)] : null;
@@ -2589,6 +4068,9 @@
     var i;
 
     state.step = path.length ? mod(state.step, path.length) : 0;
+    var currentStepIndex = state.step;
+    var currentFinger = path.length ? fingers[mod(state.step, fingers.length)] : '';
+    var ergonomicStep = scoreErgonomicStep(path, fingers, strategy, currentStepIndex);
     for (i = 0; i < path.length; i++) {
       pathById[path[i].id.replace('-octave', '')] = true;
       if (typeof pathIndexById[path[i].id.replace('-octave', '')] !== 'number') {
@@ -2603,8 +4085,12 @@
     }
 
     clearChildren(els.keyboard);
+    if (els.appShell) els.appShell.setAttribute('data-mode', state.mode);
+    if (els.exquisDevice) els.exquisDevice.setAttribute('data-orientation', state.orientation);
     els.keyboard.className = 'keyboard keyboard-' + state.orientation + (state.rotation === 90 || state.rotation === 270 ? ' keyboard-rotated-sideways' : '');
+    els.keyboard.setAttribute('data-mode', state.mode);
     els.keyboard.setAttribute('data-rotation', String(mod(state.rotation, 360)));
+    renderEdgeControls();
     var baseFieldBounds = getFieldBounds(logicCells);
     var baseKeyboardWidth = Math.round(baseFieldBounds.width + 130);
     var baseKeyboardHeight = Math.round(baseFieldBounds.height + 48);
@@ -2628,11 +4114,11 @@
     for (i = 0; i < cells.length; i++) {
       var cell = cells[i];
       var inPath = !!pathById[cell.id];
-      var displayMidi = inPath && typeof pathMidiById[cell.id] === 'number' ? pathMidiById[cell.id] : cell.midi;
-      var hardwareLit = state.view === 'practice' && !!litPracticeById[cell.id];
-      var inScale = state.view === 'practice' ? inPath : isScalePc(cell.pc, scale);
+      var displayMidi = isPracticeMode && inPath && typeof pathMidiById[cell.id] === 'number' ? pathMidiById[cell.id] : cell.midi;
+      var hardwareLit = isPracticeMode && state.view === 'practice' && !!litPracticeById[cell.id];
+      var inScale = state.view === 'map' ? false : (isPracticeMode && state.view === 'practice' ? inPath : isScalePc(cell.pc, scale));
       var isTonic = cell.pc === state.tonicPc;
-      var isCurrent = current && current.id.replace('-octave', '') === cell.id;
+      var isCurrent = isPracticeMode && current && current.id.replace('-octave', '') === cell.id;
       var heldInfo = getHeldInfoForCell(cell);
       var heldLevel = heldInfo.level;
       var heldPressure = heldLevel / 127;
@@ -2640,19 +4126,19 @@
       var classes = ['key'];
       if (hardwareLit) classes.push('hardware-lit');
       if (inScale) classes.push('in-scale');
-      if (inPath && state.view === 'practice') classes.push('in-path');
+      if (isPracticeMode && inPath && state.view === 'practice') classes.push('in-path');
       if (isTonic) classes.push('tonic');
       if (isCurrent) classes.push('current');
-      if (state.view === 'calibration' && isCurrent) classes.push('calibration-target');
+      if (isPracticeMode && state.view === 'calibration' && isCurrent) classes.push('calibration-target');
       if (heldLevel > 0 && heldInfo.exact) classes.push('midi-held');
       if (state.rawMidiFlash && state.activeMidiCellId === cell.id) classes.push('midi-hit');
       if (!state.rawMidiFlash && state.lastMidiCellId === cell.id) classes.push('midi-last');
       if (state.rawMidiFlash && state.activeMidiPc === null && isCurrent) classes.push('raw-midi-hit');
       if (state.calibrated[cell.id]) classes.push('calibrated');
       if (state.mismatched[cell.id]) classes.push('mismatch');
-      if (state.view === 'practice' && !inPath && !hardwareLit) classes.push('dimmed');
-      if (state.view === 'scale' && !inScale) classes.push('dimmed');
-      if (state.view === 'calibration' && !isCurrent) classes.push('dimmed');
+      if (isPracticeMode && state.view === 'practice' && !inPath && !hardwareLit) classes.push('dimmed');
+      if (isPracticeMode && state.view === 'scale' && !inScale) classes.push('dimmed');
+      if (isPracticeMode && state.view === 'calibration' && !isCurrent) classes.push('dimmed');
       key.type = 'button';
       key.className = classes.join(' ');
       key.style.left = (cell.x + shiftX) + 'px';
@@ -2692,25 +4178,82 @@
         };
       })(cell));
       key.innerHTML = '<span class="key-label"><span class="note">' + cell.label + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
-      if (inPath && state.view === 'practice') {
+      if (isPracticeMode && inPath && state.view === 'practice') {
         var degree = document.createElement('span');
         degree.className = 'degree-badge';
-        degree.textContent = String(getScaleDegree(cell, scale));
+        degree.textContent = String((pathIndexById[cell.id] || 0) + 1);
+        degree.setAttribute('aria-label', 'Step ' + String((pathIndexById[cell.id] || 0) + 1));
         key.appendChild(degree);
         var finger = document.createElement('span');
         finger.className = 'finger';
-        finger.textContent = String(fingerById[cell.id]);
+        finger.textContent = fingerShortName(fingerById[cell.id]);
+        finger.setAttribute('aria-label', fingerDisplayName(fingerById[cell.id]));
         key.appendChild(finger);
       }
       els.keyboard.appendChild(key);
     }
 
+    if (els.practicePathStrip) {
+      clearChildren(els.practicePathStrip);
+      if (isPracticeMode) {
+        for (var ps = 0; ps < path.length; ps++) {
+          var chip = document.createElement('span');
+          chip.className = 'path-chip' + (ps === state.step ? ' active' : '');
+          if (isHandShiftStep(strategy, ps)) chip.className += ' shift-chip';
+          chip.setAttribute('data-testid', 'path-chip');
+          chip.textContent = String(ps + 1) + ' ' + noteName(path[ps].midi) + octave(path[ps].midi);
+          chip.setAttribute('aria-label', 'Step ' + String(ps + 1) + ' ' + noteName(path[ps].midi) + octave(path[ps].midi) + ' ' + fingerDisplayName(fingers[ps % fingers.length]) + (isHandShiftStep(strategy, ps) ? ' Shift hand' : ''));
+          els.practicePathStrip.appendChild(chip);
+        }
+      }
+    }
     els.title.textContent = getTonicName() + ' ' + scale.name;
-    els.subtitle.textContent = (state.hand === 'right' ? 'Right' : 'Left') + ' hand: ' + strategy.name;
+    els.subtitle.textContent = isPracticeMode
+      ? 'Practice: ' + (state.hand === 'right' ? 'Right' : 'Left') + ' hand: ' + strategy.name + ' / ' + exercise.name
+      : 'Play: full Exquis surface / MIDI and audio live';
+    if (els.handButtons) {
+      var handChoiceButtons = els.handButtons.querySelectorAll('button[data-value]');
+      for (var hb = 0; hb < handChoiceButtons.length; hb++) {
+        var handButton = handChoiceButtons[hb];
+        var handActive = handButton.dataset.value === state.hand;
+        handButton.classList.toggle('active', handActive);
+        handButton.setAttribute('aria-pressed', handActive ? 'true' : 'false');
+      }
+    }
+    if (els.octaveButtons) {
+      var octaveChoiceButtons = els.octaveButtons.querySelectorAll('button[data-value]');
+      for (var ob = 0; ob < octaveChoiceButtons.length; ob++) {
+        var octaveButton = octaveChoiceButtons[ob];
+        var octaveActive = octaveButton.dataset.value === state.octaveSide;
+        var octaveDisabled = state.exerciseId === 'two_octaves';
+        octaveButton.classList.toggle('active', octaveActive);
+        octaveButton.disabled = octaveDisabled;
+        octaveButton.setAttribute('aria-pressed', octaveActive ? 'true' : 'false');
+      }
+    }
+    if (els.exerciseButtons) {
+      var exerciseChoiceButtons = els.exerciseButtons.querySelectorAll('button[data-value]');
+      for (var eb = 0; eb < exerciseChoiceButtons.length; eb++) {
+        var exerciseButton = exerciseChoiceButtons[eb];
+        var exerciseActive = exerciseButton.dataset.value === state.exerciseId;
+        exerciseButton.classList.toggle('active', exerciseActive);
+        exerciseButton.setAttribute('aria-pressed', exerciseActive ? 'true' : 'false');
+      }
+    }
     els.fingerRule.textContent = getHandRule(strategy);
+    els.drillPrompt.textContent = isPracticeMode ? exercise.prompt : 'Free-play the full Exquis surface. MIDI, pressure, audio, and note highlights stay live while scoring is paused.';
     els.stepReadout.textContent = path.length ? String(state.step + 1) + ' / ' + path.length : '0 / 0';
-    els.currentNote.textContent = current ? noteName(current.midi) + octave(current.midi) : '--';
-    els.currentDegree.textContent = current ? 'Scale degree ' + getScaleDegree(current, scale) : 'Scale degree --';
+    els.currentNote.textContent = isPracticeMode && current ? noteName(current.midi) + octave(current.midi) : 'Free';
+    els.currentDegree.textContent = isPracticeMode && current ? 'Scale degree ' + getScaleDegree(current, scale) : 'No target in play mode';
+    if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && current ? fingerDisplayName(currentFinger) : 'Finger --';
+    if (els.targetStep) els.targetStep.textContent = isPracticeMode && current ? 'Step ' + String(state.step + 1) + ' of ' + String(path.length) : 'Step --';
+    if (els.buttonReason) els.buttonReason.textContent = isPracticeMode && current ? describeButtonChoice(cells, current, rootCell) : 'Free-play chooses any physical button.';
+    if (els.fingerReason) els.fingerReason.textContent = isPracticeMode && current ? describeFingerChoice(strategy, currentStepIndex, currentFinger, fingers) : 'No fingering scaffold in play mode.';
+    if (els.motionReason) els.motionReason.textContent = isPracticeMode && current ? describeMotionChoice(strategy, currentStepIndex, fingers) : 'Move freely in play mode.';
+    if (els.ergonomicReason) {
+      els.ergonomicReason.textContent = isPracticeMode && current ? ergonomicStep.text : 'Movement load: not scored in play mode.';
+      els.ergonomicReason.setAttribute('data-load-level', isPracticeMode && current ? ergonomicStep.level : 'off');
+    }
     els.audioStatus.textContent = state.audioStatus;
     if (els.filterCutoffValue) els.filterCutoffValue.textContent = Math.round(state.filterCutoff) + ' Hz';
     if (els.filterResonanceValue) els.filterResonanceValue.textContent = String(Math.round(state.filterResonance * 10) / 10);
@@ -2742,7 +4285,7 @@
     els.midiActivity.textContent = state.midiActivity;
     els.coachFeedback.className = 'feedback-' + state.feedbackKind;
     els.coachFeedback.textContent = state.feedback;
-    els.drillScore.textContent = 'Score: ' + state.correctCount + ' correct / ' + state.missCount + ' missed / streak ' + state.streak;
+    els.drillScore.textContent = isPracticeMode ? 'Score: ' + state.correctCount + ' correct / ' + state.missCount + ' missed / streak ' + state.streak : 'Play mode: score paused / all keys available';
     updateCalibrationStats();
     if (state.view === 'calibration') {
       els.assumptionText.className = 'calibration-note';
@@ -2751,6 +4294,25 @@
       els.assumptionText.className = '';
       els.assumptionText.textContent = 'This first build uses a documented Exquis-style model: horizontal semitones and vertical thirds. It is meant for fingering exploration, then calibration against the physical keyboard.';
     }
+    if (els.exquisSyncStatus) els.exquisSyncStatus.textContent = state.exquisSyncStatus;
+    if (els.syncExquis) {
+      els.syncExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
+      els.syncExquis.textContent = state.exquisSyncEnabled ? 'Stop Sync' : 'Sync Key/Mode';
+      els.syncExquis.setAttribute('aria-pressed', state.exquisSyncEnabled ? 'true' : 'false');
+    }
+    if (els.probeExquis) {
+      els.probeExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
+    }
+    if (els.nativeProbeExquis) {
+      els.nativeProbeExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
+    }
+    if (els.dialListen) {
+      els.dialListen.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
+      els.dialListen.textContent = state.exquisDialListenEnabled ? 'Stop Dial' : 'Dial Listen';
+      els.dialListen.setAttribute('aria-pressed', state.exquisDialListenEnabled ? 'true' : 'false');
+    }
+    if (els.legacyMap) els.legacyMap.value = state.legacyMap;
+    if (els.legacyLight) els.legacyLight.value = state.legacyLightTarget;
   }
 
   function bindEvents() {
@@ -2758,6 +4320,13 @@
       state.tonicPc = parseInt(els.tonic.value, 10) || 0;
       state.rootCellId = '';
       state.step = 0;
+      if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
+        sendExquisRoot();
+        refreshExquisDisplay('refresh-after-root');
+        requestExquisReadback();
+        sendExquisLegacyKeyMode('Exquis legacy key/mode after root');
+        state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name;
+      }
       render();
     });
     els.root.addEventListener('change', function() {
@@ -2768,10 +4337,81 @@
     els.scale.addEventListener('change', function() {
       state.scaleId = els.scale.value;
       state.step = 0;
+      if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
+        sendExquisScale();
+        refreshExquisDisplay('refresh-after-scale');
+        requestExquisReadback();
+        sendExquisLegacyKeyMode('Exquis legacy key/mode after scale');
+        state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name;
+      }
+      render();
+    });
+    els.legacyMap.addEventListener('change', function() {
+      state.legacyMap = els.legacyMap.value || 'bottom_left';
+      exquisLegacyNoteMapSent = false;
+      if (state.exquisSyncEnabled) sendExquisLegacyKeyMode('Exquis legacy key/mode map=' + state.legacyMap, { immediate: true, forceNoteMap: true });
+      render();
+    });
+    els.legacyLight.addEventListener('change', function() {
+      state.legacyLightTarget = els.legacyLight.value || 'buttons';
+      if (state.exquisSyncEnabled) sendExquisLegacyKeyMode('Exquis legacy key/mode lights=' + state.legacyLightTarget, { immediate: true });
+      render();
+    });
+    els.mode.addEventListener('change', function() {
+      setMode(els.mode.value);
+      render();
+    });
+    els.practiceMode.addEventListener('click', function() {
+      setMode('practice');
+      render();
+    });
+    els.playMode.addEventListener('click', function() {
+      setMode('play');
+      render();
+    });
+    if (els.handButtons) {
+      els.handButtons.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-value]');
+        if (!button) return;
+        state.hand = button.dataset.value === 'right' ? 'right' : 'left';
+        els.hand.value = state.hand;
+        render();
+      });
+    }
+    if (els.octaveButtons) {
+      els.octaveButtons.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-value]');
+        if (!button || button.disabled) return;
+        state.octaveSide = button.dataset.value === 'lower' ? 'lower' : 'higher';
+        state.rootCellId = '';
+        state.step = 0;
+        els.octave.value = state.octaveSide;
+        render();
+      });
+    }
+    els.octave.addEventListener('change', function() {
+      state.octaveSide = els.octave.value === 'lower' ? 'lower' : 'higher';
+      state.rootCellId = '';
+      state.step = 0;
       render();
     });
     els.hand.addEventListener('change', function() {
       state.hand = els.hand.value;
+      render();
+    });
+    if (els.exerciseButtons) {
+      els.exerciseButtons.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-value]');
+        if (!button) return;
+        state.exerciseId = button.dataset.value;
+        els.exercise.value = state.exerciseId;
+        state.step = 0;
+        render();
+      });
+    }
+    els.exercise.addEventListener('change', function() {
+      state.exerciseId = els.exercise.value;
+      state.step = 0;
       render();
     });
     els.strategy.addEventListener('change', function() {
@@ -2874,7 +4514,14 @@
     els.testAudio.addEventListener('click', playTestTone);
     els.playScale.addEventListener('click', playPath);
     els.enableMidi.addEventListener('click', enableMidi);
-    els.audioDiag.addEventListener('click', function() { logSsliAudioHealth('manual'); });
+    els.syncExquis.addEventListener('click', toggleExquisSync);
+    els.probeExquis.addEventListener('click', probeExquisHardware);
+    els.nativeProbeExquis.addEventListener('click', probeExquisNativeWrites);
+    els.dialListen.addEventListener('click', toggleExquisDialListen);
+    els.audioDiag.addEventListener('click', function() {
+      expandConsole();
+      logSsliAudioHealth('manual');
+    });
     els.resetConsole.addEventListener('click', resetConsole);
     els.copyConsole.addEventListener('click', copyConsole);
     els.exitConsole.addEventListener('click', exitConsole);
@@ -2891,6 +4538,7 @@
       state.selectedMidiId = els.midiInputSelect.value;
       if (midiAccess) {
         connectMidiInput(chooseMidiInput(midiAccess));
+        connectMidiOutput(chooseMidiOutput(midiAccess));
         render();
       }
     });
@@ -2912,7 +4560,15 @@
       tonic: document.getElementById('tonicSelect'),
       root: document.getElementById('rootSelect'),
       scale: document.getElementById('scaleSelect'),
+      mode: document.getElementById('modeSelect'),
+      practiceMode: document.getElementById('practiceMode'),
+      playMode: document.getElementById('playMode'),
+      octave: document.getElementById('octaveSelect'),
+      octaveButtons: document.getElementById('octaveButtons'),
       hand: document.getElementById('handSelect'),
+      handButtons: document.getElementById('handButtons'),
+      exercise: document.getElementById('exerciseSelect'),
+      exerciseButtons: document.getElementById('exerciseButtons'),
       strategy: document.getElementById('strategySelect'),
       view: document.getElementById('viewSelect'),
       orientation: document.getElementById('orientationSelect'),
@@ -2930,10 +4586,22 @@
       filterCutoffValue: document.getElementById('filterCutoffValue'),
       filterResonanceValue: document.getElementById('filterResonanceValue'),
       autoAdvance: document.getElementById('autoAdvance'),
+      exquisDevice: document.getElementById('exquisDevice'),
       keyboard: document.getElementById('keyboard'),
+      practicePathStrip: document.getElementById('practicePathStrip'),
+      edgeTopControls: document.getElementById('edgeTopControls'),
+      edgeBottomControls: document.getElementById('edgeBottomControls'),
+      edgeControlStatus: document.getElementById('edgeControlStatus'),
       title: document.getElementById('stateTitle'),
       subtitle: document.getElementById('stateSubtitle'),
       fingerRule: document.getElementById('fingerRule'),
+      targetFinger: document.getElementById('targetFinger'),
+      targetStep: document.getElementById('targetStep'),
+      buttonReason: document.getElementById('buttonReason'),
+      fingerReason: document.getElementById('fingerReason'),
+      motionReason: document.getElementById('motionReason'),
+      ergonomicReason: document.getElementById('ergonomicReason'),
+      drillPrompt: document.getElementById('drillPrompt'),
       currentNote: document.getElementById('currentNote'),
       stepReadout: document.getElementById('stepReadout'),
       currentDegree: document.getElementById('currentDegree'),
@@ -2950,7 +4618,14 @@
       midiActivity: document.getElementById('midiActivity'),
       midiInputSelect: document.getElementById('midiInputSelect'),
       midiDevices: document.getElementById('midiDevices'),
+      legacyMap: document.getElementById('legacyMapSelect'),
+      legacyLight: document.getElementById('legacyLightSelect'),
       enableMidi: document.getElementById('enableMidi'),
+      syncExquis: document.getElementById('syncExquis'),
+      probeExquis: document.getElementById('probeExquis'),
+      nativeProbeExquis: document.getElementById('nativeProbeExquis'),
+      dialListen: document.getElementById('dialListen'),
+      exquisSyncStatus: document.getElementById('exquisSyncStatus'),
       lastMidi: document.getElementById('lastMidi'),
       coachFeedback: document.getElementById('coachFeedback'),
       drillScore: document.getElementById('drillScore'),
@@ -2964,8 +4639,13 @@
       exitConsole: document.getElementById('exitConsole')
     };
     renderOptions();
+    els.appShell = document.querySelector('[data-testid="app-shell"]');
     els.tonic.value = String(state.tonicPc);
+    els.mode.value = state.mode;
+    setMode(state.mode);
+    els.octave.value = state.octaveSide;
     els.hand.value = state.hand;
+    els.exercise.value = state.exerciseId;
     els.scale.value = state.scaleId;
     els.strategy.value = state.strategyId;
     els.view.value = state.view;

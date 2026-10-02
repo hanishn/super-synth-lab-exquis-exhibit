@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "partVersion": "0.1.25",
+  "partVersion": "0.1.26",
   "capabilities": [
     {
       "id": "exquis_layout_model",
@@ -50,6 +50,7 @@
       "userValue": "Gives a concrete starting fingering for one-hand scale practice.",
       "acceptanceCriteria": [
         "left-hand mode is the default",
+        "Natural clusters is the default fingering strategy",
         "left and right hand fingering modes are selectable",
         "4-finger ladder, thumb-assisted, and position-shift strategies are selectable",
         "finger legend remains visible on desktop and mobile widths"
@@ -124,6 +125,42 @@
       ]
     },
     {
+      "id": "exquis_key_mode_sync",
+      "name": "Exquis Key/Mode Sync",
+      "status": "prototype",
+      "description": "Synchronizes the exhibit tonic and scale/mode with the physical Exquis through the official Developer Mode SysEx API.",
+      "userValue": "Keeps the hardware's displayed key and scale aligned with the practice UI, and reflects hardware root/scale changes back into the app.",
+      "acceptanceCriteria": [
+        "Web MIDI is requested with SysEx permission before enabling Exquis key/mode sync",
+        "if SysEx permission is denied, MIDI coaching falls back to input-only mode and Exquis sync remains disabled",
+        "Sync Key/Mode momentarily enters Exquis Developer Mode for Pads with F0 00 21 7E 7F 00 01 F7, sends native root/scale messages, then exits Developer Mode",
+        "UI tonic changes send official Exquis root-note SysEx command 06h",
+        "UI scale/mode changes send the official scale number 07h with the same short Pads Developer Mode transaction used by Exquis root/mode sync tools, followed by refresh 03h and readback messages",
+        "incoming Exquis root 06h and scale 07h SysEx messages update the UI without echoing back to hardware",
+        "Probe sends universal identity, official Developer Mode/readback/refresh, legacy Exquis keepalive probes, and logs raw incoming SysEx bytes",
+        "when hardware responds to the legacy protocol, Sync sends legacy keepalive, per-pad note-map, and per-pad tonic/scale button-color LED messages by default",
+        "legacy pad-ID orientation can be switched among bottom-left, bottom-right, top-left, and top-right row-major maps without restarting MIDI",
+        "legacy light target can be switched between button-color command 07h, note-color command 03h, or both for hardware calibration",
+        "Dial Listen can hold Pads + Encoders + Settings/Sound Developer Mode with F0 00 21 7E 7F 00 13 F7 to receive official root/scale SysEx, channel-16 encoder movement, and raw fallback MIDI from physical dials",
+        "Dial Listen recognizes physical Settings raw CC42 as hardware root, raw CC43 as hardware scale number, and raw CC21-24 as encoder clicks",
+        "the stage view arranges Exquis edge controls to match the physical device placement: Encoder 1-4 above the hex keybed, with Down/Up, six-zone Slider, Undo/Redo, and Settings/Sound/Record/Loop/Clips/Play-Stop below the keybed and visible above build/console overlays; horizontal mode rotates the bottom controls to the left rail and encoders to the right rail without clipping the stepper or leaving a large empty band above the device, with hardware labels beside controls so knobs/buttons stay visually primary",
+        "edge controls show captured Developer Mode zones and the most recent edge control activity",
+        "Exquis scale numbers use the hardware ordering for supported modes: 0 Major, 1 Dorian, 4 Mixolydian, and 5 Natural minor",
+        "Native Probe sweeps official root/scale writes across Developer Mode masks 01h, 10h, 11h, and 13h with labeled console output for hardware verification",
+        "sync status is visible in the MIDI coach diagnostics"
+      ],
+      "testIds": [
+        "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
+        "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
+        "test_regression_exquis_incoming_root_scale_sysex_updates_ui_without_echo",
+        "test_regression_exquis_sync_falls_back_to_input_only_when_sysex_permission_denied",
+        "test_regression_exquis_probe_sends_official_and_legacy_diagnostics",
+        "test_regression_exquis_dial_listen_uses_settings_encoder_developer_mode_and_logs_dials",
+        "test_regression_exquis_native_probe_sweeps_official_write_masks",
+        "test_regression_exquis_edge_controls_are_labeled_and_show_capture_state"
+      ]
+    },
+    {
       "id": "hardware_calibration",
       "name": "Hardware Calibration",
       "status": "prototype",
@@ -164,11 +201,11 @@
       "description": "Prioritizes the playable Exquis surface, keeps required sound controls visible, and fits the main desktop/laptop practice view without page-level scrolling.",
       "userValue": "Lets the player focus on fingering and touch feedback instead of fighting a diagnostic cockpit.",
       "acceptanceCriteria": [
-        "desktop and laptop layouts avoid document-level horizontal and vertical scrolling without clipping the right rail",
+        "desktop, tablet, and laptop layouts avoid document-level horizontal and vertical scrolling without clipping the right rail or horizontal Exquis slab",
         "horizontal orientation defaults to the corrected physical-facing view whose rotate button offers Rotate 180",
         "horizontal orientation rotates the physical key shapes rather than transposing upright hexes",
         "desktop layout keeps the practice surface visually dominant",
-        "mobile layouts keep controls reachable and make the Exquis surface intentionally pannable",
+        "mobile layouts keep controls reachable, keep the build badge out of the playable key field, and make the Exquis surface intentionally pannable",
         "keyboard surface is presented as a controller pad field, not a cartesian background grid",
         "rendered key-field proportions match the tall compact Exquis hardware silhouette",
         "adjacent hex keys use regular-hex honeycomb spacing with shared edges and no geometric gaps or overlap",
@@ -200,11 +237,25 @@
         "Physical-model MIDI playback uses general independent-voice headroom so simultaneous and sequential notes preserve pitch identity, remain audible, and avoid sustained clipping",
         "Physical-model MIDI behavior must not depend on note names, intervals, preset names, or special-case two-note exceptions",
         "Physical pluck headroom is handled by the general worklet output path without note-name, interval, or preset-specific exceptions",
+        "Every bundled SSLI preset includes an articulation capability configuration",
+        "Plucked physical presets capture near-simultaneous note-ons into a bounded strum scheduler instead of starting all plucked voices on the same sample",
+        "Generated plucked physical preset metadata uses onset-only pressure policy so held aftertouch cannot modulate a decaying pluck",
+        "The plucked strum scheduler orders buffered notes by Exquis physical position and caps total spread by preset configuration",
+        "Non-plucked sustained presets start MIDI note-ons immediately and do not enter the strum buffer",
+        "Plucked strum groups use chord-context output gain and velocity shaping from the first onset so the first note cannot fire as an over-loud solo pluck",
+        "Plucked strum groups trigger bounded SSLI one-shot physical notes instead of sustained MPE-style physical voices",
+        "Live plucked MIDI one-shots trigger direct SSLI physical noteOn and must not schedule a delayed helper noteOff that can sound like a second pluck",
+        "Pressure received while a note is waiting in the strum buffer is captured as onset energy for the matching one-shot pluck",
+        "Releasing a buffered plucked note before the scheduler flushes cancels the pending voice so stale touches cannot leak into SSLI",
+        "A plucked note that has joined a multi-note strum group remains committed even if the player releases before the delayed strum slot starts",
+        "Plucked strum voices ignore held aftertouch after onset so continuous pressure cannot roughen the decaying resonator",
+        "Hot resonant subtractive presets use structural dense-poly headroom based on filter resonance, filter envelope, oscillator load, and filter slope rather than preset-name exceptions",
+        "Hot resonant subtractive presets cap expression gain before SSLI's internal synth path so six-note pressure sweeps avoid clipping",
         "dense Subtractive and FM MIDI playback scales later independent voice velocities and expression gain so six-note poly-aftertouch practice does not overload the synth engine",
         "Physical strike-model MIDI playback receives additional model-specific velocity shaping because struck resonators clip under six-note stress at pluck/bow velocity levels",
         "Physical-model MIDI poly-aftertouch is applied per held note through SSLI physical updateNotePressure and must never be collapsed into a shared global physical pressure value",
         "SSLI physical worklet voices expose independent per-note pressure gain so Exquis pressure changes affect only the matching active note",
-        "Plucked physical presets receive bounded per-note pressure through SSLI updateNotePressure rather than an exhibit-side bypass or global expression path",
+        "Plucked physical presets route per-note pressure for ownership and diagnostics while keeping continuous aftertouch from modulating Karplus-string amplitude after note-on",
         "Continuous and plucked physical models both preserve independent note ownership for pressure updates and note-off cleanup",
         "SSLI physical worklet output scales summed polyphony above four active voices so six independent Exquis voices retain headroom instead of pushing the soft clipper continuously",
         "Physical-model per-note pressure updates are rate-limited per held note so dense Exquis aftertouch streams do not overload the physical worklet while zero-pressure release remains immediate",
@@ -245,7 +296,11 @@
         "test_regression_four_note_physical_voices_track_pressure_independently_without_global_expression",
         "test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine",
         "test_regression_six_note_physical_pressure_flow_has_stable_final_audio_output",
-        "test_regression_adjacent_pluck_has_stable_audio_output"
+        "test_regression_adjacent_pluck_has_stable_audio_output",
+        "test_regression_plucked_presets_buffer_simultaneous_note_ons_into_strum",
+        "test_regression_non_plucked_presets_keep_immediate_note_ons",
+        "test_regression_released_buffered_strum_note_does_not_start_synth_voice",
+        "test_regression_plucked_strum_plays_capture_matured_note_even_when_flush_timer_is_late"
       ]
     },
     {

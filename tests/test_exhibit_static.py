@@ -28,7 +28,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertTrue((ROOT / "index.html").exists())
         self.assertTrue((ROOT / "dist/index.html").exists())
         self.assertIn("<!doctype html>", self.bundle.lower())
-        self.assertIn('src="ssli/index.html?v=exquis-poly-aftertouch-v2"', self.bundle)
+        self.assertRegex(self.bundle, r'src="ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
         self.assertFalse((ROOT / "exhibit.json").exists())
 
     def test_versioned_parts_exist(self):
@@ -49,11 +49,49 @@ class StaticExhibitTests(unittest.TestCase):
 
     def test_bundle_contains_core_ui(self):
         self.assertIn("Exquis Fingering Lab", self.bundle)
+        self.assertIn('data-testid="build-version"', self.bundle)
         self.assertIn('data-testid="keyboard"', self.bundle)
         self.assertIn("EXQUIS_NOTE_ROWS", self.bundle)
         self.assertIn("Soft Wurli", self.bundle)
+        self.assertIn('data-testid="mode-select"', self.bundle)
+        self.assertIn('data-testid="mode-switch"', self.bundle)
+        self.assertIn('data-testid="practice-mode"', self.bundle)
+        self.assertIn('data-testid="play-mode"', self.bundle)
+        self.assertIn("Practice", self.bundle)
+        self.assertIn("Play", self.bundle)
         self.assertIn("function playNote", self.bundle)
         self.assertIn("SSLI_VENDOR", self.bundle)
+
+    def test_build_version_is_generated_visible_and_used_for_cache_busting(self):
+        match = re.search(r'data-testid="build-version"[^>]*title="Built ([^"]+)"[^>]*>\s*<span>Build</span>\s*<b>([^<]+)</b>', self.bundle)
+        self.assertIsNotNone(match)
+        timestamp = match.group(1)
+        version = match.group(2)
+        self.assertRegex(version, r"^Build \d+$")
+        self.assertRegex(timestamp, r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M ET$")
+        utc_match = re.search(r'<meta name="ssli-exquis-build-timestamp-utc" content="([^"]+)">', self.bundle)
+        self.assertIsNotNone(utc_match)
+        utc_timestamp = utc_match.group(1)
+        self.assertIn(f'<meta name="ssli-exquis-build-version" content="{version}">', self.bundle)
+        self.assertIn(f'window.SSLI_EXQUIS_BUILD = {{"version":"{version}","timestamp":"{timestamp}","timestampUtc":"{utc_timestamp}"}};', self.bundle)
+        self.assertIn(f'src="ssli/index.html?v={utc_timestamp}"', self.bundle)
+        self.assertIn(f"var freshSrc = 'ssli/index.html?v={utc_timestamp}';", self.bundle)
+        self.assertNotIn("{{BUILD_VERSION}}", self.bundle)
+        self.assertNotIn("{{BUILD_TIMESTAMP}}", self.bundle)
+        self.assertNotIn("{{BUILD_TIMESTAMP_UTC}}", self.bundle)
+
+    def test_build_version_changes_on_each_build(self):
+        import build
+
+        first = build.build()
+        second = build.build()
+        self.assertEqual(second["buildNumber"], first["buildNumber"] + 1)
+        self.assertNotEqual(first["buildVersion"], second["buildVersion"])
+        rebuilt = (ROOT / "index.html").read_text(encoding="utf-8")
+        rebuilt_dist = (ROOT / "dist/index.html").read_text(encoding="utf-8")
+        self.assertIn('data-testid="build-version"', rebuilt)
+        self.assertIn(second["buildVersion"], rebuilt)
+        self.assertIn(second["buildVersion"], rebuilt_dist)
 
     def test_public_index_is_built(self):
         self.assertTrue((ROOT / "index.html").exists())
@@ -69,9 +107,30 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertTrue(ssli_index.exists())
         self.assertGreater(ssli_index.stat().st_size, 1_000_000)
         self.assertIn('id="ssliEngineFrame"', self.bundle)
-        self.assertIn('src="ssli/index.html?v=exquis-poly-aftertouch-v2"', self.bundle)
+        self.assertRegex(self.bundle, r'src="ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
         self.assertIn("SL.presets.apply", self.bundle)
         self.assertIn("SL.audio.playNoteOnInstrument", self.bundle)
+
+    def test_capability_docs_describe_play_and_practice_modes(self):
+        docs = (ROOT / "docs/capabilities.md").read_text(encoding="utf-8")
+        self.assertIn("### Play Mode and Practice Mode", docs)
+        self.assertIn("Practice mode", docs)
+        self.assertIn("Play mode", docs)
+        self.assertIn("scoring", docs)
+
+    def test_capability_docs_require_spec_test_implement_verify_order(self):
+        docs = (ROOT / "docs/capabilities.md").read_text(encoding="utf-8")
+        section = docs.split("New feature workflow invariant:", 1)[1].split("Stated failure workflow:", 1)[0]
+        required_order = [
+            "Update the durable spec first",
+            "Update unit/static/Playwright tests second",
+            "Verify the new or changed tests fail",
+            "Implement only after the spec and tests",
+            "Verify the targeted tests pass",
+            "Run the full existing unit suite"
+        ]
+        positions = [section.index(item) for item in required_order]
+        self.assertEqual(positions, sorted(positions))
 
     def test_regression_ssli_runtime_keeps_upstream_physical_pluck_level(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
@@ -103,11 +162,26 @@ class StaticExhibitTests(unittest.TestCase):
 
     def test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
+        ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertIn("this.modelType === 'pluck'", worklet_text)
-        self.assertIn("0.95 + normalized * 0.05", worklet_text)
+        self.assertIn("this.targetPressureGain = 1.0;", worklet_text)
+        self.assertIn("this.pressureGain = 1.0;", worklet_text)
+        self.assertIn("this.targetPressureGain = 1.0;", ssli_text)
         self.assertIn("0.2 + normalized * 0.8", worklet_text)
+        self.assertNotIn("0.95 + normalized * 0.05", worklet_text)
+        self.assertNotIn("0.95 + normalized * 0.05", ssli_text)
         self.assertNotIn("normalized * 1.25", worklet_text)
         self.assertNotIn("1.35", worklet_text)
+
+    def test_regression_plucked_midi_one_shots_do_not_schedule_helper_note_off(self):
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        match = re.search(r"function startPluckedOneShotWithSsli\(midi, velocity, options\) \{([\s\S]*?)\n  \}\n\n  function stopSustainedWithSsli", app)
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn("SL.physical.noteOn(midi, playableVelocity, inst);", body)
+        self.assertIn("decay=natural", body)
+        self.assertNotIn("playNoteOnInstrument", body)
+        self.assertNotIn("physical.noteOff", body)
 
     def test_regression_physical_worklet_scales_six_voice_polyphony_headroom(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
@@ -118,16 +192,20 @@ class StaticExhibitTests(unittest.TestCase):
     def test_regression_physical_voice_headroom_has_no_pitch_specific_pluck_hack(self):
         app_text = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
+        ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertNotIn("semitoneJamGuard", app_text)
         self.assertNotIn("hasRecentPhysicalSemitoneNeighbor", app_text)
-        self.assertIn("var PLUCK_OUTPUT_SCALE = 1.5;", worklet_text)
+        self.assertIn("var PLUCK_OUTPUT_SCALE = 1.0;", worklet_text)
+        self.assertIn("var PLUCK_OUTPUT_SCALE = 1.0;", ssli_text)
+        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.5;", worklet_text)
+        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.5;", ssli_text)
 
     def test_regression_ssli_runtime_cannot_be_served_from_stale_service_worker(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertIn("service worker disabled for Exquis exhibit runtime", ssli_text)
         self.assertNotIn("navigator.serviceWorker.register('sw.js')", ssli_text)
         self.assertIn("ensureFreshSsliFrame", self.bundle)
-        self.assertIn("exquis-poly-aftertouch-v2", self.bundle)
+        self.assertRegex(self.bundle, r"ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
         self.assertIn("removed stale SSLI service worker cache", self.bundle)
 
     def test_public_build_includes_ssli_audio_worklet_assets(self):
@@ -187,6 +265,35 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertTrue(any(preset["name"] == "Wurlitzer EP" for preset in subtractive["presets"]))
         self.assertIn("library", fx)
         self.assertTrue(any(preset["id"] == "lead-solo" for group in fx["library"].values() for preset in group))
+
+    def test_every_bundled_preset_has_articulation_capability(self):
+        import build
+
+        preset_dir = ROOT / "src/vendor/ssli/presets"
+        required = {"family", "onsetMode", "captureWindowMs", "minInterOnsetMs", "maxSpreadMs", "order", "pressurePolicy"}
+        for path in sorted(preset_dir.glob("*-presets.json")):
+            engine = path.stem.replace("-presets", "")
+            library = build.with_articulation_defaults(engine, json.loads(path.read_text(encoding="utf-8")))
+            for preset in library["presets"]:
+                articulation = preset.get("articulation")
+                self.assertIsInstance(articulation, dict, f"{engine}/{preset.get('category')}/{preset.get('name')}")
+                self.assertTrue(required.issubset(articulation), f"{engine}/{preset.get('category')}/{preset.get('name')}: {articulation}")
+
+    def test_plucked_physical_presets_use_strum_articulation_and_keys_remain_immediate(self):
+        import build
+
+        physical = build.with_articulation_defaults("physical", json.loads((ROOT / "src/vendor/ssli/presets/physical-presets.json").read_text(encoding="utf-8")))
+        nylon = next(preset for preset in physical["presets"] if preset["name"] == "Nylon Guitar")
+        self.assertEqual(nylon["articulation"]["family"], "plucked")
+        self.assertEqual(nylon["articulation"]["onsetMode"], "strum")
+        self.assertGreaterEqual(nylon["articulation"]["minInterOnsetMs"], 8)
+        self.assertLessEqual(nylon["articulation"]["maxSpreadMs"], 55)
+        self.assertEqual(nylon["articulation"]["pressurePolicy"], "onset-only")
+
+        subtractive = build.with_articulation_defaults("subtractive", json.loads((ROOT / "src/vendor/ssli/presets/subtractive-presets.json").read_text(encoding="utf-8")))
+        soft_piano = next(preset for preset in subtractive["presets"] if preset["name"] == "Soft EP")
+        self.assertEqual(soft_piano["articulation"]["onsetMode"], "immediate")
+        self.assertEqual(soft_piano["articulation"]["pressurePolicy"], "live")
 
     def test_repeatable_preset_sweep_harness_exists(self):
         script = ROOT / "tools/preset_sweep.py"
@@ -400,6 +507,7 @@ class StaticExhibitTests(unittest.TestCase):
             "test_regression_ssli_runtime_patches_are_required_and_named",
             "test_regression_ssli_physical_runtime_exposes_per_note_pressure_api",
             "test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on",
+            "test_regression_plucked_midi_one_shots_do_not_schedule_helper_note_off",
             "test_regression_physical_worklet_scales_six_voice_polyphony_headroom",
             "test_regression_physical_voice_headroom_has_no_pitch_specific_pluck_hack",
             "test_regression_ssli_runtime_cannot_be_served_from_stale_service_worker",

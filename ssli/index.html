@@ -26493,7 +26493,7 @@ registerProcessor('formant-processor', FormantWorkletProcessor);
 // === Inlined physical-worklet.js ===
 window.__SSL_PHYSICAL_WORKLET_CODE = `// Super Synth Lab - Physical Modelling AudioWorklet Processor
 // Karplus-Strong, Bowed String, Blown Pipe, Modal Synthesis
-// v1.1.4 - fix: bounded pluck output for independent poly-aftertouch voices
+// v1.1.5 - fix: plucked-string aftertouch no longer modulates resonator amplitude
 //
 // ================================================================
 // EDUCATIONAL CONTEXT: Physical Modelling DSP (AudioWorklet)
@@ -26523,7 +26523,7 @@ window.__SSL_PHYSICAL_WORKLET_CODE = `// Super Synth Lab - Physical Modelling Au
 // Per-voice output gain — keeps 4 simultaneous voices under the
 // soft-clipper knee (~0.9). 4 voices * 0.22 = 0.88 peak sum.
 var PHYS_VOICE_OUTPUT_GAIN = 0.22;
-var PLUCK_OUTPUT_SCALE = 1.5;
+var PLUCK_OUTPUT_SCALE = 1.0;
 // Pre-computed sine lookup table: avoids calling Math.sin() at audio
 // rate. Size is a power of 2 (4096) so we can use bitwise AND with
 // PHYS_SINE_MASK for fast modular indexing. At 4096 entries, the
@@ -26830,29 +26830,36 @@ class PluckModel {
         var safeExcLenPick = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLenPick));
         var noise = (Math.random() * 2 - 1) * 0.15;
-        this.delayLine.write((env + noise) * hann * vel * 0.5);
+        this.delayLine.write((env + noise) * hann * vel * 0.75);
       }
     } else {
       // Shaped noise burst: mix of filtered noise + short sine burst at fundamental
-      // Apply a half-Hann window for smoother onset
+      // Apply a half-Hann window and brightness-dependent smoothing so
+      // polyphonic string plucks stay string-like instead of broadband-noisy.
       var sineLen = Math.min(intPeriod, Math.floor(period * 0.5));
       var safeSineLen = sineLen || 1;
       var prevNoise = 0;
+      var prevSmoothedNoise = 0;
+      var noiseSmoothing = 0.08 + bright * 0.18;
+      var noiseLevel = 0.18 + bright * 0.12;
+      var toneLevel = 0.82 + (1 - bright) * 0.18;
       for (var i = 0; i < excLen; i++) {
         // Half-Hann window
         var safeExcLen = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLen));
-        // Noise component (simple one-pole lowpass for shaping)
+        // Noise component (two gentle one-pole stages for string-like excitation)
         var rawNoise = (Math.random() * 2 - 1);
-        var filteredNoise = 0.6 * rawNoise + 0.4 * prevNoise;
+        var filteredNoise = noiseSmoothing * rawNoise + (1 - noiseSmoothing) * prevNoise;
         prevNoise = filteredNoise;
+        var smoothedNoise = 0.22 * filteredNoise + 0.78 * prevSmoothedNoise;
+        prevSmoothedNoise = smoothedNoise;
         // Sine burst at fundamental (fades out after half the period)
         var sineBurst = 0;
         if (i < sineLen) {
           var sineEnv = 1 - (i / safeSineLen);
           sineBurst = Math.sin(2 * Math.PI * freq * i / this.sampleRate) * sineEnv * 0.4;
         }
-        var sample = (filteredNoise * 0.6 + sineBurst) * hann * vel * 0.5;
+        var sample = (smoothedNoise * noiseLevel + sineBurst * toneLevel) * hann * vel * 0.45;
         this.delayLine.write(sample);
       }
     }
@@ -27775,7 +27782,7 @@ class PhysicalVoice {
     // modulation on six active resonators sounds like zippering during release,
     // so keep aftertouch shallow: still per-note, but never a volume pedal.
     if (this.modelType === 'pluck') {
-      this.targetPressureGain = Math.max(0.95, Math.min(1.0, 0.95 + normalized * 0.05));
+      this.targetPressureGain = 1.0;
     } else {
       this.targetPressureGain = Math.max(0.2, Math.min(1.0, 0.2 + normalized * 0.8));
     }

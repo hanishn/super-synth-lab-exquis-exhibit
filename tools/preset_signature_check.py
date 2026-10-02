@@ -203,6 +203,16 @@ def capture_signature(page, sample_ms):
             });
             await new Promise(resolve => setTimeout(resolve, 40));
           }
+          const analyserPeaks = buffers.map(buffer => ({
+            peak: Number(buffer.peak.toFixed(5)),
+            rms: Number(Math.sqrt(buffer.rmsSum / Math.max(1, buffer.rmsCount)).toFixed(5)),
+            spectrumPeak: Number(buffer.spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(buffer.spectrumSum / Math.max(1, buffer.spectrumCount)).toFixed(5)),
+            waveformHash: String(buffer.waveHash),
+            spectrumHash: String(buffer.spectrumHash)
+          }));
+          const aggregateRms = Number(Math.sqrt(rmsSum / Math.max(1, rmsCount)).toFixed(5));
+          const strongestAnalyserRms = Math.max(aggregateRms, ...analyserPeaks.map(row => row.rms || 0));
           return {
             available: true,
             instrumentType: probe.instrumentType || '',
@@ -215,16 +225,10 @@ def capture_signature(page, sample_ms):
             physicalSettings: probe.physicalSettings || null,
             analyserArmedBeforeTrigger: true,
             analyserCount: buffers.length,
-            analyserPeaks: buffers.map(buffer => ({
-              peak: Number(buffer.peak.toFixed(5)),
-              rms: Number(Math.sqrt(buffer.rmsSum / Math.max(1, buffer.rmsCount)).toFixed(5)),
-              spectrumPeak: Number(buffer.spectrumPeak.toFixed(5)),
-              spectrumRms: Number(Math.sqrt(buffer.spectrumSum / Math.max(1, buffer.spectrumCount)).toFixed(5)),
-              waveformHash: String(buffer.waveHash),
-              spectrumHash: String(buffer.spectrumHash)
-            })),
+            analyserPeaks,
             peak: Number(peak.toFixed(5)),
-            rms: Number(Math.sqrt(rmsSum / Math.max(1, rmsCount)).toFixed(5)),
+            rms: Number(strongestAnalyserRms.toFixed(5)),
+            aggregateRms,
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
             waveformHash: String(waveHash),

@@ -8,7 +8,7 @@
         "model": "pluck",
         "damping": 45,
         "brightness": 55,
-        "excitation": "noise",
+        "excitation": "pick",
         "bodySize": 60,
         "decayTime": 70
       }

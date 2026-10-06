@@ -152,24 +152,58 @@
   var SURFACE_H = 690;
   var SURFACE_HORIZONTAL_W = 620;
   var LOCAL_MASTER_GAIN = 2.6;
-  var SSLI_PRACTICE_OUTPUT_GAIN = 4.5;
-  var SSLI_PRACTICE_OUTPUT_GAIN_MID = 2.4;
-  var SSLI_PRACTICE_OUTPUT_GAIN_POLY = 0.04;
-  var SSLI_FM_OUTPUT_GAIN_POLY = 0.012;
-  var SSLI_SUSTAINED_NOTE_VELOCITY = 127;
-  var SSLI_FM_SUSTAINED_NOTE_VELOCITY = 120;
-  var SSLI_EXPRESSION_GAIN_SCALE_MID = 0.22;
-  var SSLI_EXPRESSION_GAIN_SCALE_POLY = 0.02;
-  var SSLI_FM_EXPRESSION_GAIN_SCALE_POLY = 0.025;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_SOLO = 4.5;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_DUO = 2.2;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_MID = 1.6;
-  var SSLI_PHYSICAL_OUTPUT_GAIN_POLY = 0.42;
-  var SSLI_PHYSICAL_PLUCK_CHORD_GAIN_DUO = 1.05;
-  var SSLI_PHYSICAL_PLUCK_CHORD_GAIN_MULTI = 0.72;
-  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_SOLO = 4.5;
-  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_DUO = 1.6;
-  var SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_MULTI = 1.15;
+  var DEFAULT_PERFORMANCE_VOLUME = 80;
+  var SSLI_NORMALIZATION_BASE_VOLUME = 80;
+  var SSLI_NORMALIZATION_MAX_OUTPUT_GAIN = 8;
+  var SSLI_MATURE_ENGINE_NORMALIZATION = { instrumentVolume: 100, outputGain: 4.0 };
+  var SSLI_PRESET_NORMALIZATION = {
+    'FM::SYNTH BASS FM': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::GLASS FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Synth FM BASSOON': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::WARM FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Balafon FM': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Erhu FM': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Synth FM PICCOLO': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::CHOIR FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Dark Chant': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Glassy Keys': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::FM CHIPTUNE': { instrumentVolume: 100, outputGain: 8.0 },
+    'FM::Synthwave Lead': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Choir Pad FM': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Angel Choir': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::12-STRING GUITAR': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Pop Pad': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Retro Stab': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Talk Box FM': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Poly-5 FM': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Vocal Formant Ah': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Voltage Drop': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::E.PIANO 2': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::DX RHODES': { instrumentVolume: 100, outputGain: 5.5 },
+    'FM::DX Rhodes': { instrumentVolume: 100, outputGain: 5.5 },
+    'FM::FM Wurlitzer': { instrumentVolume: 100, outputGain: 5.5 },
+    'FM::WURLITZER FM': { instrumentVolume: 100, outputGain: 5.5 },
+    'FM::Retro Tine Piano': { instrumentVolume: 100, outputGain: 5.5 },
+    'FM::Crystal EP': { instrumentVolume: 100, outputGain: 5.0 },
+    'Physical::Metallic Drone': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Rain on Metal': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Feedback Resonator': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Struck Ice': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Glass Marimba': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Gamelan Metallophone': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Mbira': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Bowed Plate': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Struck Springs': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Bowed Bass Pluck': { instrumentVolume: 100, outputGain: 8.0 },
+    'Physical::Whale Song': { instrumentVolume: 100, outputGain: 7.0 },
+    'FM::Northern Lights': { instrumentVolume: 100, outputGain: 8.0 },
+    'subtractive::Celesta': { instrumentVolume: 100, outputGain: 4.0 },
+    'subtractive::Celesta II': { instrumentVolume: 100, outputGain: 4.0 },
+    'subtractive::Electric Piano (Rhodes)': { instrumentVolume: 100, outputGain: 7.0 },
+    'Subtractive::Celesta': { instrumentVolume: 100, outputGain: 4.0 },
+    'Subtractive::Celesta II': { instrumentVolume: 100, outputGain: 4.0 },
+    'Subtractive::Electric Piano (Rhodes)': { instrumentVolume: 100, outputGain: 7.0 }
+  };
   var SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS = 360;
   var SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS = 320;
   var EXQUIS_BOTTOM_LEFT_MIDI = 27;
@@ -199,19 +233,29 @@
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
+  var pendingLogs = [];
+  var logFlushTimer = null;
   var midiVoices = {};
+  var recentMidiNoteOffs = {};
+  var pendingShortNoteReleases = {};
+  var pendingShortRawReleases = {};
+  var recentMidiChordNotes = [];
+  var recentMidiChordTimer = null;
   var articulationQueue = [];
   var articulationFlushTimer = null;
   var articulationSequence = 0;
   var lastAppliedSsliPresetKey = '';
   var lastSsliExpressionPressure = null;
+  var lastMidiPressureRenderAt = 0;
+  var lastMidiPressureLogAt = 0;
   var skippedSsliExpressionUpdates = 0;
   var MIDI_VOICE_BUDGET = 12;
-  var SSLI_EXPRESSION_PRESSURE_STEP = 3;
+  var SSLI_EXPRESSION_PRESSURE_STEP = 8;
   var PHYSICAL_PRESSURE_STEP = 14;
   var PHYSICAL_PRESSURE_MIN_INTERVAL_MS = 35;
   var PHYSICAL_SIMULTANEOUS_ONSET_MS = 45;
   var PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES = 2;
+  var EXQUIS_MIN_MIDI_HOLD_MS = 110;
   var MATURE_SOUND_ENGINES = { subtractive: true, physical: true, fm: true };
   var state = {
     tonicPc: 0,
@@ -231,6 +275,8 @@
     fxPresetId: 'dry',
     fxCategory: 'Clean / Natural',
     fxDirty: false,
+    performanceVolume: DEFAULT_PERFORMANCE_VOLUME,
+    pressureCurve: 'linear',
     filterType: 'lowpass',
     filterCutoff: 2200,
     filterResonance: 0.8,
@@ -278,13 +324,33 @@
 
   function logEvent(kind, message) {
     var stamp = new Date().toLocaleTimeString();
-    logs.push(stamp + ' [' + kind + '] ' + message);
+    pendingLogs.push(stamp + ' [' + kind + '] ' + message);
+    scheduleLogFlush();
+  }
+
+  function scheduleLogFlush() {
+    if (logFlushTimer) return;
+    logFlushTimer = window.setTimeout(flushLogs, 32);
+  }
+
+  function flushLogs() {
+    logFlushTimer = null;
+    if (!pendingLogs.length) return;
+    Array.prototype.push.apply(logs, pendingLogs);
+    pendingLogs = [];
     if (logs.length > 120) logs.shift();
+    if (logs.length > 120) logs = logs.slice(logs.length - 120);
     if (els.diagnosticLog) {
       els.diagnosticLog.textContent = logs.join('\n') || 'Ready.';
       els.diagnosticLog.scrollTop = els.diagnosticLog.scrollHeight;
     }
   }
+
+  function allLogText() {
+    return logs.concat(pendingLogs).join('\n') || 'Ready.';
+  }
+
+  window.__exquisDebugLog = logEvent;
 
   function resetVisualMidi() {
     state.activeMidiCellId = '';
@@ -1190,6 +1256,10 @@
     return ok;
   }
 
+  function shouldUseFastMidiPath(SL) {
+    return lastAppliedSsliPresetKey === currentSsliPresetKey() && objectKeyCount(midiVoices) > 0 && !state.filterDirty && !state.fxDirty && !!SL;
+  }
+
   function ensureSsliPracticeVolume(SL, inst, targetVolume) {
     if (!SL || !SL.audio || !SL.audio.getInstruments) return;
     var instruments = SL.audio.getInstruments() || [];
@@ -1203,58 +1273,6 @@
     } else {
       logEvent('audio', 'SSLI instrument inst=' + inst + ' type=' + (instrument.type || 'unknown') + ' volume=' + (currentVolume === null ? 'unset' : currentVolume));
     }
-  }
-
-  function ensureSsliPracticeOutputBoost(SL) {
-    if (!SL || !SL.audio || !SL.audio.getCtx || !SL.audio.getFinalDestination) return false;
-    if (!SL.__exquisPracticeOutputBoost || !SL.audio.getFinalDestination.__exquisBoosted) {
-      var ctx = SL.audio.getCtx();
-      if (!ctx || !ctx.createGain) return false;
-      var originalGetFinalDestination = SL.audio.getFinalDestination;
-      var originalDestination = originalGetFinalDestination.call(SL.audio);
-      if (!originalDestination) return false;
-      var boost = ctx.createGain();
-      boost.gain.value = SSLI_PRACTICE_OUTPUT_GAIN;
-      boost.connect(originalDestination);
-      SL.__exquisPracticeOutputBoost = boost;
-      SL.__exquisOriginalGetFinalDestination = originalGetFinalDestination;
-      SL.audio.getFinalDestination = function() {
-        return SL.__exquisPracticeOutputBoost || originalGetFinalDestination.call(SL.audio);
-      };
-      SL.audio.getFinalDestination.__exquisBoosted = true;
-      logEvent('audio', 'SSLI output boost gain=' + SSLI_PRACTICE_OUTPUT_GAIN);
-    }
-    if (SL.audio.getInstruments) {
-      (SL.audio.getInstruments() || []).forEach(function(instrument) {
-        if (instrument) instrument.masterOutput = SL.__exquisPracticeOutputBoost;
-      });
-    }
-    return true;
-  }
-
-  window.__exquisPrepareSsliOutputBoost = function() {
-    var host = getSsliHost();
-    var SL = host && host.SynthLab;
-    return ensureSsliPracticeOutputBoost(SL);
-  };
-
-  function setSsliPracticeOutputGain(SL, gain, reason) {
-    if (!SL || !SL.__exquisPracticeOutputBoost || !SL.__exquisPracticeOutputBoost.gain) {
-      logEvent('audio', 'SSLI output boost unavailable' + (reason ? ' ' + reason : ''));
-      return false;
-    }
-    gain = Math.max(0.02, Math.min(SSLI_PRACTICE_OUTPUT_GAIN, gain));
-    var current = SL.__exquisPracticeOutputBoost.gain.value;
-    if (Math.abs(current - gain) < 0.01) return true;
-    SL.__exquisPracticeOutputBoost.gain.value = gain;
-    logEvent('audio', 'SSLI output boost gain=' + gain.toFixed(2) + (reason ? ' ' + reason : ''));
-    return true;
-  }
-
-  function ssliPracticeOutputGain(SL) {
-    if (!SL || !SL.__exquisPracticeOutputBoost || !SL.__exquisPracticeOutputBoost.gain) return 'n/a';
-    var value = SL.__exquisPracticeOutputBoost.gain.value;
-    return typeof value === 'number' ? value.toFixed(2) : String(value);
   }
 
   function ensureSsliAudioReady(SL) {
@@ -1385,14 +1403,73 @@
     };
   }
 
-  function playableSsliMidiVelocity(instrumentType) {
-    return instrumentType === 'fm' ? SSLI_FM_SUSTAINED_NOTE_VELOCITY : SSLI_SUSTAINED_NOTE_VELOCITY;
+  function playableSsliMidiVelocity(velocity) {
+    var raw = Math.max(1, Math.min(127, Math.round(velocity || 1)));
+    var level = raw / 127;
+    if (state.pressureCurve === 'soft') {
+      level = Math.sqrt(level);
+    } else if (state.pressureCurve === 'hard') {
+      level = level * level;
+    }
+    return Math.max(1, Math.min(127, Math.round(Math.sqrt(level) * 127)));
+  }
+
+  function currentSsliNormalization() {
+    if (SSLI_PRESET_NORMALIZATION[state.soundPresetId]) return SSLI_PRESET_NORMALIZATION[state.soundPresetId];
+    if (MATURE_SOUND_ENGINES[soundEngineKey(state.soundEngine)]) return SSLI_MATURE_ENGINE_NORMALIZATION;
+    return null;
+  }
+
+  function normalizedSsliInstrumentVolume(normalization) {
+    var base = Math.max(0, Math.min(100, Number(state.performanceVolume || DEFAULT_PERFORMANCE_VOLUME)));
+    if (!normalization || typeof normalization.instrumentVolume !== 'number') return base;
+    return Math.max(0, Math.min(100, Math.round(base * normalization.instrumentVolume / SSLI_NORMALIZATION_BASE_VOLUME)));
+  }
+
+  function normalizedSsliOutputGain(normalization) {
+    if (!normalization || typeof normalization.outputGain !== 'number') return 1;
+    return Math.max(0.1, Math.min(SSLI_NORMALIZATION_MAX_OUTPUT_GAIN, normalization.outputGain));
+  }
+
+  function ensureSsliOutputNormalization(SL, inst, normalization) {
+    if (!SL || !SL.audio || !SL.audio.getInstruments) return;
+    var instruments = SL.audio.getInstruments() || [];
+    var instrument = instruments[inst] || {};
+    var outputGain = normalizedSsliOutputGain(normalization);
+    if (instrument.masterOutput && instrument.masterOutput.gain && typeof instrument.masterOutput.gain.value === 'number') {
+      var current = instrument.masterOutput.gain.value;
+      if (Math.abs(current - outputGain) >= 0.01) {
+        instrument.masterOutput.gain.value = outputGain;
+        logEvent('audio', 'SSLI normalization output preset=' + state.soundPresetId + ' gain=' + outputGain.toFixed(2));
+      }
+    } else if (normalization && normalization.outputGain) {
+      logEvent('audio', 'SSLI normalization output unavailable preset=' + state.soundPresetId + ' gain=' + outputGain.toFixed(2));
+    }
+  }
+
+  function ensureSsliPerformanceGain(SL, inst) {
+    var normalization = currentSsliNormalization();
+    var targetVolume = normalizedSsliInstrumentVolume(normalization);
+    ensureSsliPracticeVolume(SL, inst, targetVolume);
+    ensureSsliOutputNormalization(SL, inst, normalization);
+    if (normalization) {
+      logEvent('audio', 'SSLI normalization preset=' + state.soundPresetId + ' volume=' + targetVolume + ' output=' + normalizedSsliOutputGain(normalization).toFixed(2));
+    }
   }
 
   function heldSsliVoiceCount() {
     var count = 0;
     Object.keys(midiVoices).forEach(function(key) {
       if (midiVoices[key] && midiVoices[key].ssli && !midiVoices[key].oneShot) count += 1;
+    });
+    return count;
+  }
+
+  function activeSsliOneShotCount() {
+    var count = 0;
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (voice && voice.ssli && voice.oneShot) count += 1;
     });
     return count;
   }
@@ -1561,6 +1638,15 @@
     }
   }
 
+  function applyPerformanceVolume() {
+    var host = getSsliHost();
+    var SL = host && host.SynthLab;
+    if (!SL || !SL.audio) return false;
+    var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    ensureSsliPerformanceGain(SL, inst);
+    return true;
+  }
+
   function flushArticulationQueue() {
     if (articulationFlushTimer) {
       window.clearTimeout(articulationFlushTimer);
@@ -1576,7 +1662,7 @@
     if (events.length > 1 && maxSpread > 0) spacing = Math.min(spacing, maxSpread / (events.length - 1));
     var labels = events.map(function(event) { return noteLabelFromMidi(event.midi); }).join(',');
     logEvent('audio', 'articulation flush mode=' + (articulation.onsetMode || 'immediate') + ' family=' + (articulation.family || 'unknown') + ' notes=' + labels + ' spacing=' + Math.round(spacing * 10) / 10 + 'ms');
-    var activeAtFlush = heldSsliVoiceCount();
+    var activeAtFlush = heldSsliVoiceCount() + activeSsliOneShotCount();
     var expectedVoiceCount = activeAtFlush + events.length;
     events.forEach(function(event, index) {
       var delay = Math.round(index * spacing);
@@ -1653,23 +1739,6 @@
     var SL = host.SynthLab;
     ensureSsliAudioReady(SL);
     var expression = pressureToSsliExpression(pressure);
-    var activeSsliVoices = heldSsliVoiceCount();
-    var instrumentType = getCurrentSsliInstrumentType(SL);
-    if (instrumentType === 'subtractive') {
-      var preset = getSsliPresetPayload(SL);
-      var settings = preset && preset.settings ? preset.settings : {};
-      var inst = SL.audio && SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
-      var liveInstruments = SL.audio && SL.audio.getInstruments ? SL.audio.getInstruments() || [] : [];
-      var liveSettings = liveInstruments[inst] && liveInstruments[inst].settings ? liveInstruments[inst].settings : {};
-      if (isHotResonantSubtractivePreset(settings, liveSettings)) {
-        expression.gain = Math.min(expression.gain, activeSsliVoices >= 3 ? 0.28 : 0.65);
-      }
-    }
-    if (activeSsliVoices >= 5) {
-      expression.gain = expression.gain * (instrumentType === 'fm' ? SSLI_FM_EXPRESSION_GAIN_SCALE_POLY : SSLI_EXPRESSION_GAIN_SCALE_POLY);
-    } else if (activeSsliVoices >= 3) {
-      expression.gain = expression.gain * SSLI_EXPRESSION_GAIN_SCALE_MID;
-    }
     SL.audio.setExpression(expression.cutoffHz, expression.gain);
     lastSsliExpressionPressure = pressure;
     skippedSsliExpressionUpdates = 0;
@@ -1724,6 +1793,9 @@
 
   function updateSsliExpressionFromHeldNotes() {
     var host = getSsliHost();
+    if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) !== 'physical') {
+      return false;
+    }
     if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
       return false;
     }
@@ -1737,6 +1809,7 @@
   }
 
   function clearSsliMidiExpression() {
+    if (lastSsliExpressionPressure === null) return false;
     var host = getSsliHost();
     if (host && host.SynthLab && host.SynthLab.audio && host.SynthLab.audio.clearExpression) {
       host.SynthLab.audio.clearExpression();
@@ -1780,6 +1853,8 @@
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio) return false;
     var SL = host.SynthLab;
+    if (getCurrentSsliInstrumentType(SL) !== 'physical') return false;
+    if (activeSsliOneShotCount() > 0) return false;
     return cleanupSsliEngineVoices(SL, 'after MIDI idle');
   }
 
@@ -1807,46 +1882,6 @@
     });
   }
 
-  function isLowRegisterFilteredSubtractive(settings) {
-    if (!settings) return false;
-    var osc = Array.isArray(settings.osc) ? settings.osc : [];
-    var activeOsc = osc.filter(function(partial) {
-      return partial && Number(partial.level || 0) > 0;
-    });
-    if (!activeOsc.length) return false;
-    var highestOctave = activeOsc.reduce(function(highest, partial) {
-      return Math.max(highest, Number(partial.oct || 0));
-    }, -Infinity);
-    var filter = settings.filter || {};
-    var noiseLevel = settings.noise ? Number(settings.noise.level || 0) : 0;
-    var filterFreq = Number(filter.freq || 0);
-    var filterQ = Number(filter.q || 0);
-    return highestOctave <= -2 && filter.enabled !== false && filter.type === 'lowpass' && filterFreq > 0 && filterFreq <= 450 && filterQ <= 50 && noiseLevel <= 20;
-  }
-
-  function preservesLowRegisterSubtractiveVolume(settings, liveSettings) {
-    return isLowRegisterFilteredSubtractive(settings) || isLowRegisterFilteredSubtractive(liveSettings);
-  }
-
-  function isHotResonantSubtractive(settings) {
-    if (!settings) return false;
-    var filter = settings.filter || {};
-    var filterEnv = settings.filterEnv || {};
-    var osc = Array.isArray(settings.osc) ? settings.osc : [];
-    var activeOscLevel = osc.reduce(function(sum, partial) {
-      return sum + Math.max(0, Number(partial && partial.level || 0));
-    }, 0);
-    var filterFreq = Number(filter.freq || 0);
-    var filterQ = Number(filter.q || 0);
-    var envAmount = filterEnv.enabled === false ? 0 : Math.abs(Number(filterEnv.amount || 0));
-    var slope = Number(filter.slope || 12);
-    return filter.enabled !== false && filterQ >= 55 && envAmount >= 35 && activeOscLevel >= 140 && filterFreq > 0 && filterFreq <= 1200 && slope >= 24;
-  }
-
-  function isHotResonantSubtractivePreset(settings, liveSettings) {
-    return isHotResonantSubtractive(settings) || isHotResonantSubtractive(liveSettings);
-  }
-
   function startSustainedWithSsli(midi, velocity, options) {
     options = options || {};
     var host = getSsliHost();
@@ -1860,72 +1895,45 @@
       logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': ' + readiness);
       return false;
     }
-    ensureSsliAudioReady(SL);
-    if (!applySelectedSsliPreset()) {
-      logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
-      return false;
+    var fastMidiPath = shouldUseFastMidiPath(SL);
+    if (!fastMidiPath) {
+      ensureSsliAudioReady(SL);
+      if (!applySelectedSsliPreset()) {
+        logEvent('audio', 'SSLI MIDI unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
+        return false;
+      }
+      if (state.filterDirty) applySelectedSsliFilter();
+      if (state.fxDirty) applySelectedSsliFxChain();
     }
-    if (state.filterDirty) applySelectedSsliFilter();
-    if (state.fxDirty) applySelectedSsliFxChain();
     var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
     var preset = getSsliPresetPayload(SL);
-    verifySsliPresetRuntime(SL, preset, true);
-    ensureSsliPracticeOutputBoost(SL);
+    if (!fastMidiPath) verifySsliPresetRuntime(SL, preset, true);
     var instrumentType = getCurrentSsliInstrumentType(SL);
     var heldPhysicalVoices = instrumentType === 'physical' ? heldSsliVoiceCount() : 0;
     if (instrumentType === 'physical') {
-      var physicalVoiceCount = Math.max(heldPhysicalVoices + 1, Math.round(options.expectedVoiceCount || 0));
-      ensureSsliPracticeVolume(SL, inst, 100);
-      var targetPhysicalGain = physicalVoiceCount >= 5 ? SSLI_PHYSICAL_OUTPUT_GAIN_POLY : (physicalVoiceCount >= 3 ? SSLI_PHYSICAL_OUTPUT_GAIN_MID : (physicalVoiceCount >= 2 ? SSLI_PHYSICAL_OUTPUT_GAIN_DUO : SSLI_PHYSICAL_OUTPUT_GAIN_SOLO));
-      if (options.articulationFamily === 'plucked' && physicalVoiceCount >= 2) {
-        targetPhysicalGain = physicalVoiceCount >= 3 ? SSLI_PHYSICAL_PLUCK_CHORD_GAIN_MULTI : SSLI_PHYSICAL_PLUCK_CHORD_GAIN_DUO;
-      }
-      setSsliPracticeOutputGain(SL, targetPhysicalGain, 'physicalVoices=' + physicalVoiceCount + (options.articulationMode ? ' articulation=' + options.articulationMode : ''));
+      if (!fastMidiPath) ensureSsliPerformanceGain(SL, inst);
     } else {
-      var nonPhysicalVoiceCount = heldSsliVoiceCount() + 1;
-      var targetInstrumentVolume = nonPhysicalVoiceCount >= 5 ? 55 : (nonPhysicalVoiceCount >= 3 ? 80 : 100);
-      var settings = preset && preset.settings ? preset.settings : {};
-      var liveInstruments = SL.audio.getInstruments ? SL.audio.getInstruments() || [] : [];
-      var liveSettings = liveInstruments[inst] && liveInstruments[inst].settings ? liveInstruments[inst].settings : {};
-      var presetNoiseLevel = settings.noise ? Number(settings.noise.level || 0) : 0;
-      var liveNoiseLevel = liveSettings.noise ? Number(liveSettings.noise.level || 0) : 0;
-      var selectedNoiseClass = /noise/i.test(String(state.soundCategory || '') + ' ' + String(state.soundPresetId || ''));
-      var isHighNoisePreset = selectedNoiseClass || Math.max(presetNoiseLevel, liveNoiseLevel) >= 80;
-      var preserveLowRegisterVolume = instrumentType === 'subtractive' && nonPhysicalVoiceCount >= 5 && preservesLowRegisterSubtractiveVolume(settings, liveSettings);
-      var hotResonantSubtractive = instrumentType === 'subtractive' && isHotResonantSubtractivePreset(settings, liveSettings);
-      if (preserveLowRegisterVolume) targetInstrumentVolume = 100;
-      if (isHighNoisePreset) targetInstrumentVolume = Math.min(targetInstrumentVolume, 24);
-      if (hotResonantSubtractive) targetInstrumentVolume = Math.min(targetInstrumentVolume, nonPhysicalVoiceCount >= 3 ? 18 : 28);
-      ensureSsliPracticeVolume(SL, inst, targetInstrumentVolume);
-      var targetPracticeGain = nonPhysicalVoiceCount >= 5 ? SSLI_PRACTICE_OUTPUT_GAIN_POLY : (nonPhysicalVoiceCount >= 2 ? SSLI_PRACTICE_OUTPUT_GAIN_MID : SSLI_PRACTICE_OUTPUT_GAIN);
-      if (instrumentType === 'fm') targetPracticeGain = Math.min(targetPracticeGain, SSLI_PRACTICE_OUTPUT_GAIN_MID);
-      if (instrumentType === 'fm' && nonPhysicalVoiceCount >= 5) targetPracticeGain = SSLI_FM_OUTPUT_GAIN_POLY;
-      if (isHighNoisePreset) targetPracticeGain = Math.min(targetPracticeGain, 0.026);
-      if (hotResonantSubtractive && !isHighNoisePreset) targetPracticeGain = nonPhysicalVoiceCount >= 3 ? 0.08 : Math.min(targetPracticeGain, 0.7);
-      if (preserveLowRegisterVolume) logEvent('audio', 'SSLI subtractive low-register dense-poly volume preserved voices=' + nonPhysicalVoiceCount);
-      if (hotResonantSubtractive) logEvent('audio', 'SSLI subtractive resonant headroom voices=' + nonPhysicalVoiceCount);
-      setSsliPracticeOutputGain(SL, targetPracticeGain, 'engine=' + instrumentType + ' voices=' + nonPhysicalVoiceCount);
+      if (!fastMidiPath) ensureSsliPerformanceGain(SL, inst);
     }
     var physicalModel = instrumentType === 'physical' ? getCurrentPhysicalModel(SL) : '';
     var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? (options.velocityLoadVoices || effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices)) : 0;
-    var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(instrumentType);
+    var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(velocity);
     if (physicalModel === 'strike') {
       playableVelocity = Math.max(8, Math.round(playableVelocity * 0.25));
-    }
-    if (instrumentType === 'physical' && options.articulationFamily === 'plucked' && physicalVoiceCount >= 2) {
-      playableVelocity = Math.max(24, Math.min(playableVelocity, physicalVoiceCount >= 3 ? 36 : 42));
     }
     if (instrumentType === 'physical') {
       logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel + (options.expectedVoiceCount ? ' expectedVoices=' + options.expectedVoiceCount : ''));
     }
+    logEvent('audio', 'SSLI call startSustainedNote midi=' + midi + ' note=' + noteLabelFromMidi(midi) + ' inst=' + inst + ' engine=' + instrumentType + ' activeBefore=' + heldSsliVoiceCount());
     SL.audio.startSustainedNote(midi, playableVelocity);
+    if (window.__exquisLatencyProbe && Array.isArray(window.__exquisLatencyProbe.starts)) {
+      window.__exquisLatencyProbe.starts.push({ midi: midi, at: Date.now() });
+    }
     if (instrumentType === 'physical') {
       logEvent('audio', 'SSLI physical note-on pressure captured ' + noteLabelFromMidi(midi) + ' pressure=' + Math.max(1, velocity || 1) + ' audioUpdate=note-on-velocity-only');
-    } else {
-      setSsliMidiExpression(Math.max(1, strongestHeldMidiPressure(), velocity || 1));
     }
     state.audioStatus = 'Audio: SSLI held ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId + ' boost=' + ssliPracticeOutputGain(SL));
+    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId);
     startAudioScope();
     render();
     return true;
@@ -1948,28 +1956,26 @@
       logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': missing SynthLab.physical.noteOn');
       return false;
     }
-    ensureSsliAudioReady(SL);
-    if (!applySelectedSsliPreset()) {
-      logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
-      return false;
+    var fastMidiPath = shouldUseFastMidiPath(SL);
+    if (!fastMidiPath) {
+      ensureSsliAudioReady(SL);
+      if (!applySelectedSsliPreset()) {
+        logEvent('audio', 'SSLI plucked one-shot unavailable for ' + noteLabelFromMidi(midi) + ': preset apply failed preset=' + state.soundPresetId);
+        return false;
+      }
+      if (state.filterDirty) applySelectedSsliFilter();
+      if (state.fxDirty) applySelectedSsliFxChain();
     }
-    if (state.filterDirty) applySelectedSsliFilter();
-    if (state.fxDirty) applySelectedSsliFxChain();
     var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
     var preset = getSsliPresetPayload(SL);
-    verifySsliPresetRuntime(SL, preset, true);
-    ensureSsliPracticeOutputBoost(SL);
+    if (!fastMidiPath) verifySsliPresetRuntime(SL, preset, true);
     if (getCurrentSsliInstrumentType(SL) !== 'physical' || getCurrentPhysicalModel(SL) !== 'pluck') return false;
-    var expectedVoiceCount = Math.max(1, Math.round(options.expectedVoiceCount || 1));
-    ensureSsliPracticeVolume(SL, inst, 100);
-    var targetGain = expectedVoiceCount >= 3 ? SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_MULTI : (expectedVoiceCount >= 2 ? SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_DUO : SSLI_PHYSICAL_PLUCK_ONESHOT_GAIN_SOLO);
-    setSsliPracticeOutputGain(SL, targetGain, 'physicalOneShotPluck=' + expectedVoiceCount + (options.articulationMode ? ' articulation=' + options.articulationMode : ''));
-    var playableVelocity = playablePhysicalMidiVelocity(velocity, Math.max(0, options.velocityLoadVoices || expectedVoiceCount));
-    if (expectedVoiceCount >= 2) playableVelocity = Math.max(18, Math.min(playableVelocity, expectedVoiceCount >= 3 ? 48 : 56));
+    if (!fastMidiPath) ensureSsliPerformanceGain(SL, inst);
+    var playableVelocity = playableSsliMidiVelocity(velocity);
     var duration = Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000));
     SL.physical.noteOn(midi, playableVelocity, inst);
     state.audioStatus = 'Audio: SSLI plucked ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'SSLI plucked one-shot ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' decay=natural preset=' + state.soundPresetId + ' boost=' + ssliPracticeOutputGain(SL));
+    logEvent('audio', 'SSLI plucked one-shot ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' decay=natural preset=' + state.soundPresetId);
     startAudioScope();
     render();
     return true;
@@ -1979,6 +1985,9 @@
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopSustainedNote) return false;
     var SL = host.SynthLab;
+    var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    var instrumentType = getCurrentSsliInstrumentType(SL);
+    logEvent('audio', 'SSLI call stopSustainedNote midi=' + midi + ' note=' + noteLabelFromMidi(midi) + ' inst=' + inst + ' engine=' + instrumentType + ' activeBefore=' + heldSsliVoiceCount());
     host.SynthLab.audio.stopSustainedNote(midi);
     logEvent('audio', 'SSLI MIDI sustain stop ' + noteLabelFromMidi(midi));
     return true;
@@ -2392,6 +2401,15 @@
         pressurePolicy: options.pressurePolicy || 'onset-only',
         articulationFamily: options.articulationFamily || 'plucked'
       };
+      midiVoices[key].oneShotNoteOffTimer = window.setTimeout(function() {
+        var voice = midiVoices[key];
+        var runtimeHost = getSsliHost();
+        var runtimeSL = runtimeHost && runtimeHost.SynthLab;
+        if (!runtimeSL || !runtimeSL.physical || !runtimeSL.physical.noteOff) return;
+        runtimeSL.physical.noteOff(midi, runtimeSL.audio && runtimeSL.audio.getCurrentInstrument ? runtimeSL.audio.getCurrentInstrument() : 0);
+        if (voice && voice.oneShot) voice.oneShotNoteOffSent = true;
+        logEvent('audio', 'SSLI plucked one-shot note-off ' + noteLabelFromMidi(midi) + ' after ' + Math.round(Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000)) * 1000) + 'ms');
+      }, Math.round(Math.max(120, Math.min(600, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS)))));
       midiVoices[key].oneShotCleanupTimer = window.setTimeout(function() {
         var voice = midiVoices[key];
         if (!voice || !voice.oneShot) return;
@@ -2400,7 +2418,6 @@
         logMidiVoiceStats('after-one-shot-expire ' + noteLabelFromMidi(midi));
       }, Math.max(160, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) + 120));
       logMidiVoiceStats('after-one-shot ' + noteLabelFromMidi(midi));
-      logSsliAudioHealth('after-one-shot ' + noteLabelFromMidi(midi));
       return;
     }
     if (startSustainedWithSsli(midi, Math.max(1, velocity), options)) {
@@ -2427,7 +2444,6 @@
       }
       reconcileSsliSustainedVoices('start ' + noteLabelFromMidi(midi));
       logMidiVoiceStats('after-start ' + noteLabelFromMidi(midi));
-      logSsliAudioHealth('after-start ' + noteLabelFromMidi(midi));
       return;
     }
     var ctx = ensureAudio();
@@ -2443,9 +2459,11 @@
     var level = Math.max(0.06, Math.min(1, playableVelocity / 127));
     var settings = getRenderablePresetSettings();
     var adsr = settings.adsr || { a: 8, s: 45 };
+    var attackSeconds = Math.max(0.02, (adsr.a || 8) / 1000);
+    var targetGain = 0.08 + level * 0.28;
 
     out.gain.setValueAtTime(0.0001, now);
-    out.gain.exponentialRampToValueAtTime(0.08 + level * 0.28, now + Math.max(0.004, (adsr.a || 8) / 1000));
+    out.gain.exponentialRampToValueAtTime(targetGain, now + attackSeconds);
     var oscNodes = createPresetOscillators(ctx, midi, freq, filter, level);
     applyPresetFilterSettings(filter, midi, freq);
     filter.connect(out);
@@ -2460,7 +2478,7 @@
       startedAt: Date.now()
     };
     state.audioStatus = 'Audio: MIDI voice ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'MIDI voice start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId + ' ctx=' + ctx.state);
+    logEvent('audio', 'MIDI voice start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId + ' gain=' + targetGain.toFixed(3) + ' attack=' + Math.round(attackSeconds * 1000) + 'ms ctx=' + ctx.state);
     startAudioScope();
   }
 
@@ -2498,15 +2516,29 @@
     var voice = midiVoices[key];
     if (voice && voice.ssli) {
       if (voice.oneShot) {
-        if (voice.oneShotCleanupTimer) {
-          window.clearTimeout(voice.oneShotCleanupTimer);
-          voice.oneShotCleanupTimer = null;
+        if (immediate) {
+          if (voice.oneShotCleanupTimer) {
+            window.clearTimeout(voice.oneShotCleanupTimer);
+            voice.oneShotCleanupTimer = null;
+          }
+          if (voice.oneShotNoteOffTimer) {
+            window.clearTimeout(voice.oneShotNoteOffTimer);
+            voice.oneShotNoteOffTimer = null;
+          }
+          if (!voice.oneShotNoteOffSent) {
+            var oneShotHost = getSsliHost();
+            var oneShotSL = oneShotHost && oneShotHost.SynthLab;
+            if (oneShotSL && oneShotSL.physical && oneShotSL.physical.noteOff) {
+              oneShotSL.physical.noteOff(voice.midi, oneShotSL.audio && oneShotSL.audio.getCurrentInstrument ? oneShotSL.audio.getCurrentInstrument() : 0);
+              logEvent('audio', 'SSLI plucked one-shot note-off ' + noteLabelFromMidi(voice.midi) + ' immediate');
+            }
+          }
+          delete midiVoices[key];
+        } else if (voice.oneShotNoteOffSent) {
+          delete midiVoices[key];
         }
-        delete midiVoices[key];
-        cleanupSsliSustainedVoicesIfMidiIdle();
         clearSsliMidiExpressionIfIdle();
         logMidiVoiceStats('after-one-shot-release ' + noteLabelFromMidi(voice.midi));
-        logSsliAudioHealth('after-one-shot-release ' + noteLabelFromMidi(voice.midi));
         return;
       }
       if (voice.autoDampTimer) {
@@ -2519,7 +2551,6 @@
       cleanupSsliSustainedVoicesIfMidiIdle();
       clearSsliMidiExpressionIfIdle();
       logMidiVoiceStats('after-stop ' + noteLabelFromMidi(voice.midi));
-      logSsliAudioHealth('after-stop ' + noteLabelFromMidi(voice.midi));
       return;
     }
     if (!voice || !audioCtx) return;
@@ -2596,6 +2627,11 @@
 
   function resetConsole() {
     logs = [];
+    pendingLogs = [];
+    if (logFlushTimer) {
+      window.clearTimeout(logFlushTimer);
+      logFlushTimer = null;
+    }
     resetVisualMidi();
     if (els.consolePanel) els.consolePanel.classList.add('expanded');
     if (els.diagnosticLog) els.diagnosticLog.textContent = 'Ready.';
@@ -2604,7 +2640,7 @@
   }
 
   function copyConsole() {
-    var text = logs.join('\n') || 'Ready.';
+    var text = allLogText();
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function() {
         logEvent('console', 'copied log to clipboard');
@@ -3198,6 +3234,40 @@
     return rawMidi;
   }
 
+  function midiCellDebug(cell) {
+    if (!cell) return 'cell=pitch-only';
+    return 'cell=' + cell.id + ' cellLabel=' + cell.label + octave(cell.midi) + ' row=' + cell.row + ' col=' + cell.col;
+  }
+
+  function logRecentMidiChord() {
+    recentMidiChordTimer = null;
+    if (recentMidiChordNotes.length < 2) {
+      recentMidiChordNotes = [];
+      return;
+    }
+    var notes = recentMidiChordNotes.slice();
+    recentMidiChordNotes = [];
+    notes.sort(function(a, b) { return a.at - b.at; });
+    logEvent('midi', 'note-on chord window notes=' + notes.map(function(note) {
+      return note.label + '@ch' + note.channel + ':' + note.cellId + ':v' + note.velocity;
+    }).join(','));
+  }
+
+  function rememberRecentMidiChordNote(midi, velocity, channel, cell) {
+    var now = Date.now();
+    recentMidiChordNotes = recentMidiChordNotes.filter(function(note) { return now - note.at <= 55; });
+    recentMidiChordNotes.push({
+      label: noteLabelFromMidi(midi),
+      midi: midi,
+      velocity: velocity,
+      channel: channel + 1,
+      cellId: cell ? cell.id : 'pitch-only',
+      at: now
+    });
+    if (recentMidiChordTimer) window.clearTimeout(recentMidiChordTimer);
+    recentMidiChordTimer = window.setTimeout(logRecentMidiChord, 60);
+  }
+
   function setFeedback(message, kind) {
     state.feedback = message;
     state.feedbackKind = kind || 'neutral';
@@ -3252,10 +3322,22 @@
       render();
       return;
     }
+    var ageMs = held && held.startedAt ? Date.now() - held.startedAt : 999;
+    if (held && ageMs >= 0 && ageMs < EXQUIS_MIN_MIDI_HOLD_MS && !pendingShortNoteReleases[key]) {
+      pendingShortRawReleases[rawMidi] = Date.now();
+      pendingShortNoteReleases[key] = window.setTimeout(function() {
+        delete pendingShortNoteReleases[key];
+        delete pendingShortRawReleases[rawMidi];
+        releaseMidiNote(rawMidi, channel);
+      }, EXQUIS_MIN_MIDI_HOLD_MS - ageMs);
+      logEvent('midi', 'note-off delayed short hold ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' channel=' + (channel + 1) + ' age=' + Math.round(ageMs) + 'ms');
+      return;
+    }
     delete state.heldNotes[key];
     if (channel !== null && state.channelNotes[channel] === midi) {
       delete state.channelNotes[channel];
     }
+    recentMidiNoteOffs[rawMidi] = Date.now();
     releaseMidiVoice(key, false);
     updateSsliExpressionFromHeldNotes();
     if (state.activeMidiCellId && (!held || state.activeMidiCellId === held.cellId)) {
@@ -3276,12 +3358,33 @@
     held.pressure = Math.max(0, Math.min(127, pressure));
     updateMidiVoicePressure(key, held.pressure);
     state.midiActivity = 'Activity: ' + source + ' ' + noteLabelFromMidi(midi) + ' pressure ' + pressure;
-    logEvent('midi', source + ' ' + noteLabelFromMidi(midi) + ' pressure=' + pressure);
-    render();
+    var now = Date.now();
+    if (now - lastMidiPressureLogAt >= 120 || pressure === 0) {
+      logEvent('midi', source + ' ' + noteLabelFromMidi(midi) + ' pressure=' + pressure);
+      lastMidiPressureLogAt = now;
+    }
+    if (now - lastMidiPressureRenderAt >= 50 || pressure === 0) {
+      render();
+      lastMidiPressureRenderAt = now;
+    }
+  }
+
+  function isReleaseBounceNoteOn(rawMidi, velocity) {
+    if (pendingShortRawReleases[rawMidi]) return velocity <= 16;
+    if (velocity > 2) return false;
+    var lastOffAt = recentMidiNoteOffs[rawMidi];
+    return typeof lastOffAt === 'number' && Date.now() - lastOffAt <= 45;
   }
 
   function handleMidiNote(rawMidi, velocity, channel) {
     var midi = displayMidiFromRaw(rawMidi);
+    if (isReleaseBounceNoteOn(rawMidi, velocity)) {
+      logEvent('midi', 'note-on ignored release bounce ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1));
+      return;
+    }
+    if (window.__exquisLatencyProbe && Array.isArray(window.__exquisLatencyProbe.inputs)) {
+      window.__exquisLatencyProbe.inputs.push({ midi: midi, at: Date.now() });
+    }
     var cells = makeGrid();
     var expected = expectedCell();
     var expectedKey = cellKey(expected);
@@ -3295,6 +3398,11 @@
     state.lastMidiAt = Date.now();
     state.midiActivity = 'Activity: note-on ' + noteLabelFromMidi(midi) + ' velocity ' + velocity;
     var heldKey = voiceKey(channel, midi);
+    if (pendingShortNoteReleases[heldKey]) {
+      window.clearTimeout(pendingShortNoteReleases[heldKey]);
+      delete pendingShortNoteReleases[heldKey];
+      delete pendingShortRawReleases[rawMidi];
+    }
     if (channel !== null && typeof state.channelNotes[channel] === 'number' && state.channelNotes[channel] !== midi) {
       var previousMidi = state.channelNotes[channel];
       var previousKey = voiceKey(channel, previousMidi);
@@ -3310,11 +3418,13 @@
       velocity: velocity,
       pressure: velocity,
       cellId: hitCell ? hitCell.id : '',
-      channel: channel
+      channel: channel,
+      startedAt: Date.now()
     };
     if (channel !== null) state.channelNotes[channel] = midi;
     scheduleMidiVoiceStart(heldKey, midi, velocity, hitCell ? hitCell.id : '');
-    logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only'));
+    logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only') + ' ' + midiCellDebug(hitCell));
+    rememberRecentMidiChordNote(midi, velocity, channel, hitCell);
 
     if (state.mode !== 'practice') {
       setFeedback('Play mode: ' + noteLabelFromMidi(midi) + ' is sounding freely.', 'live');
@@ -3447,6 +3557,11 @@
     var name = input && input.name ? input.name : 'Unnamed MIDI input';
     var manufacturer = input && input.manufacturer ? input.manufacturer : '';
     return manufacturer && name.indexOf(manufacturer) < 0 ? name + ' (' + manufacturer + ')' : name;
+  }
+
+  function isExquisMidiDevice(device) {
+    var label = ((device && device.name ? device.name : '') + ' ' + (device && device.manufacturer ? device.manufacturer : '')).toLowerCase();
+    return label.indexOf('exquis') >= 0 || label.indexOf('intuitive') >= 0;
   }
 
   function midiDeviceLabel(device) {
@@ -4086,7 +4201,10 @@
 
     clearChildren(els.keyboard);
     if (els.appShell) els.appShell.setAttribute('data-mode', state.mode);
-    if (els.exquisDevice) els.exquisDevice.setAttribute('data-orientation', state.orientation);
+    if (els.exquisDevice) {
+      els.exquisDevice.setAttribute('data-orientation', state.orientation);
+      els.exquisDevice.setAttribute('data-rotation', String(mod(state.rotation, 360)));
+    }
     els.keyboard.className = 'keyboard keyboard-' + state.orientation + (state.rotation === 90 || state.rotation === 270 ? ' keyboard-rotated-sideways' : '');
     els.keyboard.setAttribute('data-mode', state.mode);
     els.keyboard.setAttribute('data-rotation', String(mod(state.rotation, 360)));
@@ -4255,6 +4373,9 @@
       els.ergonomicReason.setAttribute('data-load-level', isPracticeMode && current ? ergonomicStep.level : 'off');
     }
     els.audioStatus.textContent = state.audioStatus;
+    if (els.performanceVolume) els.performanceVolume.value = String(state.performanceVolume);
+    if (els.performanceVolumeValue) els.performanceVolumeValue.textContent = String(Math.round(state.performanceVolume));
+    if (els.pressureCurve) els.pressureCurve.value = state.pressureCurve;
     if (els.filterCutoffValue) els.filterCutoffValue.textContent = Math.round(state.filterCutoff) + ' Hz';
     if (els.filterResonanceValue) els.filterResonanceValue.textContent = String(Math.round(state.filterResonance * 10) / 10);
     els.midiStatus.textContent = state.midiStatus;
@@ -4481,6 +4602,16 @@
       if (audioCtx) rebuildFxBus(audioCtx);
       logEvent('audio', 'FX preset ' + state.fxPresetId);
     });
+    els.performanceVolume.addEventListener('input', function() {
+      state.performanceVolume = Math.max(0, Math.min(100, parseFloat(els.performanceVolume.value) || 0));
+      if (els.performanceVolumeValue) els.performanceVolumeValue.textContent = String(Math.round(state.performanceVolume));
+      applyPerformanceVolume();
+      logEvent('audio', 'performance volume ' + Math.round(state.performanceVolume));
+    });
+    els.pressureCurve.addEventListener('change', function() {
+      state.pressureCurve = els.pressureCurve.value;
+      logEvent('audio', 'pressure curve ' + state.pressureCurve);
+    });
     els.filterType.addEventListener('change', function() {
       state.filterType = els.filterType.value;
       state.filterDirty = true;
@@ -4580,6 +4711,9 @@
       showAllEngines: document.getElementById('showAllEngines'),
       fxCategory: document.getElementById('fxCategorySelect'),
       fxPreset: document.getElementById('fxPresetSelect'),
+      performanceVolume: document.getElementById('performanceVolume'),
+      performanceVolumeValue: document.getElementById('performanceVolumeValue'),
+      pressureCurve: document.getElementById('pressureCurveSelect'),
       filterType: document.getElementById('filterTypeSelect'),
       filterCutoff: document.getElementById('filterCutoff'),
       filterResonance: document.getElementById('filterResonance'),
@@ -4656,6 +4790,8 @@
     els.soundPreset.value = state.soundPresetId;
     els.fxCategory.value = state.fxCategory;
     els.fxPreset.value = state.fxPresetId;
+    els.performanceVolume.value = String(state.performanceVolume);
+    els.pressureCurve.value = state.pressureCurve;
     els.filterType.value = state.filterType;
     els.filterCutoff.value = String(state.filterCutoff);
     els.filterResonance.value = String(state.filterResonance);

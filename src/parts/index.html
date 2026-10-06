@@ -225,6 +225,20 @@
           <select id="fxPresetSelect" data-testid="fx-preset-select"></select>
         </label>
       </div>
+      <div class="performance-row" data-testid="performance-control-row">
+        <label>
+          <span>Volume <output id="performanceVolumeValue">80</output></span>
+          <input id="performanceVolume" type="range" min="0" max="100" step="1" value="80" data-testid="performance-volume">
+        </label>
+        <label>
+          <span>Pressure Curve</span>
+          <select id="pressureCurveSelect" data-testid="pressure-curve-select">
+            <option value="linear">Linear</option>
+            <option value="soft">Soft</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+      </div>
       <div class="filter-row">
         <label>
           <span>Filter</span>

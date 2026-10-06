@@ -1,6 +1,6 @@
-﻿// Super Synth Lab - Physical Modelling AudioWorklet Processor
+// Super Synth Lab - Physical Modelling AudioWorklet Processor
 // Karplus-Strong, Bowed String, Blown Pipe, Modal Synthesis
-// v1.1.5 - fix: plucked-string aftertouch no longer modulates resonator amplitude
+// v1.1.3 — fix: per-voice gain scaling + smooth soft clipper for chord headroom
 //
 // ================================================================
 // EDUCATIONAL CONTEXT: Physical Modelling DSP (AudioWorklet)
@@ -30,7 +30,7 @@
 // Per-voice output gain — keeps 4 simultaneous voices under the
 // soft-clipper knee (~0.9). 4 voices * 0.22 = 0.88 peak sum.
 var PHYS_VOICE_OUTPUT_GAIN = 0.22;
-var PLUCK_OUTPUT_SCALE = 1.0;
+var PLUCK_OUTPUT_SCALE = 3.0;
 // Pre-computed sine lookup table: avoids calling Math.sin() at audio
 // rate. Size is a power of 2 (4096) so we can use bitwise AND with
 // PHYS_SINE_MASK for fast modular indexing. At 4096 entries, the
@@ -337,36 +337,29 @@ class PluckModel {
         var safeExcLenPick = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLenPick));
         var noise = (Math.random() * 2 - 1) * 0.15;
-        this.delayLine.write((env + noise) * hann * vel * 0.75);
+        this.delayLine.write((env + noise) * hann * vel * 0.5);
       }
     } else {
       // Shaped noise burst: mix of filtered noise + short sine burst at fundamental
-      // Apply a half-Hann window and brightness-dependent smoothing so
-      // polyphonic string plucks stay string-like instead of broadband-noisy.
+      // Apply a half-Hann window for smoother onset
       var sineLen = Math.min(intPeriod, Math.floor(period * 0.5));
       var safeSineLen = sineLen || 1;
       var prevNoise = 0;
-      var prevSmoothedNoise = 0;
-      var noiseSmoothing = 0.08 + bright * 0.18;
-      var noiseLevel = 0.18 + bright * 0.12;
-      var toneLevel = 0.82 + (1 - bright) * 0.18;
       for (var i = 0; i < excLen; i++) {
         // Half-Hann window
         var safeExcLen = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLen));
-        // Noise component (two gentle one-pole stages for string-like excitation)
+        // Noise component (simple one-pole lowpass for shaping)
         var rawNoise = (Math.random() * 2 - 1);
-        var filteredNoise = noiseSmoothing * rawNoise + (1 - noiseSmoothing) * prevNoise;
+        var filteredNoise = 0.6 * rawNoise + 0.4 * prevNoise;
         prevNoise = filteredNoise;
-        var smoothedNoise = 0.22 * filteredNoise + 0.78 * prevSmoothedNoise;
-        prevSmoothedNoise = smoothedNoise;
         // Sine burst at fundamental (fades out after half the period)
         var sineBurst = 0;
         if (i < sineLen) {
           var sineEnv = 1 - (i / safeSineLen);
           sineBurst = Math.sin(2 * Math.PI * freq * i / this.sampleRate) * sineEnv * 0.4;
         }
-        var sample = (smoothedNoise * noiseLevel + sineBurst * toneLevel) * hann * vel * 0.45;
+        var sample = (filteredNoise * 0.6 + sineBurst) * hann * vel * 0.5;
         this.delayLine.write(sample);
       }
     }
@@ -1216,8 +1209,6 @@ class PhysicalVoice {
     this.midiNote = -1;
     this.instId = 0;
     this.modelType = 'pluck';
-    this.pressureGain = 1;
-    this.targetPressureGain = 1;
 
     // One of each model type (reused per voice)
     this.pluck = new PluckModel(sampleRate);
@@ -1232,8 +1223,6 @@ class PhysicalVoice {
     this.midiNote = midiNote;
     this.instId = settings.instId || 0;
     this.modelType = settings.model || 'pluck';
-    this.pressureGain = 1;
-    this.targetPressureGain = 1;
 
     // Select model and apply parameters
     switch (this.modelType) {
@@ -1283,34 +1272,17 @@ class PhysicalVoice {
     }
   }
 
-  setPressure(pressure) {
-    var normalized = Math.max(0, Math.min(127, pressure || 0)) / 127;
-    if (this.modelType === 'pluck') {
-      // Plucked strings get their musical energy at note-on. Continuous
-      // aftertouch amplitude modulation on a decaying Karplus string creates
-      // rough zipper/noise artifacts under expressive MPE pressure streams.
-      this.targetPressureGain = 1.0;
-    } else {
-      this.targetPressureGain = Math.max(0.2, Math.min(1.0, 0.2 + normalized * 0.8));
-    }
-  }
-
   process() {
     if (!this.active) return 0;
     var sample = this.currentModel.process();
     var isPluck = (this.modelType === 'pluck');
-    if (isPluck) {
-      this.pressureGain = 1.0;
-    } else {
-      this.pressureGain += (this.targetPressureGain - this.pressureGain) * 0.08;
-    }
     if (isPluck) {
       sample = sample * PLUCK_OUTPUT_SCALE;
     }
     if (this.currentModel.isFinished()) {
       this.active = false;
     }
-    return sample * this.pressureGain;
+    return sample;
   }
 }
 
@@ -1363,10 +1335,6 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
         this.stopNote(data.midiNote, data.instId);
         break;
 
-      case 'notePressure':
-        this.updateNotePressure(data.midiNote, data.pressure, data.instId);
-        break;
-
       case 'allNotesOff':
         this.stopAllNotes(data.instId);
         break;
@@ -1415,16 +1383,6 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       var isWorkletMatchingVoice = v.active && v.midiNote === midiNote && v.instId === instId;
       if (isWorkletMatchingVoice) {
         v.noteOff();
-      }
-    }
-  }
-
-  updateNotePressure(midiNote, pressure, instId) {
-    for (var i = 0; i < this.maxVoices; i++) {
-      var v = this.voices[i];
-      var isMatchingVoice = v.active && v.midiNote === midiNote && v.instId === instId;
-      if (isMatchingVoice) {
-        v.setPressure(pressure);
       }
     }
   }
@@ -1486,12 +1444,10 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    var polyphonyMixGain = numActive > 4 ? 4 / numActive : 1;
-    var effectiveVoiceGain = PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain;
     for (var s = 0; s < channel.length; s++) {
       var sample = 0;
       for (var a = 0; a < numActive; a++) {
-        sample += voices[active[a]].process() * effectiveVoiceGain;
+        sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN;
       }
       // Pade [3/3] approximant of tanh for soft clipping (always-on):
       //   tanh(x) ~ x * (27 + x^2) / (27 + 9*x^2)

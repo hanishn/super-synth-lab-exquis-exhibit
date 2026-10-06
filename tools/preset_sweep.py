@@ -3,6 +3,7 @@ import csv
 import functools
 import http.server
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -24,6 +25,15 @@ def parse_args():
     parser.add_argument("--timeout-ms", type=int, default=2500, help="Per-preset wait budget after playback.")
     parser.add_argument("--settle-ms", type=int, default=250, help="Post-click settle time before reading diagnostics.")
     parser.add_argument("--audio-sample-ms", type=int, default=650, help="How long to sample SSLI analyser output after each playback.")
+    parser.add_argument("--normalization-target-rms", type=float, default=0.08, help="Target RMS for normalization recommendations.")
+    parser.add_argument("--normalization-pressure", type=int, default=96, help="MIDI note-on pressure/velocity used by the single-midi normalization trigger.")
+    parser.add_argument("--normalization-midi", type=int, default=48, help="MIDI note used by the single-midi normalization trigger.")
+    parser.add_argument("--normalization-acceptance", action="store_true", help="Fail single-midi sweeps when mature-engine preset levels or normalization logs are outside the acceptance envelope.")
+    parser.add_argument("--normalization-min-spectrum-rms", type=float, default=0.0068, help="Minimum accepted spectrum RMS for a normalized single-midi preset sweep.")
+    parser.add_argument("--normalization-max-clip-ratio", type=float, default=0.01, help="Maximum accepted clip ratio for normalization acceptance sweeps.")
+    parser.add_argument("--normalization-baseline-output-gain", type=float, default=4.0, help="Expected mature-engine baseline output gain in normalization acceptance sweeps.")
+    parser.add_argument("--require-full-catalog", action="store_true", help="Fail if filters or list files reduce the sweep below the live preset catalog size.")
+    parser.add_argument("--performance-volume", type=int, default=80, help="Sound-panel Volume value used during MIDI sweeps.")
     parser.add_argument("--engine", default="", help="Only sweep engines whose value or label contains this text.")
     parser.add_argument("--category", default="", help="Only sweep categories whose value or label contains this text.")
     parser.add_argument("--preset-contains", default="", help="Only sweep presets whose value or label contains this text.")
@@ -40,9 +50,9 @@ def parse_args():
     )
     parser.add_argument(
         "--trigger",
-        choices=["preview", "six-note-midi"],
+        choices=["preview", "single-midi", "six-note-midi"],
         default="preview",
-        help="Use normal preview playback or a six-note Exquis-style MIDI pressure run.",
+        help="Use normal preview playback, a controlled single-note MIDI normalization run, or a six-note Exquis-style MIDI pressure run.",
     )
     return parser.parse_args()
 
@@ -249,7 +259,8 @@ def capture_ssli_audio_signature(page, sample_ms):
           if (!analyser) {
             return { available: false, error: probe.error || 'audio probe was not armed', peak: 0, rms: 0, spectrumPeak: 0, spectrumRms: 0, waveformHash: '', spectrumHash: '', samples: 0 };
           }
-          const wave = new Uint8Array(analyser.fftSize || 256);
+          const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
+          const wave = useFloatWave ? new Float32Array(analyser.fftSize || 256) : new Uint8Array(analyser.fftSize || 256);
           const spectrum = new Uint8Array(analyser.frequencyBinCount || 128);
           let peak = 0;
           let sumSq = 0;
@@ -266,12 +277,12 @@ def capture_ssli_audio_signature(page, sample_ms):
             if (analyser.getByteFrequencyData) analyser.getByteFrequencyData(spectrum);
             samples += 1;
             for (let i = 0; i < wave.length; i += 1) {
-              const normalized = (wave[i] - 128) / 128;
+              const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
               const abs = Math.abs(normalized);
               if (abs > peak) peak = abs;
               sumSq += normalized * normalized;
               count += 1;
-              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + wave[i]) | 0;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
             }
             for (let j = 0; j < spectrum.length; j += 8) {
               const spectrumLevel = spectrum[j] / 255;
@@ -352,6 +363,216 @@ def enable_mock_midi(page):
     page.wait_for_function("() => window.__presetSweepMidiInput && window.__presetSweepMidiInput.onmidimessage")
 
 
+def set_performance_volume(page, volume):
+    page.evaluate(
+        """
+        (value) => {
+          const slider = document.querySelector('[data-testid="performance-volume"]');
+          if (!slider) return false;
+          slider.value = String(value);
+          slider.dispatchEvent(new Event('input', { bubbles: true }));
+          return true;
+        }
+        """,
+        max(0, min(100, int(volume))),
+    )
+    page.wait_for_timeout(25)
+
+
+def normalization_recommendation(signature, target_rms, performance_volume):
+    rms = float(signature.get("rms") or 0)
+    peak = float(signature.get("peak") or 0)
+    if rms <= 0 or target_rms <= 0:
+        return {
+            "targetRms": target_rms,
+            "measuredRms": rms,
+            "measuredPeak": peak,
+            "requiredAmplitudeMultiplier": 0,
+            "recommendedInstrumentVolume": performance_volume,
+            "instrumentAmplitudeMultiplier": 1,
+            "recommendedGlobalMultiplier": 1,
+        }
+    base_volume = max(1, min(100, int(performance_volume)))
+    required = target_rms / rms
+    possible_up = (100 / base_volume) ** 2
+    if required <= possible_up:
+        instrument_volume = max(1, min(100, round(base_volume * (required ** 0.5))))
+        instrument_multiplier = (instrument_volume / base_volume) ** 2
+        global_multiplier = 1.0
+    else:
+        instrument_volume = 100
+        instrument_multiplier = possible_up
+        global_multiplier = required / possible_up
+    return {
+        "targetRms": round(target_rms, 5),
+        "measuredRms": round(rms, 5),
+        "measuredPeak": round(peak, 5),
+        "requiredAmplitudeMultiplier": round(required, 5),
+        "recommendedInstrumentVolume": instrument_volume,
+        "instrumentAmplitudeMultiplier": round(instrument_multiplier, 5),
+        "recommendedGlobalMultiplier": round(global_multiplier, 5),
+    }
+
+
+def normalization_log_output_gain(signature):
+    log = signature.get("diagnosticLog", "") if signature else ""
+    matches = re.findall(r"SSLI normalization preset=.*? output=([0-9.]+)", log)
+    if not matches:
+        matches = re.findall(r"SSLI normalization output preset=.*? gain=([0-9.]+)", log)
+    if not matches:
+        return None
+    try:
+        return float(matches[-1])
+    except ValueError:
+        return None
+
+
+def validate_normalization_acceptance(row, args):
+    signature = row.get("audioSignature") or {}
+    errors = []
+    if args.trigger != "single-midi":
+        errors.append("normalization acceptance requires --trigger single-midi")
+        return errors
+    if not signature.get("available"):
+        errors.append(f"normalization audio unavailable: {signature.get('error', '')}")
+        return errors
+
+    spectrum_rms = float(signature.get("spectrumRms") or 0)
+    clip_ratio = float(signature.get("clipRatio") or 0)
+    output_gain = normalization_log_output_gain(signature)
+    if output_gain is None:
+        errors.append("missing SSLI normalization output log")
+    elif output_gain < args.normalization_baseline_output_gain - 0.01:
+        errors.append(f"normalization output gain below baseline ({output_gain})")
+    if spectrum_rms < args.normalization_min_spectrum_rms and output_gain is not None:
+        if output_gain <= args.normalization_baseline_output_gain + 0.01:
+            errors.append(
+                f"quiet preset lacks measured override "
+                f"(spectrumRms={spectrum_rms}, outputGain={output_gain})"
+            )
+    if clip_ratio > args.normalization_max_clip_ratio:
+        errors.append(f"normalization clipping ratio too high ({clip_ratio})")
+    return errors
+
+
+def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
+    return page.evaluate(
+        """
+        async ({ sampleMs, midi, pressure }) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          if (SL.audio.initEffectChain) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          const settings = instrument.settings || {};
+          const settingsJson = JSON.stringify(settings);
+          let settingsHash = 0;
+          for (let i = 0; i < settingsJson.length; i += 1) settingsHash = ((settingsHash << 5) - settingsHash + settingsJson.charCodeAt(i)) | 0;
+          const engineSettingsKey = {
+            fm: 'fmSettings',
+            physical: 'physicalSettings'
+          }[instrument.type || ''] || '';
+          const engineSettings = engineSettingsKey ? (settings[engineSettingsKey] || {}) : {
+            osc: settings.osc || null,
+            filter: settings.filter || null,
+            adsr: settings.adsr || null
+          };
+          const engineSettingsJson = JSON.stringify(engineSettings || {});
+          let engineSettingsHash = 0;
+          for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+
+          const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
+          const wave = useFloatWave ? new Float32Array(analyser.fftSize || 2048) : new Uint8Array(analyser.fftSize || 2048);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount || 1024);
+          const channel = 4;
+          const notePressure = Math.max(1, Math.min(127, Math.round(pressure || 1)));
+          send([0x90 | channel, midi, notePressure]);
+          await new Promise(resolve => setTimeout(resolve, 90));
+
+          let peak = 0;
+          let rmsSum = 0;
+          let count = 0;
+          let clipped = 0;
+          let spectrumPeak = 0;
+          let spectrumSum = 0;
+          let spectrumCount = 0;
+          let waveHash = 0;
+          let spectrumHash = 0;
+          const framePeaks = [];
+          const started = Date.now();
+          while (Date.now() - started < sampleMs) {
+            if (useFloatWave) analyser.getFloatTimeDomainData(wave);
+            else analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
+            let framePeak = 0;
+            for (let i = 0; i < wave.length; i += 1) {
+              const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
+              const abs = Math.abs(normalized);
+              peak = Math.max(peak, abs);
+              framePeak = Math.max(framePeak, abs);
+              rmsSum += normalized * normalized;
+              count += 1;
+              if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
+            }
+            framePeaks.push(framePeak);
+            for (let j = 0; j < spectrum.length; j += 1) {
+              const level = spectrum[j] / 255;
+              spectrumPeak = Math.max(spectrumPeak, level);
+              spectrumSum += level * level;
+              spectrumCount += 1;
+              if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
+            }
+            await new Promise(resolve => setTimeout(resolve, 16));
+          }
+          send([0xD0 | channel, 0]);
+          send([0x80 | channel, midi, 0]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          framePeaks.sort((a, b) => a - b);
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          return {
+            available: true,
+            trigger: 'single-midi',
+            midi,
+            pressure: notePressure,
+            instrumentType: instrument.type || '',
+            settingsHash: String(settingsHash),
+            settingsKeys: Object.keys(settings).sort(),
+            engineSettingsKey,
+            engineSettingsHash: String(engineSettingsHash),
+            engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
+            physicalSettings: settings.physicalSettings || null,
+            peak: Number(peak.toFixed(5)),
+            rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            waveformHash: String(waveHash),
+            spectrumHash: String(spectrumHash),
+            analyserArmedBeforeTrigger: true,
+            analyserPath: 'SL.audio.getAnalyser() final output path',
+            diagnosticLog,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        {"sampleMs": sample_ms, "midi": int(midi), "pressure": int(pressure)},
+    )
+
+
 def ssli_six_note_midi_signature(page, sample_ms):
     return page.evaluate(
         """
@@ -385,14 +606,11 @@ def ssli_six_note_midi_signature(page, sample_ms):
           let engineSettingsHash = 0;
           for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
 
-          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
-          if (window.__exquisPrepareSsliOutputBoost) window.__exquisPrepareSsliOutputBoost();
-          const boost = SL.__exquisPracticeOutputBoost;
-          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
-          const analyser = ctx.createAnalyser();
-          analyser.fftSize = 2048;
-          boost.connect(analyser);
-          const wave = new Uint8Array(analyser.fftSize);
+          if (SL.audio.initEffectChain) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
+          const wave = useFloatWave ? new Float32Array(analyser.fftSize) : new Uint8Array(analyser.fftSize);
           const spectrum = new Uint8Array(analyser.frequencyBinCount);
           const first = { midi: 48, channel: 7, velocity: 104 };
           send([0x90 | first.channel, first.midi, first.velocity]);
@@ -441,18 +659,19 @@ def ssli_six_note_midi_signature(page, sample_ms):
           const framePeaks = [];
           const started = Date.now();
           while (Date.now() - started < sampleMs) {
-            analyser.getByteTimeDomainData(wave);
+            if (useFloatWave) analyser.getFloatTimeDomainData(wave);
+            else analyser.getByteTimeDomainData(wave);
             analyser.getByteFrequencyData(spectrum);
             let framePeak = 0;
             for (let i = 0; i < wave.length; i += 1) {
-              const normalized = (wave[i] - 128) / 128;
+              const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
               const abs = Math.abs(normalized);
               peak = Math.max(peak, abs);
               framePeak = Math.max(framePeak, abs);
               rmsSum += normalized * normalized;
               count += 1;
-              if (wave[i] <= 2 || wave[i] >= 253) clipped += 1;
-              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + wave[i]) | 0;
+              if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
             }
             framePeaks.push(framePeak);
             for (let j = 0; j < spectrum.length; j += 1) {
@@ -464,7 +683,6 @@ def ssli_six_note_midi_signature(page, sample_ms):
             }
             await new Promise(resolve => setTimeout(resolve, 16));
           }
-          try { boost.disconnect(analyser); } catch (err) {}
           await new Promise(resolve => setTimeout(resolve, 120));
           framePeaks.sort((a, b) => a - b);
           const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
@@ -487,7 +705,7 @@ def ssli_six_note_midi_signature(page, sample_ms):
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
             waveformHash: String(waveHash),
             spectrumHash: String(spectrumHash),
-            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            analyserPath: 'SL.audio.getAnalyser() final output path',
             analyserArmedBeforeTrigger: true,
             diagnosticLog,
             diagnosticStartLength,
@@ -521,9 +739,9 @@ def validate_audio_behavior(row, trigger):
         errors.append(f"expected engine {expected_type}, got {signature.get('instrumentType')}")
     if expected_type and expected_type != "subtractive" and not signature.get("engineSettingsKeys"):
         errors.append(f"missing {expected_type} parameter block")
-    if max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 or signature.get("rms", 0) < 0.003:
+    if trigger != "single-midi" and (max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 or signature.get("rms", 0) < 0.003):
         errors.append("audio energy too low")
-    if trigger == "six-note-midi":
+    if trigger in {"single-midi", "six-note-midi"}:
         if signature.get("clipRatio", 0) > 0.03:
             errors.append(f"clipping ratio too high ({signature.get('clipRatio')})")
         log = signature.get("diagnosticLog", "")
@@ -617,8 +835,9 @@ def run_sweep(args):
             )
             page.goto(url)
             page.wait_for_selector('[data-testid="sound-engine-select"]')
-            if args.trigger == "six-note-midi":
+            if args.trigger in {"single-midi", "six-note-midi"}:
                 enable_mock_midi(page)
+                set_performance_volume(page, args.performance_volume)
             presets = collect_presets(page)
             total = len(presets)
             presets = filter_presets(presets, args)
@@ -640,7 +859,16 @@ def run_sweep(args):
                     select_if_present(page, '[data-testid="sound-preset-select"]', preset["preset"])
                     clear_diagnostics(page)
                     log_start = diagnostic_snapshot(page)
-                    if args.trigger == "six-note-midi":
+                    if args.trigger == "single-midi":
+                        set_performance_volume(page, args.performance_volume)
+                        audio_signature = ssli_single_note_midi_signature(
+                            page,
+                            args.audio_sample_ms,
+                            args.normalization_midi,
+                            args.normalization_pressure,
+                        )
+                    elif args.trigger == "six-note-midi":
+                        set_performance_volume(page, args.performance_volume)
                         audio_signature = ssli_six_note_midi_signature(page, max(args.audio_sample_ms, 900))
                     else:
                         probe = prepare_ssli_audio_probe(page)
@@ -674,6 +902,11 @@ def run_sweep(args):
                     status = "fail"
                     error = "; ".join([error] + new_page_errors + new_console_errors).strip("; ")
 
+                normalization = normalization_recommendation(
+                    audio_signature,
+                    args.normalization_target_rms,
+                    args.performance_volume,
+                ) if args.trigger == "single-midi" else {}
                 row = {
                     **preset,
                     "index": index,
@@ -686,6 +919,7 @@ def run_sweep(args):
                     "consoleErrors": new_console_errors,
                     "instrument": instrument,
                     "audioSignature": audio_signature,
+                    "normalization": normalization,
                     "instrumentType": instrument.get("instrumentType", ""),
                     "instrumentSettingsHash": instrument.get("settingsHash", ""),
                     "instrumentSettingsKeys": ",".join(instrument.get("settingsKeys", [])),
@@ -701,13 +935,40 @@ def run_sweep(args):
                     "audioP95Peak": audio_signature.get("p95Peak", ""),
                     "audioClipRatio": audio_signature.get("clipRatio", ""),
                     "finalBoostGain": audio_signature.get("finalBoostGain", ""),
+                    "normalizationTargetRms": normalization.get("targetRms", ""),
+                    "normalizationRequiredMultiplier": normalization.get("requiredAmplitudeMultiplier", ""),
+                    "recommendedInstrumentVolume": normalization.get("recommendedInstrumentVolume", ""),
+                    "recommendedGlobalMultiplier": normalization.get("recommendedGlobalMultiplier", ""),
+                    "normalizationMidi": audio_signature.get("midi", ""),
+                    "normalizationPressure": audio_signature.get("pressure", ""),
                     "trigger": args.trigger,
                 }
+                if args.normalization_acceptance:
+                    normalization_errors = validate_normalization_acceptance(row, args)
+                    if normalization_errors:
+                        row["status"] = "fail"
+                        row["error"] = "; ".join([row["error"]] + normalization_errors).strip("; ")
                 results.append(row)
-                print(f"[{index}/{len(presets)}] {status.upper()} {preset['engine']} / {preset['categoryLabel']} / {preset['presetLabel']}")
+                print(f"[{index}/{len(presets)}] {row['status'].upper()} {preset['engine']} / {preset['categoryLabel']} / {preset['presetLabel']}")
         finally:
             browser.close()
             server.shutdown()
+
+    if args.require_full_catalog and len(results) != total:
+        results.append(
+            {
+                "index": len(results) + 1,
+                "status": "fail",
+                "engine": "catalog",
+                "categoryLabel": "coverage",
+                "presetLabel": "full catalog",
+                "preset": "catalog::coverage",
+                "error": f"required full catalog sweep, got {len(results)} of {total} live presets",
+                "trigger": args.trigger,
+                "availablePresetCount": total,
+                "sweepCount": len(results),
+            }
+        )
 
     duplicate_signature_groups = apply_duplicate_signature_failures(results)
     summary = {
@@ -748,6 +1009,12 @@ def run_sweep(args):
                 "audioP95Peak",
                 "audioClipRatio",
                 "finalBoostGain",
+                "normalizationTargetRms",
+                "normalizationRequiredMultiplier",
+                "recommendedInstrumentVolume",
+                "recommendedGlobalMultiplier",
+                "normalizationMidi",
+                "normalizationPressure",
                 "duplicateSignatureGroup",
                 "trigger",
                 "error",

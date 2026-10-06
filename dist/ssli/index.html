@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self';"><title>Super Synth Lab - Instrument</title><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='20' fill='%230a0a1a'/%3E%3Ctext x='90' y='105' text-anchor='middle' font-family='system-ui' font-size='48' font-weight='bold' fill='%234cc9f0'%3ESSLI%3C/text%3E%3C/svg%3E"><style>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="mobile-web-app-capable" content="yes"><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self';"><title>Super Synth Lab - Instrument</title><link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='20' fill='%230a0a1a'/%3E%3Ctext x='90' y='105' text-anchor='middle' font-family='system-ui' font-size='48' font-weight='bold' fill='%234cc9f0'%3ESSLI%3C/text%3E%3C/svg%3E"><style>
 /* === design-tokens.css === */
 /* ================================================================
    SSLU Design Tokens — Single Source of Truth
@@ -26493,7 +26493,7 @@ registerProcessor('formant-processor', FormantWorkletProcessor);
 // === Inlined physical-worklet.js ===
 window.__SSL_PHYSICAL_WORKLET_CODE = `// Super Synth Lab - Physical Modelling AudioWorklet Processor
 // Karplus-Strong, Bowed String, Blown Pipe, Modal Synthesis
-// v1.1.5 - fix: plucked-string aftertouch no longer modulates resonator amplitude
+// v1.1.3 — fix: per-voice gain scaling + smooth soft clipper for chord headroom
 //
 // ================================================================
 // EDUCATIONAL CONTEXT: Physical Modelling DSP (AudioWorklet)
@@ -26523,7 +26523,7 @@ window.__SSL_PHYSICAL_WORKLET_CODE = `// Super Synth Lab - Physical Modelling Au
 // Per-voice output gain — keeps 4 simultaneous voices under the
 // soft-clipper knee (~0.9). 4 voices * 0.22 = 0.88 peak sum.
 var PHYS_VOICE_OUTPUT_GAIN = 0.22;
-var PLUCK_OUTPUT_SCALE = 1.0;
+var PLUCK_OUTPUT_SCALE = 3.0;
 // Pre-computed sine lookup table: avoids calling Math.sin() at audio
 // rate. Size is a power of 2 (4096) so we can use bitwise AND with
 // PHYS_SINE_MASK for fast modular indexing. At 4096 entries, the
@@ -26830,36 +26830,29 @@ class PluckModel {
         var safeExcLenPick = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLenPick));
         var noise = (Math.random() * 2 - 1) * 0.15;
-        this.delayLine.write((env + noise) * hann * vel * 0.75);
+        this.delayLine.write((env + noise) * hann * vel * 0.5);
       }
     } else {
       // Shaped noise burst: mix of filtered noise + short sine burst at fundamental
-      // Apply a half-Hann window and brightness-dependent smoothing so
-      // polyphonic string plucks stay string-like instead of broadband-noisy.
+      // Apply a half-Hann window for smoother onset
       var sineLen = Math.min(intPeriod, Math.floor(period * 0.5));
       var safeSineLen = sineLen || 1;
       var prevNoise = 0;
-      var prevSmoothedNoise = 0;
-      var noiseSmoothing = 0.08 + bright * 0.18;
-      var noiseLevel = 0.18 + bright * 0.12;
-      var toneLevel = 0.82 + (1 - bright) * 0.18;
       for (var i = 0; i < excLen; i++) {
         // Half-Hann window
         var safeExcLen = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLen));
-        // Noise component (two gentle one-pole stages for string-like excitation)
+        // Noise component (simple one-pole lowpass for shaping)
         var rawNoise = (Math.random() * 2 - 1);
-        var filteredNoise = noiseSmoothing * rawNoise + (1 - noiseSmoothing) * prevNoise;
+        var filteredNoise = 0.6 * rawNoise + 0.4 * prevNoise;
         prevNoise = filteredNoise;
-        var smoothedNoise = 0.22 * filteredNoise + 0.78 * prevSmoothedNoise;
-        prevSmoothedNoise = smoothedNoise;
         // Sine burst at fundamental (fades out after half the period)
         var sineBurst = 0;
         if (i < sineLen) {
           var sineEnv = 1 - (i / safeSineLen);
           sineBurst = Math.sin(2 * Math.PI * freq * i / this.sampleRate) * sineEnv * 0.4;
         }
-        var sample = (smoothedNoise * noiseLevel + sineBurst * toneLevel) * hann * vel * 0.45;
+        var sample = (filteredNoise * 0.6 + sineBurst) * hann * vel * 0.5;
         this.delayLine.write(sample);
       }
     }
@@ -27709,8 +27702,6 @@ class PhysicalVoice {
     this.midiNote = -1;
     this.instId = 0;
     this.modelType = 'pluck';
-    this.pressureGain = 1;
-    this.targetPressureGain = 1;
 
     // One of each model type (reused per voice)
     this.pluck = new PluckModel(sampleRate);
@@ -27725,8 +27716,6 @@ class PhysicalVoice {
     this.midiNote = midiNote;
     this.instId = settings.instId || 0;
     this.modelType = settings.model || 'pluck';
-    this.pressureGain = 1;
-    this.targetPressureGain = 1;
 
     // Select model and apply parameters
     switch (this.modelType) {
@@ -27776,22 +27765,9 @@ class PhysicalVoice {
     }
   }
 
-  setPressure(pressure) {
-    var normalized = Math.max(0, Math.min(127, pressure || 0)) / 127;
-    // Plucked strings already got their energy at note-on. Deep pressure-gain
-    // modulation on six active resonators sounds like zippering during release,
-    // so keep aftertouch shallow: still per-note, but never a volume pedal.
-    if (this.modelType === 'pluck') {
-      this.targetPressureGain = 1.0;
-    } else {
-      this.targetPressureGain = Math.max(0.2, Math.min(1.0, 0.2 + normalized * 0.8));
-    }
-  }
-
   process() {
     if (!this.active) return 0;
     var sample = this.currentModel.process();
-    this.pressureGain += (this.targetPressureGain - this.pressureGain) * 0.08;
     var isPluck = (this.modelType === 'pluck');
     if (isPluck) {
       sample = sample * PLUCK_OUTPUT_SCALE;
@@ -27799,7 +27775,7 @@ class PhysicalVoice {
     if (this.currentModel.isFinished()) {
       this.active = false;
     }
-    return sample * this.pressureGain;
+    return sample;
   }
 }
 
@@ -27961,12 +27937,10 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    var polyphonyMixGain = numActive > 4 ? 4 / numActive : 1;
-    var effectiveVoiceGain = PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain;
     for (var s = 0; s < channel.length; s++) {
       var sample = 0;
       for (var a = 0; a < numActive; a++) {
-        sample += voices[active[a]].process() * effectiveVoiceGain;
+        sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN;
       }
       // Pade [3/3] approximant of tanh for soft clipping (always-on):
       //   tanh(x) ~ x * (27 + x^2) / (27 + 9*x^2)
@@ -28065,7 +28039,6 @@ var SINE_TABLE_MASK = SINE_TABLE_SIZE - 1;
 
 // Per-voice output scaling; keeps multi-voice sum below clipping
 var VOICE_OUTPUT_GAIN = 0.18;
-var POLY_MIX_EXPONENT = 1.0;
 
 // ============================================================
 // DX7 Envelope Generator
@@ -28939,15 +28912,11 @@ class FMWorkletProcessor extends AudioWorkletProcessor {
     var voices = this.voices;
     var bufLen = channel.length;
 
-    // Per-sample loop: sum all active voices, then soft-clip.
-    // Normalize dense polyphony before the limiter so six-note MPE
-    // playing keeps independent voices without driving the mix into
-    // constant saturation.
-    var voiceMixGain = VOICE_OUTPUT_GAIN / Math.pow(Math.max(1, aviLen), POLY_MIX_EXPONENT);
+    // Per-sample loop: sum all active voices, then soft-clip
     for (var s = 0; s < bufLen; s++) {
       var sample = 0;
       for (var v = 0; v < aviLen; v++) {
-        sample += voices[avi[v]].process() * voiceMixGain;
+        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN;
       }
       // Global soft clipper: Pade approximant of tanh
       // Keeps output in [-1, +1] with smooth saturation curve
@@ -139987,7 +139956,7 @@ SL.screens = (function () {
     if (engine && engine.noteOn) {
       var isEngineOk = true;
       try {
-        engine.noteOn(midi, velocity, currentInstrument);
+        engine.noteOn(midi, null, currentInstrument);
       } catch (engineErr) {
         console.error('[note-playback] engine.noteOn() threw for ' + currentType + ':', engineErr);
         isEngineOk = false;
@@ -143792,14 +143761,10 @@ SL.screens = (function () {
           var output = event.outputBuffer.getChannelData(0);
           for (var s = 0; s < output.length; s++) {
             var sample = 0;
-            var activeVoices = 0;
-            for (var ai = 0; ai < voices.length; ai++) {
-              if (voices[ai].active) activeVoices += 1;
-            }
-            var voiceMixGain = 0.18 / Math.max(1, activeVoices);
             for (var vi = 0; vi < voices.length; vi++) {
               if (voices[vi].active) {
-                sample += voices[vi].process() * voiceMixGain;
+                // 0.18 scaling factor keeps multi-voice sum below clipping
+                sample += voices[vi].process() * 0.18;
               }
             }
             // Soft clipping via Pade approximant of tanh:
@@ -144003,72 +143968,6 @@ SL.screens = (function () {
     }
   }
 
-  function updateNotePressure(midi, pressure, instId) {
-    if (instId === undefined) instId = 0;
-    pressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
-
-    if (shouldUseFallback) {
-      var voices = fallbackVoicesByInst[instId];
-      for (var i = 0; i < voices.length; i++) {
-        var v = voices[i];
-        if (v.active && v.midiNote === midi && v.setPressure) {
-          v.setPressure(pressure);
-        }
-      }
-    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
-      physicalWorkletNodes[instId].port.postMessage({
-        type: 'notePressure',
-        midiNote: midi,
-        pressure: pressure,
-        instId: instId
-      });
-    }
-  }
-
-  function updateNotePressure(midi, pressure, instId) {
-    if (instId === undefined) instId = 0;
-    pressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
-
-    if (shouldUseFallback) {
-      var voices = fallbackVoicesByInst[instId];
-      for (var i = 0; i < voices.length; i++) {
-        var v = voices[i];
-        if (v.active && v.midiNote === midi && v.setPressure) {
-          v.setPressure(pressure);
-        }
-      }
-    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
-      physicalWorkletNodes[instId].port.postMessage({
-        type: 'notePressure',
-        midiNote: midi,
-        pressure: pressure,
-        instId: instId
-      });
-    }
-  }
-
-  function updateNotePressure(midi, pressure, instId) {
-    if (instId === undefined) instId = 0;
-    pressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
-
-    if (shouldUseFallback) {
-      var voices = fallbackVoicesByInst[instId];
-      for (var i = 0; i < voices.length; i++) {
-        var v = voices[i];
-        if (v.active && v.midiNote === midi && v.setPressure) {
-          v.setPressure(pressure);
-        }
-      }
-    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
-      physicalWorkletNodes[instId].port.postMessage({
-        type: 'notePressure',
-        midiNote: midi,
-        pressure: pressure,
-        instId: instId
-      });
-    }
-  }
-
   // ============================================================
   // Parameter Control
   // ============================================================
@@ -144227,7 +144126,6 @@ SL.screens = (function () {
     // Note control
     noteOn: noteOn,
     noteOff: noteOff,
-    updateNotePressure: updateNotePressure,
     allNotesOff: allNotesOff,
 
     // Parameter control
@@ -145867,29 +145765,6 @@ SL.screens = (function () {
     return JSON.parse(JSON.stringify(DEFAULT_PHYSICAL_SETTINGS));
   }
 
-
-  function updateNotePressure(midi, pressure, instId) {
-    if (instId === undefined) instId = 0;
-    pressure = Math.max(0, Math.min(127, Math.round(pressure || 0)));
-
-    if (shouldUseFallback) {
-      var voices = fallbackVoicesByInst[instId];
-      for (var i = 0; i < voices.length; i++) {
-        var v = voices[i];
-        if (v.active && v.midiNote === midi && v.setPressure) {
-          v.setPressure(pressure);
-        }
-      }
-    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
-      physicalWorkletNodes[instId].port.postMessage({
-        type: 'notePressure',
-        midiNote: midi,
-        pressure: pressure,
-        instId: instId
-      });
-    }
-  }
-
   // ============================================================
   // Export to SynthLab Namespace
   // ============================================================
@@ -145900,7 +145775,6 @@ SL.screens = (function () {
 
     noteOn: noteOn,
     noteOff: noteOff,
-    updateNotePressure: updateNotePressure,
     allNotesOff: allNotesOff,
 
     setModel: setModel,
@@ -169204,12 +169078,12 @@ SL.screens = (function () {
         "algorithm": 32,
         "feedback": 2,
         "operators": [
-          {"ratioCoarse":1,"ratioFine":0,"level":99,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":30,"R3":20,"R4":70,"L1":99,"L2":92,"L3":92,"L4":0}},
-          {"ratioCoarse":3,"ratioFine":0,"level":82,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":35,"R3":20,"R4":70,"L1":99,"L2":88,"L3":88,"L4":0}},
-          {"ratioCoarse":5,"ratioFine":0,"level":68,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":40,"R3":20,"R4":70,"L1":99,"L2":84,"L3":84,"L4":0}},
-          {"ratioCoarse":7,"ratioFine":0,"level":55,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":45,"R3":20,"R4":70,"L1":99,"L2":80,"L3":80,"L4":0}},
-          {"ratioCoarse":9,"ratioFine":0,"level":42,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":50,"R3":20,"R4":70,"L1":99,"L2":76,"L3":76,"L4":0}},
-          {"ratioCoarse":11,"ratioFine":0,"level":30,"detune":7,"velocitySens":3,"envelope":{"R1":70,"R2":55,"R3":20,"R4":70,"L1":99,"L2":72,"L3":72,"L4":0}}
+          {"ratioCoarse":1,"ratioFine":0,"level":99,"detune":7,"velocitySens":3,"envelope":{"R1":20,"R2":30,"R3":20,"R4":70,"L1":99,"L2":92,"L3":92,"L4":0}},
+          {"ratioCoarse":3,"ratioFine":0,"level":82,"detune":7,"velocitySens":3,"envelope":{"R1":25,"R2":35,"R3":20,"R4":70,"L1":99,"L2":88,"L3":88,"L4":0}},
+          {"ratioCoarse":5,"ratioFine":0,"level":68,"detune":7,"velocitySens":3,"envelope":{"R1":30,"R2":40,"R3":20,"R4":70,"L1":99,"L2":84,"L3":84,"L4":0}},
+          {"ratioCoarse":7,"ratioFine":0,"level":55,"detune":7,"velocitySens":3,"envelope":{"R1":35,"R2":45,"R3":20,"R4":70,"L1":99,"L2":80,"L3":80,"L4":0}},
+          {"ratioCoarse":9,"ratioFine":0,"level":42,"detune":7,"velocitySens":3,"envelope":{"R1":40,"R2":50,"R3":20,"R4":70,"L1":99,"L2":76,"L3":76,"L4":0}},
+          {"ratioCoarse":11,"ratioFine":0,"level":30,"detune":7,"velocitySens":3,"envelope":{"R1":45,"R2":55,"R3":20,"R4":70,"L1":99,"L2":72,"L3":72,"L4":0}}
         ]
       }
     },

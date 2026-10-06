@@ -34,44 +34,9 @@ class TextPatch:
 
 SSLI_INDEX_PATCHES = [
     TextPatch(
-        name="physical-pluck-preview-level-2",
-        before="var PLUCK_VOICE_LEVEL  = 2.00;  // Exquis exhibit: make physical plucks audible from MPE pads",
-        after="var PLUCK_VOICE_LEVEL  = 0.25;  // transient, slightly hotter OK",
-    ),
-    TextPatch(
-        name="physical-pluck-preview-level-1_5",
-        before="var PLUCK_VOICE_LEVEL  = 1.50;  // Exquis exhibit: make physical plucks audible from MPE pads",
-        after="var PLUCK_VOICE_LEVEL  = 0.25;  // transient, slightly hotter OK",
-    ),
-    TextPatch(
-        name="sustained-physical-note-uses-midi-velocity",
-        before="engine.noteOn(midi, null, currentInstrument);",
-        after="engine.noteOn(midi, velocity, currentInstrument);",
-    ),
-    TextPatch(
         name="disable-stale-service-worker",
         before="<script>(function(){if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW registration failed:',e);});}})();</script>",
         after="<script>console.info('[SSLI] service worker disabled for Exquis exhibit runtime');</script>",
-    ),
-    TextPatch(
-        name="physical-worklet-pluck-aftertouch-version",
-        before="// v1.1.4 - fix: bounded pluck output for independent poly-aftertouch voices",
-        after="// v1.1.5 - fix: plucked-string aftertouch no longer modulates resonator amplitude",
-    ),
-    TextPatch(
-        name="physical-worklet-pluck-output-scale",
-        before="var PLUCK_OUTPUT_SCALE = 1.5;",
-        after="var PLUCK_OUTPUT_SCALE = 1.0;",
-    ),
-    TextPatch(
-        name="physical-worklet-pick-excitation-scale",
-        before="this.delayLine.write((env + noise) * hann * vel * 1.0);",
-        after="this.delayLine.write((env + noise) * hann * vel * 0.75);",
-    ),
-    TextPatch(
-        name="physical-worklet-pluck-pressure-fixed-target",
-        before="this.targetPressureGain = Math.max(0.95, Math.min(1.0, 0.95 + normalized * 0.05));",
-        after="this.targetPressureGain = 1.0;",
     ),
 ]
 
@@ -180,14 +145,7 @@ def build_bundle(metadata: dict) -> str:
 
 
 def sync_ssli_runtime(target: Path) -> None:
-    if target.resolve() == ROOT_SSLI_DIR.resolve() and (ROOT_SSLI_DIR / "index.html").exists():
-        patch_ssli_runtime(target)
-        return
     target.mkdir(exist_ok=True)
-    if ROOT_SSLI_DIR.exists() and (ROOT_SSLI_DIR / "index.html").exists():
-        shutil.copytree(ROOT_SSLI_DIR, target, dirs_exist_ok=True)
-        patch_ssli_runtime(target)
-        return
     if SSLI_SOURCE.exists():
         shutil.copyfile(SSLI_SOURCE, target / "index.html")
         ssli_assets = SSLI_ROOT / "assets"
@@ -197,6 +155,8 @@ def sync_ssli_runtime(target: Path) -> None:
             source_file = SSLI_ROOT / support_file
             if source_file.exists():
                 shutil.copyfile(source_file, target / support_file)
+    elif target.resolve() != ROOT_SSLI_DIR.resolve() and ROOT_SSLI_DIR.exists() and (ROOT_SSLI_DIR / "index.html").exists():
+        shutil.copytree(ROOT_SSLI_DIR, target, dirs_exist_ok=True)
     patch_ssli_runtime(target)
 
 

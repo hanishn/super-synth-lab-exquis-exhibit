@@ -132,48 +132,36 @@ class StaticExhibitTests(unittest.TestCase):
         positions = [section.index(item) for item in required_order]
         self.assertEqual(positions, sorted(positions))
 
-    def test_regression_ssli_runtime_keeps_upstream_physical_pluck_level(self):
-        ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
-        dist_ssli_text = (ROOT / "dist/ssli/index.html").read_text(encoding="utf-8")
-        self.assertIn("var PLUCK_VOICE_LEVEL  = 0.25;  // transient, slightly hotter OK", ssli_text)
-        self.assertIn("var PLUCK_VOICE_LEVEL  = 0.25;  // transient, slightly hotter OK", dist_ssli_text)
-        self.assertNotIn("Exquis exhibit: make physical plucks audible from MPE pads", ssli_text)
-        self.assertNotIn("Exquis exhibit: make physical plucks audible from MPE pads", dist_ssli_text)
-
-    def test_regression_ssli_runtime_patches_are_required_and_named(self):
+    def test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior(self):
         import build
 
-        self.assertGreaterEqual(len(build.SSLI_INDEX_PATCHES), 4)
+        self.assertEqual([patch.name for patch in build.SSLI_INDEX_PATCHES], ["disable-stale-service-worker"])
         self.assertTrue(all(patch.name and patch.before and patch.after for patch in build.SSLI_INDEX_PATCHES))
         with TemporaryDirectory() as tmp:
             target = Path(tmp) / "index.html"
             with self.assertRaisesRegex(RuntimeError, "Missing SSLI runtime patch target"):
                 build.apply_required_text_patches("unrelated upstream file", build.SSLI_INDEX_PATCHES, target)
 
-    def test_regression_ssli_physical_runtime_exposes_per_note_pressure_api(self):
+    def test_regression_ssli_physical_runtime_is_not_locally_patched_for_per_note_pressure(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
-        self.assertIn("function updateNotePressure(midi, pressure, instId)", ssli_text)
-        self.assertIn("updateNotePressure: updateNotePressure", ssli_text)
-        self.assertIn("type: 'notePressure'", ssli_text)
-        self.assertIn("case 'notePressure':", worklet_text)
-        self.assertIn("updateNotePressure(midiNote, pressure, instId)", worklet_text)
-        self.assertIn("setPressure(pressure)", worklet_text)
+        self.assertNotIn("function updateNotePressure(midi, pressure, instId)", ssli_text)
+        self.assertNotIn("updateNotePressure: updateNotePressure", ssli_text)
+        self.assertNotIn("type: 'notePressure'", ssli_text)
+        self.assertNotIn("case 'notePressure':", worklet_text)
+        self.assertNotIn("updateNotePressure(midiNote, pressure, instId)", worklet_text)
+        self.assertNotIn("setPressure(pressure)", worklet_text)
 
     def test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
-        ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertIn("this.modelType === 'pluck'", worklet_text)
-        self.assertIn("this.targetPressureGain = 1.0;", worklet_text)
-        self.assertIn("this.pressureGain = 1.0;", worklet_text)
-        self.assertIn("this.targetPressureGain = 1.0;", ssli_text)
-        self.assertIn("0.2 + normalized * 0.8", worklet_text)
-        self.assertNotIn("0.95 + normalized * 0.05", worklet_text)
-        self.assertNotIn("0.95 + normalized * 0.05", ssli_text)
+        self.assertNotIn("this.targetPressureGain = 1.0;", worklet_text)
+        self.assertNotIn("this.pressureGain = 1.0;", worklet_text)
+        self.assertNotIn("case 'notePressure':", worklet_text)
         self.assertNotIn("normalized * 1.25", worklet_text)
         self.assertNotIn("1.35", worklet_text)
 
-    def test_regression_plucked_midi_one_shots_do_not_schedule_helper_note_off(self):
+    def test_regression_plucked_midi_one_shots_bound_physical_voice_lifetime(self):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
         match = re.search(r"function startPluckedOneShotWithSsli\(midi, velocity, options\) \{([\s\S]*?)\n  \}\n\n  function stopSustainedWithSsli", app)
         self.assertIsNotNone(match)
@@ -181,7 +169,8 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("SL.physical.noteOn(midi, playableVelocity, inst);", body)
         self.assertIn("decay=natural", body)
         self.assertNotIn("playNoteOnInstrument", body)
-        self.assertNotIn("physical.noteOff", body)
+        self.assertIn("oneShotNoteOffTimer", app)
+        self.assertIn("runtimeSL.physical.noteOff", app)
 
     def test_regression_physical_worklet_scales_six_voice_polyphony_headroom(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
@@ -195,10 +184,8 @@ class StaticExhibitTests(unittest.TestCase):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertNotIn("semitoneJamGuard", app_text)
         self.assertNotIn("hasRecentPhysicalSemitoneNeighbor", app_text)
-        self.assertIn("var PLUCK_OUTPUT_SCALE = 1.0;", worklet_text)
-        self.assertIn("var PLUCK_OUTPUT_SCALE = 1.0;", ssli_text)
-        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.5;", worklet_text)
-        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.5;", ssli_text)
+        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.0;", worklet_text)
+        self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.0;", ssli_text)
 
     def test_regression_ssli_runtime_cannot_be_served_from_stale_service_worker(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
@@ -318,6 +305,13 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("__presetSweepAudioProbe", text)
         self.assertIn("audioWaveformHash", text)
         self.assertIn("audioSpectrumHash", text)
+        self.assertIn("ssli_single_note_midi_signature", text)
+        self.assertIn("normalization_recommendation", text)
+        self.assertIn("normalization-target-rms", text)
+        self.assertIn("recommendedInstrumentVolume", text)
+        self.assertIn("recommendedGlobalMultiplier", text)
+        self.assertIn("SL.audio.getAnalyser() final output path", text)
+        self.assertIn("getFloatTimeDomainData", text)
         self.assertIn("apply_duplicate_signature_failures", text)
         self.assertIn("duplicateSignatureGroups", text)
         self.assertIn("preset-sweep-results.json", text)
@@ -443,6 +437,8 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("--case", result.stdout)
         self.assertIn("--sample-ms", result.stdout)
         self.assertIn("--trigger", result.stdout)
+        self.assertIn("single-midi", result.stdout)
+        self.assertIn("--normalization-target-rms", result.stdout)
         self.assertIn("waveform", result.stdout.lower())
 
     def test_preset_signature_check_compares_runtime_engine_settings_and_audio(self):
@@ -503,15 +499,18 @@ class StaticExhibitTests(unittest.TestCase):
         playwright_module = load_module("tests/test_exhibit_playwright.py", "playwright_for_regression_audit")
         registered = set(playwright_module.PlaywrightExhibitTests.STATED_FAILURE_REGRESSIONS.values())
         static_tripwires = {
-            "test_regression_ssli_runtime_keeps_upstream_physical_pluck_level",
-            "test_regression_ssli_runtime_patches_are_required_and_named",
-            "test_regression_ssli_physical_runtime_exposes_per_note_pressure_api",
+            "test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior",
+            "test_regression_ssli_physical_runtime_is_not_locally_patched_for_per_note_pressure",
             "test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on",
-            "test_regression_plucked_midi_one_shots_do_not_schedule_helper_note_off",
+            "test_regression_plucked_midi_one_shots_bound_physical_voice_lifetime",
             "test_regression_physical_worklet_scales_six_voice_polyphony_headroom",
             "test_regression_physical_voice_headroom_has_no_pitch_specific_pluck_hack",
             "test_regression_ssli_runtime_cannot_be_served_from_stale_service_worker",
             "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
+            "test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels",
+            "test_regression_mature_normalization_fixture_matches_live_catalog_size",
+            "test_regression_measured_quiet_presets_have_explicit_normalization_overrides",
+            "test_regression_mature_engine_normalization_uses_canonical_engine_keys",
         }
         playwright_regressions = {
             name for name in dir(playwright_module.PlaywrightExhibitTests)
@@ -529,6 +528,53 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertNotIn("CATEGORY_SAMPLE_PREFERENCES", script)
         self.assertNotIn("preferred_names", script)
         self.assertIn("Do not use as full acceptance", script)
+
+    def test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels(self):
+        script = (ROOT / "tools/preset_sweep.py").read_text(encoding="utf-8")
+        self.assertIn("--normalization-acceptance", script)
+        self.assertIn("--require-full-catalog", script)
+        self.assertIn("validate_normalization_acceptance", script)
+        self.assertIn("quiet preset lacks measured override", script)
+        self.assertIn("missing SSLI normalization output log", script)
+
+    def test_regression_mature_normalization_fixture_matches_live_catalog_size(self):
+        fixture = json.loads((ROOT / "tests/fixtures/ssli_mature_normalization_required_overrides.json").read_text(encoding="utf-8"))
+        mature_count = 0
+        for engine in ("subtractive", "fm", "physical"):
+            presets = json.loads((ROOT / f"src/vendor/ssli/presets/{engine}-presets.json").read_text(encoding="utf-8"))
+            mature_count += len(presets["presets"])
+        self.assertEqual(fixture["availablePresetCount"], mature_count)
+        self.assertEqual(fixture["sweptPresetCount"], mature_count)
+        self.assertGreaterEqual(len(fixture["requiredOverrides"]), 40)
+
+    def test_regression_measured_quiet_presets_have_explicit_normalization_overrides(self):
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        fixture = json.loads((ROOT / "tests/fixtures/ssli_mature_normalization_required_overrides.json").read_text(encoding="utf-8"))
+        table = {}
+        for preset, instrument_volume, output_gain in re.findall(
+            r"'([^']+)':\s*\{\s*instrumentVolume:\s*([0-9.]+),\s*outputGain:\s*([0-9.]+)\s*\}",
+            app,
+        ):
+            table[preset] = {
+                "instrumentVolume": float(instrument_volume),
+                "outputGain": float(output_gain),
+            }
+        missing = []
+        weak = []
+        for row in fixture["requiredOverrides"]:
+            preset = row["preset"]
+            normalization = table.get(preset)
+            if normalization is None:
+                missing.append(preset)
+            elif normalization["instrumentVolume"] < 100 or normalization["outputGain"] <= 4:
+                weak.append((preset, normalization))
+        self.assertEqual(missing, [])
+        self.assertEqual(weak, [])
+
+    def test_regression_mature_engine_normalization_uses_canonical_engine_keys(self):
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        self.assertIn("MATURE_SOUND_ENGINES[soundEngineKey(state.soundEngine)]", app)
+        self.assertNotIn("MATURE_SOUND_ENGINES[state.soundEngine]", app)
 
     def test_midi_feedback_has_no_pitch_class_fallback_highlights(self):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")

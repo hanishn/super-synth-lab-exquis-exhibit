@@ -134,7 +134,7 @@ Physical per-note pressure updates are rate-limited per held note before being s
 
 Six-note physical pressure regressions must be tested with Playwright-driven MIDI against the actual audible SSLI signal path. The test samples final audio output, not only SSLI's pre-output instrument analyser or mocked API calls. Physical-model output must satisfy measurable loudness/headroom thresholds: solo voices remain audible, dense independent voices avoid sustained clipping, and cleanup returns the engine to idle.
 
-The exhibit may use a small adapter around SSLI's final output routing so every engine reaches the same audible diagnostic path. That adapter is tested by output metrics, not treated as the core sound architecture.
+The exhibit does not wrap SSLI's final output routing for MIDI practice playback. Per-engine output must come from SSLI's own instrument voices and effect chain; any user-facing loudness change goes through the explicit Sound-panel Volume control.
 
 When the last Exquis-held MIDI voice is released, exact per-note ownership cleanup must already have stopped all voices started by the exhibit. As a final failsafe, the exhibit may ask SSLI to stop all sustained notes only after MIDI idle; tests must prove normal note-on/note-off ownership first so the idle failsafe cannot mask lifecycle bugs.
 
@@ -142,18 +142,19 @@ Repeated Exquis note bursts must not reapply the selected SSLI preset for every 
 
 Stale note-off messages for voices that were already pruned are ignored with a diagnostic log entry instead of double-stopping SSLI voices or clearing the current touch state. While multiple notes are held, global SSLI expression follows the strongest currently held pressure. A pressure-zero packet for one note must not collapse output gain/cutoff while another note is still pressed.
 
-For a single held note, pressure zero clears SSLI expression directly instead of falling back to the original note-on velocity. MIDI practice playback also normalizes the active SSLI instrument volume through `SynthLab.audio.setInstrumentVolume(inst, 100)` when a preset leaves the instrument volume lower, wraps `SynthLab.audio.getFinalDestination()` with a practice output boost for sustained-note voices, and logs the before/after volume plus boost gain so quiet-preset diagnosis is visible in the console.
+For a single held note, pressure zero clears SSLI expression directly instead of falling back to the original note-on velocity. MIDI practice playback applies the user-facing Sound-panel Volume through `SynthLab.audio.setInstrumentVolume(inst, volume)` and converts Exquis pressure through the selected pressure curve before inverse-compensating SSLI's squared sustained-note velocity response. Presets with measured low output use an explicit normalization entry: a per-preset instrument-volume target plus a bounded output multiplier on the SSLI instrument output node. This normalization must be logged with the preset id, volume, and output gain; it must not be a silent wrapper around SSLI's final destination.
 
 When duplicate physical cells share the same exact MIDI note, incoming MIDI feedback highlights the centered matching cell by default. This keeps `C3` near the center (`r5c3`) instead of lighting an edge duplicate (`r4c0`) while still requiring an exact full MIDI note match.
 
 ### Repeatable Preset Sweep
 
-Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, pre-arms the audio analyser before playback, samples the live SSLI analyser or final SSLI output path for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`.
+Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live final SSLI output path through `SL.audio.getAnalyser()` for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`. Normalization sweeps use `--trigger single-midi` with a fixed MIDI note and pressure, then report the per-preset instrument-volume recommendation plus any remaining global-output multiplier needed to hit the target RMS. Acceptance normalization sweeps must add `--normalization-acceptance --require-full-catalog` so missing normalization logs, low-level outliers without measured overrides, clipping, and incomplete preset coverage fail the run.
 
 The required mature-engine poly-pressure procedure is:
 
 ```powershell
 python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
+python tools/preset_sweep.py --mature-engines-only --trigger single-midi --normalization-acceptance --require-full-catalog --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_mature_acceptance
 ```
 
 That command sweeps every live UI preset under Subtractive, FM, and Physical, drives six Exquis-style MIDI notes on independent channels, continuously varies their channel pressure, samples the actual audible SSLI output, and fails on silence, engine mismatch, duplicate signatures within the same engine/category, clipping, browser errors, stale-log-only cleanup, or missing current voice cleanup from the app's diagnostic state snapshot.
@@ -164,7 +165,7 @@ The diagnostic console remains reachable at all times. Its collapsed state is a 
 
 Dense MIDI voice stacks use general runtime headroom protection. Subtractive/FM voices scale later independent note-on velocity and expression gain as held voice count rises, physical models scale output based on active voice count, and low-register filtered subtractive stacks preserve instrument volume so dense bass/drone voicings remain audible. The required behavior is user-facing: simultaneous and sequential independent notes must preserve pitch identity, remain audible, avoid extra tones/noise, and avoid sustained clipping. Implementation must not use note-name, interval, or preset-specific exceptions.
 
-Hot resonant subtractive presets receive structural dense-poly headroom based on filter/Q/envelope/oscillator load. The exhibit caps expression gain before SSLI's internal synth path and uses a lower practice output gain for that class, so sweep-style transition presets avoid internal clipping without relying on preset-name exceptions.
+Hot resonant subtractive presets receive structural dense-poly headroom based on filter/Q/envelope/oscillator load. The exhibit caps expression gain before SSLI's internal synth path so sweep-style transition presets avoid internal clipping without relying on preset-name exceptions.
 
 Physical plucked-string presets must stay stable when two nearby buttons are pressed together under pressure. The pluck model uses band-limited/string-shaped noise excitation, picked plucks have enough solo energy to satisfy MIDI signature checks, and physical output gain steps down starting at the second held voice so Nylon Guitar-style adjacent plucks avoid harsh summed transients without muting dense polyphony.
 
@@ -174,6 +175,8 @@ Useful commands:
 python tools/preset_sweep.py --limit 10
 python tools/preset_sweep.py --engine Physical --category Plucked --preset-contains Koto
 python tools/preset_sweep.py --output-dir tmp_preset_sweep_full
+python tools/preset_sweep.py --trigger single-midi --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_full
+python tools/preset_sweep.py --mature-engines-only --trigger single-midi --normalization-acceptance --require-full-catalog --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_mature_acceptance
 python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
 python tools/preset_sweep.py --mature-engines-only --one-per-category --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_smoke
 ```

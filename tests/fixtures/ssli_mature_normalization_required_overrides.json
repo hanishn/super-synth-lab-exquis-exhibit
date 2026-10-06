@@ -1,0 +1,295 @@
+{
+  "source": "tmp_preset_normalization_mature_full/preset-sweep-results.json",
+  "sweptPresetCount": 624,
+  "availablePresetCount": 624,
+  "selection": "Measured mature-engine quiet outliers: spectrum RMS below 0.0068, plus Rhodes/EP family presets flagged by hardware acceptance.",
+  "requiredOverrides": [
+    {
+      "preset": "Subtractive::Electric Piano (Rhodes)",
+      "engine": "Subtractive",
+      "presetLabel": "Electric Piano (Rhodes)",
+      "audioSpectrumRms": 0.00684,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "Physical::Metallic Drone",
+      "engine": "Physical",
+      "presetLabel": "Metallic Drone",
+      "audioSpectrumRms": 0.00417,
+      "audioSpectrumPeak": 0.12157
+    },
+    {
+      "preset": "Physical::Bowed Plate",
+      "engine": "Physical",
+      "presetLabel": "Bowed Plate",
+      "audioSpectrumRms": 0.00591,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Struck Ice",
+      "engine": "Physical",
+      "presetLabel": "Struck Ice",
+      "audioSpectrumRms": 0.00587,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Feedback Resonator",
+      "engine": "Physical",
+      "presetLabel": "Feedback Resonator",
+      "audioSpectrumRms": 0.00587,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Struck Springs",
+      "engine": "Physical",
+      "presetLabel": "Struck Springs",
+      "audioSpectrumRms": 0.00591,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Rain on Metal",
+      "engine": "Physical",
+      "presetLabel": "Rain on Metal",
+      "audioSpectrumRms": 0.00432,
+      "audioSpectrumPeak": 0.14118
+    },
+    {
+      "preset": "Physical::Gamelan Metallophone",
+      "engine": "Physical",
+      "presetLabel": "Gamelan Metallophone",
+      "audioSpectrumRms": 0.00591,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Mbira",
+      "engine": "Physical",
+      "presetLabel": "Mbira",
+      "audioSpectrumRms": 0.00591,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Bowed Bass Pluck",
+      "engine": "Physical",
+      "presetLabel": "Bowed Bass Pluck",
+      "audioSpectrumRms": 0.00614,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Glass Marimba",
+      "engine": "Physical",
+      "presetLabel": "Glass Marimba",
+      "audioSpectrumRms": 0.00588,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "Physical::Whale Song",
+      "engine": "Physical",
+      "presetLabel": "Whale Song",
+      "audioSpectrumRms": 0.00656,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::SYNTH BASS FM",
+      "engine": "FM",
+      "presetLabel": "SYNTH BASS FM",
+      "audioSpectrumRms": 0.0026,
+      "audioSpectrumPeak": 0.11373
+    },
+    {
+      "preset": "FM::DX RHODES",
+      "engine": "FM",
+      "presetLabel": "DX RHODES",
+      "audioSpectrumRms": 0.01191,
+      "audioSpectrumPeak": 0.31765
+    },
+    {
+      "preset": "FM::E.PIANO 2",
+      "engine": "FM",
+      "presetLabel": "E.PIANO 2",
+      "audioSpectrumRms": 0.00687,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::WURLITZER FM",
+      "engine": "FM",
+      "presetLabel": "WURLITZER FM",
+      "audioSpectrumRms": 0.00881,
+      "audioSpectrumPeak": 0.2902
+    },
+    {
+      "preset": "FM::WARM FM PAD",
+      "engine": "FM",
+      "presetLabel": "WARM FM PAD",
+      "audioSpectrumRms": 0.00378,
+      "audioSpectrumPeak": 0.1098
+    },
+    {
+      "preset": "FM::GLASS FM PAD",
+      "engine": "FM",
+      "presetLabel": "GLASS FM PAD",
+      "audioSpectrumRms": 0.00287,
+      "audioSpectrumPeak": 0.08627
+    },
+    {
+      "preset": "FM::CHOIR FM PAD",
+      "engine": "FM",
+      "presetLabel": "CHOIR FM PAD",
+      "audioSpectrumRms": 0.00517,
+      "audioSpectrumPeak": 0.18039
+    },
+    {
+      "preset": "FM::Choir Pad FM",
+      "engine": "FM",
+      "presetLabel": "Choir Pad FM",
+      "audioSpectrumRms": 0.00647,
+      "audioSpectrumPeak": 0.19608
+    },
+    {
+      "preset": "FM::12-STRING GUITAR",
+      "engine": "FM",
+      "presetLabel": "12-STRING GUITAR",
+      "audioSpectrumRms": 0.00664,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Synth FM BASSOON",
+      "engine": "FM",
+      "presetLabel": "Synth FM BASSOON",
+      "audioSpectrumRms": 0.00365,
+      "audioSpectrumPeak": 0.11765
+    },
+    {
+      "preset": "FM::Synth FM PICCOLO",
+      "engine": "FM",
+      "presetLabel": "Synth FM PICCOLO",
+      "audioSpectrumRms": 0.00495,
+      "audioSpectrumPeak": 0.17647
+    },
+    {
+      "preset": "FM::FM CHIPTUNE",
+      "engine": "FM",
+      "presetLabel": "FM CHIPTUNE",
+      "audioSpectrumRms": 0.00636,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Northern Lights",
+      "engine": "FM",
+      "presetLabel": "Northern Lights",
+      "audioSpectrumRms": 0.00591,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "FM::Erhu FM",
+      "engine": "FM",
+      "presetLabel": "Erhu FM",
+      "audioSpectrumRms": 0.00417,
+      "audioSpectrumPeak": 0.12157
+    },
+    {
+      "preset": "FM::Balafon FM",
+      "engine": "FM",
+      "presetLabel": "Balafon FM",
+      "audioSpectrumRms": 0.00417,
+      "audioSpectrumPeak": 0.12157
+    },
+    {
+      "preset": "FM::DX Rhodes",
+      "engine": "FM",
+      "presetLabel": "DX Rhodes",
+      "audioSpectrumRms": 0.00869,
+      "audioSpectrumPeak": 0.26667
+    },
+    {
+      "preset": "FM::FM Wurlitzer",
+      "engine": "FM",
+      "presetLabel": "FM Wurlitzer",
+      "audioSpectrumRms": 0.00797,
+      "audioSpectrumPeak": 0.22745
+    },
+    {
+      "preset": "FM::Retro Tine Piano",
+      "engine": "FM",
+      "presetLabel": "Retro Tine Piano",
+      "audioSpectrumRms": 0.00779,
+      "audioSpectrumPeak": 0.22745
+    },
+    {
+      "preset": "FM::Poly-5 FM",
+      "engine": "FM",
+      "presetLabel": "Poly-5 FM",
+      "audioSpectrumRms": 0.00669,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Crystal EP",
+      "engine": "FM",
+      "presetLabel": "Crystal EP",
+      "audioSpectrumRms": 0.00902,
+      "audioSpectrumPeak": 0.28627
+    },
+    {
+      "preset": "FM::Synthwave Lead",
+      "engine": "FM",
+      "presetLabel": "Synthwave Lead",
+      "audioSpectrumRms": 0.00639,
+      "audioSpectrumPeak": 0.19608
+    },
+    {
+      "preset": "FM::Pop Pad",
+      "engine": "FM",
+      "presetLabel": "Pop Pad",
+      "audioSpectrumRms": 0.00665,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Talk Box FM",
+      "engine": "FM",
+      "presetLabel": "Talk Box FM",
+      "audioSpectrumRms": 0.00668,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Retro Stab",
+      "engine": "FM",
+      "presetLabel": "Retro Stab",
+      "audioSpectrumRms": 0.00665,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Glassy Keys",
+      "engine": "FM",
+      "presetLabel": "Glassy Keys",
+      "audioSpectrumRms": 0.00571,
+      "audioSpectrumPeak": 0.18824
+    },
+    {
+      "preset": "FM::Voltage Drop",
+      "engine": "FM",
+      "presetLabel": "Voltage Drop",
+      "audioSpectrumRms": 0.00679,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Angel Choir",
+      "engine": "FM",
+      "presetLabel": "Angel Choir",
+      "audioSpectrumRms": 0.0065,
+      "audioSpectrumPeak": 0.2
+    },
+    {
+      "preset": "FM::Dark Chant",
+      "engine": "FM",
+      "presetLabel": "Dark Chant",
+      "audioSpectrumRms": 0.00571,
+      "audioSpectrumPeak": 0.19216
+    },
+    {
+      "preset": "FM::Vocal Formant Ah",
+      "engine": "FM",
+      "presetLabel": "Vocal Formant Ah",
+      "audioSpectrumRms": 0.00672,
+      "audioSpectrumPeak": 0.2
+    }
+  ]
+}

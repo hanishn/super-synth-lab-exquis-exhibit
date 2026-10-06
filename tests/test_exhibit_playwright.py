@@ -1,4 +1,4 @@
-﻿import json
+import json
 import subprocess
 import unittest
 from pathlib import Path
@@ -86,14 +86,23 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "test_tone_must_be_loud_diagnostic_reference": "test_regression_test_tone_uses_loud_local_output",
         "waveform_must_show_visible_signal": "test_regression_test_tone_scope_draws_visible_waveform",
         "test_tone_scope_must_use_real_audio_not_mocked_analyser": "test_regression_real_test_tone_drives_scope_without_mocked_audio_context",
-        "ssli_midi_sustain_must_install_practice_output_boost": "test_regression_ssli_midi_sustain_installs_practice_output_boost",
-        "ssli_midi_sustain_must_boost_quiet_instrument_volume": "test_regression_ssli_midi_sustain_boosts_quiet_instrument_volume",
-        "single_nonphysical_note_must_restore_full_practice_boost_after_quiet_poly_path": "test_regression_single_nonphysical_note_restores_full_practice_boost_after_quiet_poly_path",
-        "exquis_midi_must_use_stable_voice_velocity_and_hot_expression": "test_regression_exquis_midi_uses_stable_ssli_voice_velocity_and_hot_expression",
-        "fm_midi_must_use_calibrated_sustained_velocity_headroom": "test_regression_fm_midi_uses_calibrated_sustained_velocity_headroom",
+        "ssli_midi_sustain_must_use_user_performance_volume": "test_regression_ssli_midi_sustain_uses_performance_volume",
+        "celesta_midi_must_use_measured_preset_normalization_gain": "test_regression_ssli_celesta_uses_preset_normalization_gain",
+        "rhodes_midi_must_use_measured_preset_normalization_gain": "test_regression_ssli_rhodes_uses_measured_preset_normalization_gain",
+        "ssli_midi_sustain_must_not_wrap_runtime_output": "test_regression_ssli_midi_sustain_does_not_wrap_runtime_output",
+        "exquis_midi_must_inverse_ssli_velocity_curve_without_global_expression": "test_regression_exquis_midi_inverses_ssli_velocity_curve_without_global_expression",
+        "exquis_live_pressure_must_not_stack_expression_gain_into_garble": "test_regression_live_pressure_caps_expression_gain_during_repeated_play",
+        "staggered_physical_plucked_chords_must_not_use_solo_boost_or_idle_cleanup": "test_regression_staggered_physical_plucked_chords_keep_chord_headroom",
+        "repeated_exquis_chords_must_not_accumulate_playback_latency": "test_regression_repeated_exquis_chords_do_not_accumulate_playback_latency",
+        "diagnostic_logging_must_not_block_midi_hot_path": "test_regression_diagnostic_logging_is_batched_off_hot_path",
+        "fm_midi_must_use_raw_velocity_without_global_expression": "test_regression_fm_midi_uses_raw_velocity_without_global_expression",
         "low_register_subtractive_poly_must_remain_audible": "test_regression_low_register_subtractive_poly_preserves_volume",
         "mpe_channel_reuse_must_release_previous_voice": "test_regression_mpe_channel_reuse_releases_previous_voice",
         "mpe_same_note_new_channel_must_release_previous_owner": "test_regression_mpe_same_note_on_new_channel_releases_previous_ssli_owner",
+        "exquis_channel_16_notes_must_play_as_mpe_notes": "test_regression_exquis_channel_16_note_events_are_playable_mpe_notes",
+        "low_velocity_release_bounce_must_not_retrigger_note": "test_regression_low_velocity_release_bounce_does_not_retrigger_note",
+        "low_velocity_retrigger_during_short_hold_must_not_double_start_voice": "test_regression_low_velocity_retrigger_during_short_hold_does_not_double_start_voice",
+        "immediate_exquis_note_off_must_not_drop_chord_member": "test_regression_immediate_note_off_is_delayed_to_preserve_chord_member",
         "midi_voice_bursts_must_cleanup_all_ssli_sustained_voices_when_idle": "test_regression_midi_voice_bursts_cleanup_all_ssli_sustained_voices_when_idle",
         "repeated_exquis_notes_must_not_reapply_preset_or_leak_ssli_voices": "test_regression_repeated_exquis_notes_do_not_reapply_preset_or_leak_ssli_voices",
         "play_mode_chords_must_keep_independent_ssli_voice_ownership": "test_regression_play_mode_chords_keep_independent_ssli_voice_ownership",
@@ -115,6 +124,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "exquis_native_write_probe_must_sweep_developer_masks": "test_regression_exquis_native_probe_sweeps_official_write_masks",
         "exquis_edge_controls_must_be_labeled_in_ui": "test_regression_exquis_edge_controls_are_labeled_and_show_capture_state",
         "exquis_edge_controls_must_follow_physical_orientation": "test_regression_exquis_edge_controls_follow_orientation_layout",
+        "exquis_side_controls_must_rotate_in_physical_bottom_to_top_order": "test_regression_exquis_side_controls_rotate_in_physical_bottom_to_top_order",
         "exquis_hardware_controls_must_use_physical_shapes": "test_regression_exquis_hardware_controls_use_physical_shapes",
         "horizontal_hardware_slab_must_not_waste_vertical_space": "test_regression_horizontal_hardware_slab_does_not_waste_vertical_space",
         "tablet_horizontal_hardware_must_not_clip_stage": "test_regression_tablet_horizontal_hardware_fits_stage",
@@ -124,6 +134,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "console_actions_must_fit_on_one_row": "test_regression_console_actions_fit_on_one_row",
         "midi_note_highlight_must_match_exact_midi_note_only": "test_regression_midi_highlight_matches_exact_note_only",
         "midi_duplicate_note_highlight_must_use_centered_physical_cell": "test_regression_midi_duplicate_note_highlights_centered_physical_cell",
+        "midi_note_on_must_be_blue_white_not_root_white": "test_regression_midi_note_on_color_is_distinct_from_root_white",
         "all_tonic_pitch_class_keys_must_be_root_white": "test_regression_all_c_keys_are_tonic_in_default_c_major",
         "horizontal_and_vertical_scale_leds_must_stay_visibly_lit": "test_regression_scale_leds_are_visible_in_horizontal_and_vertical",
         "horizontal_layout_must_rotate_physical_key_shapes": "test_regression_horizontal_layout_rotates_physical_key_shapes",
@@ -1485,6 +1496,138 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(horizontal["bottom"]["width"], 72, horizontal)
         self.assertLessEqual(horizontal["bottom"]["width"], 92, horizontal)
         self.assertLess(abs((horizontal["top"]["top"] + horizontal["top"]["bottom"]) / 2 - (horizontal["keyboard"]["top"] + horizontal["keyboard"]["bottom"]) / 2), horizontal["keyboard"]["height"] * 0.28, horizontal)
+
+    def test_regression_exquis_side_controls_rotate_in_physical_bottom_to_top_order(self):
+        self.page.select_option('[data-testid="orientation-select"]', "vertical")
+        self.page.wait_for_timeout(100)
+        vertical = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const keyboard = rect('[data-testid="keyboard"]');
+          return {
+            enc1: rect('[data-edge-id="enc1"] .edge-visual'),
+            enc4: rect('[data-edge-id="enc4"] .edge-visual'),
+            settings: rect('[data-edge-id="settings"] .edge-visual'),
+            playStop: rect('[data-edge-id="playStop"] .edge-visual'),
+            keyboard
+          };
+        }""")
+        self.assertLess(vertical["enc1"]["bottom"], vertical["keyboard"]["top"], vertical)
+        self.assertLess(vertical["enc1"]["left"], vertical["enc4"]["left"], vertical)
+        self.assertGreater(vertical["settings"]["top"], vertical["keyboard"]["bottom"], vertical)
+        self.assertLess(vertical["settings"]["left"], vertical["playStop"]["left"], vertical)
+
+        self.page.locator('[data-testid="rotate-surface"]').click()
+        self.page.wait_for_timeout(100)
+        vertical_rotated = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const keyboard = rect('[data-testid="keyboard"]');
+          return {
+            deviceRotation: document.querySelector('[data-testid="exquis-device"]').dataset.rotation,
+            enc1: rect('[data-edge-id="enc1"] .edge-visual'),
+            enc4: rect('[data-edge-id="enc4"] .edge-visual'),
+            settings: rect('[data-edge-id="settings"] .edge-visual'),
+            playStop: rect('[data-edge-id="playStop"] .edge-visual'),
+            keyboard
+          };
+        }""")
+        self.assertEqual(vertical_rotated["deviceRotation"], "180", vertical_rotated)
+        self.assertGreater(vertical_rotated["enc1"]["top"], vertical_rotated["keyboard"]["bottom"], vertical_rotated)
+        self.assertGreater(vertical_rotated["enc1"]["left"], vertical_rotated["enc4"]["left"], vertical_rotated)
+        self.assertLess(vertical_rotated["settings"]["bottom"], vertical_rotated["keyboard"]["top"], vertical_rotated)
+        self.assertGreater(vertical_rotated["settings"]["left"], vertical_rotated["playStop"]["left"], vertical_rotated)
+
+        self.page.select_option('[data-testid="orientation-select"]', "horizontal")
+        if self.page.locator('[data-testid="keyboard"]').get_attribute("data-rotation") != "0":
+            self.page.locator('[data-testid="rotate-surface"]').click()
+        self.page.wait_for_timeout(100)
+        metrics = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const keyboard = rect('[data-testid="keyboard"]');
+          const controls = {
+            settings: rect('[data-edge-id="settings"] .edge-visual'),
+            sound: rect('[data-edge-id="sound"] .edge-visual'),
+            record: rect('[data-edge-id="record"] .edge-visual'),
+            loop: rect('[data-edge-id="loop"] .edge-visual'),
+            clips: rect('[data-edge-id="clips"] .edge-visual'),
+            playStop: rect('[data-edge-id="playStop"] .edge-visual'),
+            down: rect('[data-edge-id="down"] .edge-visual'),
+            up: rect('[data-edge-id="up"] .edge-visual'),
+            slider: rect('[data-edge-id="slider"] .edge-visual'),
+            undo: rect('[data-edge-id="undo"] .edge-visual'),
+            redo: rect('[data-edge-id="redo"] .edge-visual'),
+            enc1: rect('[data-edge-id="enc1"] .edge-visual'),
+            enc2: rect('[data-edge-id="enc2"] .edge-visual'),
+            enc3: rect('[data-edge-id="enc3"] .edge-visual'),
+            enc4: rect('[data-edge-id="enc4"] .edge-visual')
+          };
+          const cx = (box) => (box.left + box.right) / 2;
+          const cy = (box) => (box.top + box.bottom) / 2;
+          return {
+            keyboard,
+            controls,
+            leftRailIds: Object.keys(controls).filter((id) => controls[id].right < keyboard.left),
+            rightRailIds: Object.keys(controls).filter((id) => controls[id].left > keyboard.right),
+            leftOrder: Object.keys(controls)
+              .filter((id) => controls[id].right < keyboard.left)
+              .sort((a, b) => cy(controls[a]) - cy(controls[b])),
+            rightOrder: Object.keys(controls)
+              .filter((id) => controls[id].left > keyboard.right)
+              .sort((a, b) => cy(controls[a]) - cy(controls[b])),
+            actionMaxY: Math.max(cy(controls.settings), cy(controls.sound), cy(controls.record), cy(controls.loop), cy(controls.clips), cy(controls.playStop)),
+            sliderY: cy(controls.slider),
+            encoderMinY: Math.min(cy(controls.enc1), cy(controls.enc2), cy(controls.enc3), cy(controls.enc4))
+          };
+        }""")
+        self.assertEqual(metrics["leftRailIds"], ["settings", "sound", "record", "loop", "clips", "playStop", "down", "up", "slider", "undo", "redo"], metrics)
+        self.assertEqual(metrics["rightRailIds"], ["enc1", "enc2", "enc3", "enc4"], metrics)
+        self.assertEqual(metrics["leftOrder"], ["settings", "sound", "record", "loop", "clips", "playStop", "down", "up", "slider", "undo", "redo"], metrics)
+        self.assertEqual(metrics["rightOrder"], ["enc1", "enc2", "enc3", "enc4"], metrics)
+        self.assertLess(metrics["actionMaxY"], metrics["sliderY"], metrics)
+        self.assertLess(metrics["sliderY"], metrics["keyboard"]["bottom"], metrics)
+        self.assertGreater(metrics["encoderMinY"], metrics["keyboard"]["top"], metrics)
+
+        self.page.locator('[data-testid="rotate-surface"]').click()
+        self.page.wait_for_timeout(100)
+        rotated = self.page.evaluate("""() => {
+          const rect = (sel) => document.querySelector(sel).getBoundingClientRect();
+          const keyboard = rect('[data-testid="keyboard"]');
+          const controls = {
+            settings: rect('[data-edge-id="settings"] .edge-visual'),
+            sound: rect('[data-edge-id="sound"] .edge-visual'),
+            record: rect('[data-edge-id="record"] .edge-visual'),
+            loop: rect('[data-edge-id="loop"] .edge-visual'),
+            clips: rect('[data-edge-id="clips"] .edge-visual'),
+            playStop: rect('[data-edge-id="playStop"] .edge-visual'),
+            down: rect('[data-edge-id="down"] .edge-visual'),
+            up: rect('[data-edge-id="up"] .edge-visual'),
+            slider: rect('[data-edge-id="slider"] .edge-visual'),
+            undo: rect('[data-edge-id="undo"] .edge-visual'),
+            redo: rect('[data-edge-id="redo"] .edge-visual'),
+            enc1: rect('[data-edge-id="enc1"] .edge-visual'),
+            enc2: rect('[data-edge-id="enc2"] .edge-visual'),
+            enc3: rect('[data-edge-id="enc3"] .edge-visual'),
+            enc4: rect('[data-edge-id="enc4"] .edge-visual')
+          };
+          const cy = (box) => (box.top + box.bottom) / 2;
+          return {
+            deviceRotation: document.querySelector('[data-testid="exquis-device"]').dataset.rotation,
+            keyboardRotation: document.querySelector('[data-testid="keyboard"]').dataset.rotation,
+            encodersAreLeft: controls.enc1.right < keyboard.left,
+            buttonsAreRight: controls.settings.left > keyboard.right,
+            leftOrder: Object.keys(controls)
+              .filter((id) => controls[id].right < keyboard.left)
+              .sort((a, b) => cy(controls[a]) - cy(controls[b])),
+            rightOrder: Object.keys(controls)
+              .filter((id) => controls[id].left > keyboard.right)
+              .sort((a, b) => cy(controls[a]) - cy(controls[b]))
+          };
+        }""")
+        self.assertEqual(rotated["deviceRotation"], "180", rotated)
+        self.assertEqual(rotated["keyboardRotation"], "180", rotated)
+        self.assertTrue(rotated["encodersAreLeft"], rotated)
+        self.assertTrue(rotated["buttonsAreRight"], rotated)
+        self.assertEqual(rotated["leftOrder"], ["enc4", "enc3", "enc2", "enc1"], rotated)
+        self.assertEqual(rotated["rightOrder"], ["redo", "undo", "slider", "up", "down", "playStop", "clips", "loop", "record", "sound", "settings"], rotated)
 
     def test_regression_exquis_hardware_controls_use_physical_shapes(self):
         self.page.select_option('[data-testid="orientation-select"]', "horizontal")
@@ -3271,11 +3414,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
           const host = frame && frame.contentWindow;
           const SL = host && host.SynthLab;
           const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
-          const boost = SL && SL.__exquisPracticeOutputBoost;
-          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!ctx || !masterOutput) return { available: false, error: 'missing SSLI master output path' };
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 2048;
-          boost.connect(analyser);
+          masterOutput.connect(analyser);
           const wave = new Uint8Array(analyser.fftSize);
           const spectrum = new Uint8Array(analyser.frequencyBinCount);
           const events = [
@@ -3318,7 +3461,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             }
             await new Promise(resolve => setTimeout(resolve, 16));
           }
-          try { boost.disconnect(analyser); } catch (err) {}
+          try { masterOutput.disconnect(analyser); } catch (err) {}
           framePeaks.sort((a, b) => a - b);
           return {
             available: true,
@@ -3328,7 +3471,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             p95Peak: Number(framePeaks[Math.floor(framePeaks.length * 0.95)].toFixed(5)),
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
-            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            finalOutputGain: Number(masterOutput.gain && typeof masterOutput.gain.value === 'number' ? masterOutput.gain.value.toFixed(2) : 1),
             diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
           };
         }
@@ -3336,7 +3479,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(metrics.get("available"), metrics)
         self.assertIn("SSLI physical per-note pressure updated", metrics["diagnosticLog"])
         self.assertNotIn("SSLI physical pluck pressure bypassed", metrics["diagnosticLog"])
-        self.assertLessEqual(metrics["finalBoostGain"], 1.8, metrics)
+        self.assertLessEqual(metrics["finalOutputGain"], 1.8, metrics)
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["p95Peak"], 0.38, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
@@ -3384,15 +3527,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
           const host = frame && frame.contentWindow;
           const SL = host && host.SynthLab;
           const waitStart = Date.now();
-          while (Date.now() - waitStart < 500 && !(SL && SL.__exquisPracticeOutputBoost)) {
+          while (Date.now() - waitStart < 500 && !(SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput)) {
             await new Promise(resolve => setTimeout(resolve, 10));
           }
           const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
-          const boost = SL && SL.__exquisPracticeOutputBoost;
-          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!ctx || !masterOutput) return { available: false, error: 'missing SSLI master output path' };
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 2048;
-          boost.connect(analyser);
+          masterOutput.connect(analyser);
           const wave = new Uint8Array(analyser.fftSize);
           const spectrum = new Uint8Array(analyser.frequencyBinCount);
           let peak = 0;
@@ -3426,7 +3569,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             }
             await new Promise(resolve => setTimeout(resolve, 16));
           }
-          try { boost.disconnect(analyser); } catch (err) {}
+          try { masterOutput.disconnect(analyser); } catch (err) {}
           framePeaks.sort((a, b) => a - b);
           return {
             available: true,
@@ -3436,7 +3579,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             p95Peak: Number(framePeaks[Math.floor(framePeaks.length * 0.95)].toFixed(5)),
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
-            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            finalOutputGain: Number(masterOutput.gain && typeof masterOutput.gain.value === 'number' ? masterOutput.gain.value.toFixed(2) : 1),
             diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
           };
         }
@@ -3446,11 +3589,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("articulation queued C3 mode=strum", metrics["diagnosticLog"])
         self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
         self.assertNotIn("semitoneJamGuard", metrics["diagnosticLog"])
-        self.assertIn("SSLI output boost gain=1.60 physicalOneShotPluck=2 articulation=strum", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot B2 velocity=50", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot C3 velocity=54", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
-        self.assertLessEqual(metrics["finalBoostGain"], 1.6, metrics)
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["p95Peak"], 0.5, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
@@ -3500,11 +3641,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
           const host = frame && frame.contentWindow;
           const SL = host && host.SynthLab;
           const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
-          const boost = SL && SL.__exquisPracticeOutputBoost;
-          if (!ctx || !boost) return { available: false, error: 'missing final SSLI boost path' };
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!ctx || !masterOutput) return { available: false, error: 'missing SSLI master output path' };
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 2048;
-          boost.connect(analyser);
+          masterOutput.connect(analyser);
           const wave = new Uint8Array(analyser.fftSize);
           const spectrum = new Uint8Array(analyser.frequencyBinCount);
           let peak = 0;
@@ -3527,24 +3668,23 @@ class PlaywrightExhibitTests(unittest.TestCase):
             for (let j = 0; j < spectrum.length; j += 1) spectrumPeak = Math.max(spectrumPeak, spectrum[j] / 255);
             await new Promise(resolve => setTimeout(resolve, 16));
           }
-          try { boost.disconnect(analyser); } catch (err) {}
+          try { masterOutput.disconnect(analyser); } catch (err) {}
           return {
             available: true,
             peak: Number(peak.toFixed(5)),
             rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
             clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
-            finalBoostGain: Number(boost.gain.value.toFixed(2)),
+            finalOutputGain: Number(masterOutput.gain && typeof masterOutput.gain.value === 'number' ? masterOutput.gain.value.toFixed(2) : 1),
             diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
           };
         }
         """)
         self.assertTrue(metrics.get("available"), metrics)
         self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
-        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
-        self.assertNotIn("SSLI output boost gain=3.50 physicalVoices=1 articulation=strum", metrics["diagnosticLog"])
+        self.assertNotIn("SSLI output boost", metrics["diagnosticLog"])
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
         self.assertLessEqual(metrics["spectrumPeak"], 0.95, metrics)
@@ -3602,10 +3742,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__ssliCalls = [];
           window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
           const originalDestination = { name: 'originalDestination' };
-          const boostNode = {
-            name: 'practiceBoost',
+          const mockGainNode = {
+            name: 'mockGain',
             gain: { value: 1 },
-            connect(target) { window.__ssliCalls.push(['boostConnect', target.name || 'target', performance.now()]); }
+            connect(target) { window.__ssliCalls.push(['mockGainConnect', target.name || 'target', performance.now()]); }
           };
           const instrument = {
             type: instrumentType,
@@ -3630,7 +3770,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
               apply() { window.__ssliCalls.push(['apply', performance.now()]); }
             },
             audio: {
-              getCtx() { return { state: 'running', currentTime: performance.now() / 1000, createGain() { return boostNode; } }; },
+              getCtx() { return { state: 'running', currentTime: performance.now() / 1000, createGain() { return mockGainNode; } }; },
               initEffectChain() {},
               getCurrentInstrument() { return 0; },
               getInstrumentType() { return instrument.type; },
@@ -3730,9 +3870,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("articulation flush mode=strum", log)
         self.assertEqual([call[0] for call in calls if call[0] == "startSustainedNote"], [], calls)
         self.assertEqual([call[0] for call in calls if call[0] == "physical.noteOff"], [], calls)
-        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", log)
         self.assertIn("SSLI plucked one-shot", log)
-        self.assertNotIn("SSLI output boost gain=3.50 physicalVoices=1 articulation=strum", log)
+        self.assertNotIn("SSLI output boost", log)
 
     def test_regression_plucked_strum_ignores_held_pressure_and_auto_damps(self):
         self.open_audio_drawer()
@@ -3765,9 +3904,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.assertEqual(metrics["pressure"], [], metrics)
         self.assertEqual(metrics["stops"], [], metrics)
-        self.assertEqual(metrics["physicalOff"], [], metrics)
+        self.assertEqual([call[1] for call in metrics["physicalOff"]], [55, 52, 48], metrics)
         self.assertEqual(metrics["sustained"], [], metrics)
         self.assertIn("SSLI plucked pressure ignored after onset", metrics["log"])
+        self.assertIn("SSLI plucked one-shot note-off", metrics["log"])
         self.assertIn("SSLI plucked one-shot", metrics["log"])
 
     def test_regression_plucked_held_one_shot_keeps_voice_ownership_until_note_off(self):
@@ -3797,7 +3937,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(mid_hold["debug"]["heldNotes"], 1, mid_hold)
         self.assertEqual(mid_hold["debug"]["midiVoices"], 1, mid_hold)
         self.assertNotIn("after-one-shot-expire B2 held=1 local=0", mid_hold["log"])
-        self.assertEqual(mid_hold["physicalOff"], [], mid_hold)
+        self.assertEqual([call[1] for call in mid_hold["physicalOff"]], [47], mid_hold)
         self.page.evaluate("""
         () => {
           const input = window.__mockExquisInput;
@@ -3948,7 +4088,6 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(metrics["sustained"], [], metrics)
         self.assertEqual(metrics["physicalOff"], [], metrics)
         self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", metrics["log"])
-        self.assertIn("SSLI output boost gain=1.15 physicalOneShotPluck=3 articulation=strum", metrics["log"])
         self.assertIn("SSLI plucked one-shot E3", metrics["log"])
         self.assertNotIn("articulation skipped released E3", metrics["log"])
 
@@ -4183,7 +4322,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xD1, 96] })")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x81, 60, 0] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 60, 127], calls)
+        self.assertIn(["startSustainedNote", 60, 96], calls)
         self.assertIn(["stopSustainedNote", 60], calls)
         self.assertNotIn(["play", 60, 1.6, 0, 1], calls)
         self.assertTrue(any(call[0] == "setExpression" and call[2] > 0.7 for call in calls))
@@ -4238,7 +4377,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(len(starts), 1, calls)
         self.assertEqual(starts[0][1], 48, calls)
         self.assertGreaterEqual(starts[0][2], 48, calls)
-        self.assertGreaterEqual(starts[0][3], 0.14, calls)
+        self.assertGreaterEqual(starts[0][3], 0.12, calls)
 
     def test_regression_exquis_raw_midi_is_not_octave_transposed(self):
         self.open_audio_drawer()
@@ -4276,7 +4415,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x9F, 48, 96] })")
         self.page.wait_for_function("() => document.querySelectorAll('.midi-held').length === 1")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 127], calls)
+        self.assertIn(["startSustainedNote", 48, 96], calls)
         self.assertIn("C3", self.page.locator('[data-testid="last-midi"]').inner_text())
         self.assertIn("raw=48", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
         self.assertEqual(self.page.locator(".midi-held").get_attribute("data-cell-id"), "r5c3")
@@ -4439,9 +4578,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        expression_calls = [call for call in calls if call[0] == "setExpression"]
-        self.assertTrue(expression_calls, calls)
-        self.assertGreaterEqual(expression_calls[-1][2], 1.0, calls)
+        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
         self.assertFalse(any(call == ["clearExpression"] for call in calls), calls)
 
     def test_regression_play_mode_chords_keep_independent_ssli_voice_ownership(self):
@@ -4597,12 +4734,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("SSLI expression skipped", log)
 
-    def test_regression_ssli_midi_sustain_boosts_quiet_instrument_volume(self):
+    def test_regression_ssli_midi_sustain_uses_performance_volume(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
           window.__ssliCalls = [];
-          const instruments = [{ type: 'subtractive', settings: { volume: 42, filter: {}, effects: {} } }];
+          const instruments = [{ type: 'subtractive', settings: { volume: 42, filter: {}, effects: {} }, masterOutput: { gain: { value: 1 } } }];
           window.SynthLab = {
             presets: { apply() {} },
             audio: {
@@ -4617,7 +4754,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
               qToSlider(v) { return v; },
               setInstrumentVolume(inst, value) { instruments[inst].settings.volume = value; window.__ssliCalls.push(['setInstrumentVolume', inst, value]); },
               getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
-              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, instruments[0].settings.volume]); },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, instruments[0].settings.volume, instruments[0].masterOutput.gain.value]); },
               stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
               setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
               clearExpression() {}
@@ -4636,10 +4773,111 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 97] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertIn(["setInstrumentVolume", 0, 100], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 127 and call[3] == 100 for call in calls), calls)
-        self.assertIn("SSLI instrument inst=0 type=subtractive volume=42->100", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 111 and call[3] == 100 and call[4] == 4 for call in calls), calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("SSLI instrument inst=0 type=subtractive volume=42->100", log)
+        self.assertIn("SSLI normalization preset=subtractive::Wurlitzer EP volume=100 output=4.00", log)
 
-    def test_regression_exquis_midi_uses_stable_ssli_voice_velocity_and_hot_expression(self):
+    def test_regression_ssli_celesta_uses_preset_normalization_gain(self):
+        self.open_audio_drawer()
+        celesta_value = self.page.locator('[data-testid="sound-preset-select"]').evaluate(
+            """select => [...select.options].find((option) => option.textContent.trim() === 'Celesta').value"""
+        )
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const instruments = [{ type: 'subtractive', settings: { volume: 42, filter: {}, effects: {} }, masterOutput: { gain: { value: 1 } } }];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstruments() { return instruments; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume(inst, value) { instruments[inst].settings.volume = value; window.__ssliCalls.push(['setInstrumentVolume', inst, value]); },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, instruments[0].settings.volume, instruments[0].masterOutput.gain.value]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="sound-preset-select"]').select_option(celesta_value)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
+        self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[3] == 100 and call[4] == 4 for call in calls), calls)
+        self.page.wait_for_timeout(80)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("SSLI normalization output preset=" + celesta_value + " gain=4.00", log)
+        self.assertIn("SSLI normalization preset=" + celesta_value + " volume=100 output=4.00", log)
+
+    def test_regression_ssli_rhodes_uses_measured_preset_normalization_gain(self):
+        self.open_audio_drawer()
+        rhodes_value = self.page.locator('[data-testid="sound-preset-select"]').evaluate(
+            """select => [...select.options].find((option) => option.textContent.trim() === 'Electric Piano (Rhodes)').value"""
+        )
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const instruments = [{ type: 'subtractive', settings: { volume: 42, filter: {}, effects: {} }, masterOutput: { gain: { value: 1 } } }];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstruments() { return instruments; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume(inst, value) { instruments[inst].settings.volume = value; window.__ssliCalls.push(['setInstrumentVolume', inst, value]); },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, instruments[0].settings.volume, instruments[0].masterOutput.gain.value]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="sound-preset-select"]').select_option(rhodes_value)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
+        self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[3] == 100 and call[4] == 7 for call in calls), calls)
+        self.page.wait_for_timeout(80)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("SSLI normalization output preset=" + rhodes_value + " gain=7.00", log)
+
+    def test_regression_exquis_midi_inverses_ssli_velocity_curve_without_global_expression(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -4680,13 +4918,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 127], calls)
-        self.assertIn(["setExpression", 10000, 2], calls)
+        self.assertIn(["startSustainedNote", 48, 113], calls)
+        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("pressure=101", log)
-        self.assertIn("gain=2.00", log)
+        self.assertNotIn("SSLI expression pressure=", log)
 
-    def test_regression_fm_midi_uses_calibrated_sustained_velocity_headroom(self):
+    def test_regression_fm_midi_uses_raw_velocity_without_global_expression(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -4722,8 +4960,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 48, 127] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 120], calls)
-        self.assertIn(["setExpression", 10000, 2], calls)
+        self.assertIn(["startSustainedNote", 48, 127], calls)
+        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
 
     def test_regression_low_register_subtractive_poly_preserves_volume(self):
         self.open_audio_drawer()
@@ -4741,16 +4979,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
             noise: { level: 0 },
             effects: {}
           };
-          const originalDestination = { name: 'originalDestination' };
-          const boostNode = {
-            name: 'practiceBoost',
-            gain: { value: 1 },
-            connect(target) { window.__ssliCalls.push(['boostConnect', target.name]); }
-          };
           window.SynthLab = {
             presets: { apply() {} },
             audio: {
-              getCtx() { return { state: 'running', createGain() { window.__ssliCalls.push(['createGain']); return boostNode; } }; },
+              getCtx() { return { state: 'running' }; },
               initEffectChain() {},
               getCurrentInstrument() { return 0; },
               getInstruments() { return [{ type: 'subtractive', settings: lowRegisterSettings }]; },
@@ -4761,7 +4993,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
               freqToSlider(v) { return v; },
               qToSlider(v) { return v; },
               getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
-              getFinalDestination() { return originalDestination; },
+              getFinalDestination() { return { name: 'originalDestination' }; },
               startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
               stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
               setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
@@ -4787,27 +5019,22 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertEqual([call[1] for call in calls if call[0] == "startSustainedNote"], [48, 50, 52, 53, 55, 57], calls)
-        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        self.assertIn(["setInstrumentVolume", 0, 80], calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("SSLI subtractive low-register dense-poly volume preserved voices=6", log)
-        self.assertIn("SSLI MIDI sustain start A3 velocity=127 pressure=112 preset=subtractive::Wurlitzer EP boost=0.04", log)
+        self.assertIn("SSLI MIDI sustain start A3 velocity=112 pressure=112 preset=subtractive::Wurlitzer EP", log)
+        self.assertNotIn("boost=", log)
 
-    def test_regression_ssli_midi_sustain_installs_practice_output_boost(self):
+    def test_regression_ssli_midi_sustain_does_not_wrap_runtime_output(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
           window.__ssliCalls = [];
           const originalDestination = { name: 'originalDestination' };
-          const boostNode = {
-            name: 'practiceBoost',
-            gain: { value: 1 },
-            connect(target) { window.__ssliCalls.push(['boostConnect', target.name]); }
-          };
           const instruments = [{ type: 'subtractive', settings: { volume: 100, filter: {}, effects: {} } }];
           window.SynthLab = {
             presets: { apply() {} },
             audio: {
-              getCtx() { return { state: 'running', createGain() { window.__ssliCalls.push(['createGain']); return boostNode; } }; },
+              getCtx() { return { state: 'running', createGain() { window.__ssliCalls.push(['createGain']); throw new Error('unexpected output wrapper'); } }; },
               initEffectChain() {},
               getCurrentInstrument() { return 0; },
               getInstruments() { return instruments; },
@@ -4839,63 +5066,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 48, 110] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["createGain"], calls)
-        self.assertIn(["boostConnect", "originalDestination"], calls)
-        self.assertIn(["startSustainedNote", 48, 127, "practiceBoost", 4.5], calls)
+        self.assertNotIn(["createGain"], calls)
+        self.assertIn(["startSustainedNote", 48, 118, "originalDestination", None], calls)
         master_output = self.page.evaluate("() => window.SynthLab.audio.getInstruments()[0].masterOutput && window.SynthLab.audio.getInstruments()[0].masterOutput.name")
-        self.assertEqual(master_output, "practiceBoost")
-        self.assertIn("SSLI output boost gain=4.5", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
-
-    def test_regression_single_nonphysical_note_restores_full_practice_boost_after_quiet_poly_path(self):
-        self.open_audio_drawer()
-        self.page.evaluate("""
-        () => {
-          window.__ssliCalls = [];
-          const originalDestination = { name: 'originalDestination' };
-          const boostNode = {
-            name: 'practiceBoost',
-            gain: { value: 0.04 },
-            connect(target) { window.__ssliCalls.push(['boostConnect', target.name]); }
-          };
-          const instruments = [{ type: 'subtractive', settings: { volume: 100, filter: {}, effects: {} }, masterOutput: boostNode }];
-          const getFinalDestination = function() { return boostNode; };
-          getFinalDestination.__exquisBoosted = true;
-          window.SynthLab = {
-            __exquisPracticeOutputBoost: boostNode,
-            __exquisOriginalGetFinalDestination() { return originalDestination; },
-            presets: { apply() {} },
-            audio: {
-              getCtx() { return { state: 'running', createGain() { window.__ssliCalls.push(['createGain']); return boostNode; } }; },
-              initEffectChain() {},
-              getCurrentInstrument() { return 0; },
-              getInstruments() { return instruments; },
-              stopAllSustained() {},
-              loadInstrumentSettings() {},
-              refreshFilter() {},
-              freqToSlider(v) { return v; },
-              qToSlider(v) { return v; },
-              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
-              getFinalDestination,
-              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, boostNode.gain.value]); },
-              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
-              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3)), boostNode.gain.value]); },
-              clearExpression() {}
-            }
-          };
-          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
-          navigator.requestMIDIAccess = () => Promise.resolve({
-            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
-            outputs: { forEach: () => {} },
-            onstatechange: null
-          });
-        }
-        """)
-        self.page.locator('[data-testid="enable-midi"]').click()
-        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x93, 48, 110] })")
-        calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[3] == 4.5 for call in calls), calls)
-        self.assertIn("SSLI output boost gain=4.50 engine=subtractive voices=1", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+        self.assertIsNone(master_output)
+        self.assertNotIn("SSLI output boost", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
 
     def test_regression_exquis_soft_touch_expression_is_audible(self):
         self.open_audio_drawer()
@@ -4932,9 +5107,206 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 1] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        expression_calls = [call for call in calls if call[0] == "setExpression"]
-        self.assertTrue(expression_calls, calls)
-        self.assertGreaterEqual(expression_calls[0][2], 0.55, calls)
+        self.assertIn(["startSustainedNote", 48, 11], calls)
+        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
+
+    def test_regression_live_pressure_caps_expression_gain_during_repeated_play(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const activeOscs = new Map();
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getActiveOscillators() { return activeOscs; },
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { volume: 100, filter: {}, effects: {} } }]; },
+              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained']); activeOscs.clear(); },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume(inst, volume) { window.__ssliCalls.push(['setInstrumentVolume', inst, volume]); },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); activeOscs.set(midi, { midi }); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); activeOscs.delete(midi); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() { window.__ssliCalls.push(['clearExpression']); }
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const seq = [
+            [0x90 | 2, 48, 7], [0xD0 | 2, 103],
+            [0x90 | 9, 50, 7], [0xD0 | 9, 100],
+            [0x80 | 2, 48, 0], [0x90 | 13, 53, 1], [0xD0 | 13, 101],
+            [0x80 | 9, 50, 0], [0x80 | 13, 53, 0]
+          ];
+          seq.forEach(data => window.__mockExquisInput.onmidimessage({ data }));
+        }
+        """)
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
+        self.assertFalse(any(call[0] == "clearExpression" for call in calls), calls)
+
+    def test_regression_staggered_physical_plucked_chords_keep_chord_headroom(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          const events = [
+            [0, [0x9C, 47, 21]], [8, [0xDC, 76]],
+            [90, [0x9B, 50, 1]], [98, [0xDB, 73]],
+            [160, [0x8C, 47, 0]],
+            [185, [0x98, 53, 1]], [193, [0xD8, 75]],
+            [285, [0x8B, 50, 0]],
+            [320, [0x88, 53, 0]]
+          ];
+          events.forEach(([delay, data]) => setTimeout(() => input.onmidimessage({ data }), delay));
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        self.page.wait_for_timeout(520)
+        metrics = self.page.evaluate("""
+        () => ({
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
+          physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff'),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call[1] for call in metrics["starts"]], [47, 50, 53], metrics)
+        self.assertEqual([call[1] for call in metrics["physicalOff"]], [47, 50, 53], metrics)
+        self.assertIn("SSLI plucked one-shot D3 velocity=32 pressure=1 decay=natural preset=physical::Nylon Guitar", metrics["log"])
+        self.assertIn("SSLI plucked one-shot note-off B2 after 320ms", metrics["log"])
+        self.assertNotIn("SSLI engine all-notes-off after MIDI idle", metrics["log"])
+        self.assertNotIn("boost=", metrics["log"])
+
+    def test_regression_repeated_exquis_chords_do_not_accumulate_playback_latency(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__exquisLatencyProbe = { inputs: [], starts: [] };
+          window.__latencyInput = { id: 'latency-exquis', name: 'Latency Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__latencyInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__latencyInput && window.__latencyInput.onmidimessage")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('SSLI runtime preset API ready')")
+        self.page.locator('[data-testid="play-step"]').click()
+        self.page.wait_for_function("() => /SSLI preset applied|SSLI MIDI sustain start/.test(document.querySelector('[data-testid=\"diagnostic-log\"]').textContent)")
+        self.page.locator('[data-testid="reset-console"]').click()
+        self.page.locator('[data-testid="play-mode"]').click()
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__latencyInput;
+          const notes = [53, 47, 50];
+          const expected = [];
+          let delay = 0;
+          for (let chord = 0; chord < 28; chord += 1) {
+            notes.forEach((midi, index) => {
+              const channel = (chord * 3 + index) % 14;
+              const onDelay = delay + index * 8;
+              const offDelay = delay + 54 + index * 3;
+              expected.push({ midi, at: onDelay });
+              setTimeout(() => input.onmidimessage({ data: [0x90 | channel, midi, 70 + index * 8] }), onDelay);
+              setTimeout(() => input.onmidimessage({ data: [0xD0 | channel, 90 + index * 5] }), onDelay + 12);
+              setTimeout(() => input.onmidimessage({ data: [0xD0 | channel, 0] }), offDelay - 4);
+              setTimeout(() => input.onmidimessage({ data: [0x80 | channel, midi, 0] }), offDelay);
+            });
+            delay += 78;
+          }
+          const start = performance.now();
+          await new Promise(resolve => setTimeout(resolve, delay + 700));
+          const log = document.querySelector('[data-testid="diagnostic-log"]').textContent;
+          const probe = window.__exquisLatencyProbe;
+          const starts = probe.starts.slice();
+          const inputs = probe.inputs.slice();
+          const latencies = starts.map((entry, index) => entry.at - inputs[index].at);
+          const sorted = latencies.slice().sort((a, b) => a - b);
+          const excessRuntimeLogs = (log.match(/SSLI runtime inst=/g) || []).length;
+          const pressureLogs = (log.match(/channel-pressure/g) || []).length;
+          return {
+            starts: starts.length,
+            inputs: inputs.length,
+            maxLatency: Math.max(...latencies),
+            p95Latency: sorted[Math.floor(sorted.length * 0.95)],
+            finalLatency: latencies[latencies.length - 1],
+            runtimeLogs: excessRuntimeLogs,
+            pressureLogs,
+            log
+          };
+        }
+        """)
+        self.assertEqual(metrics["starts"], 84, metrics)
+        self.assertEqual(metrics["inputs"], 84, metrics)
+        self.assertLess(metrics["p95Latency"], 85, metrics)
+        self.assertLess(metrics["maxLatency"], 160, metrics)
+        self.assertLess(metrics["finalLatency"], 120, metrics)
+        self.assertLess(metrics["runtimeLogs"], 8, metrics)
+        self.assertLess(metrics["pressureLogs"], 80, metrics)
+        self.assertNotIn("preset apply failed", metrics["log"])
+        self.assertNotIn("SSLI MIDI unavailable", metrics["log"])
+        self.assertNotIn("SSLI expression pressure=", metrics["log"])
+        # Browser timer jitter in headless mode is not an audio latency oracle, but
+        # this regression catches the main-thread backlog pattern that caused delay.
+
+    def test_regression_diagnostic_logging_is_batched_off_hot_path(self):
+        metrics = self.page.evaluate("""
+        () => {
+          const log = document.querySelector('[data-testid="diagnostic-log"]');
+          const beforeText = log.textContent;
+          const t0 = performance.now();
+          for (let i = 0; i < 80; i += 1) {
+            window.__exquisDebugLog('test', 'burst ' + i);
+          }
+          const immediateText = log.textContent;
+          return new Promise(resolve => setTimeout(() => {
+            resolve({
+              elapsed: performance.now() - t0,
+              beforeText,
+              immediateText,
+              afterText: log.textContent
+            });
+          }, 80));
+        }
+        """)
+        self.assertEqual(metrics["immediateText"], metrics["beforeText"], metrics)
+        self.assertIn("burst 79", metrics["afterText"], metrics)
+        self.assertLess(metrics["elapsed"], 140, metrics)
 
     def test_regression_mpe_channel_reuse_releases_previous_voice(self):
         self.open_audio_drawer()
@@ -4972,7 +5344,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x92, 60, 96] })")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x92, 64, 96] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 60, 127], calls)
+        self.assertIn(["startSustainedNote", 60, 96], calls)
         self.assertIn(["stopSustainedNote", 60], calls)
         self.assertIn(["startSustainedNote", 64, 127], calls)
         self.assertIn("released previous channel voice C4", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
@@ -5024,6 +5396,247 @@ class PlaywrightExhibitTests(unittest.TestCase):
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("released duplicate MIDI voice C3", log)
         self.assertIn("MIDI voices after-start C3 held=1 local=1 ssli=1", log)
+
+    def test_regression_exquis_channel_16_note_events_are_playable_mpe_notes(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression() {},
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 3, 50, 95] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 5, 53, 58] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 15, 47, 112] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0 | 15, 74, 64] })")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('Exquis ch16 control id=74')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertIn(["startSustainedNote", 50, 110], calls)
+        self.assertIn(["startSustainedNote", 53, 86], calls)
+        self.assertIn(["startSustainedNote", 47, 119], calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("Exquis ch16 control id=74 value=64", log)
+        self.assertIn("note-on B2", log)
+        held_midis = self.page.locator(".midi-held").evaluate_all("els => els.map((el) => Number(el.dataset.midi)).sort((a, b) => a - b)")
+        self.assertEqual(held_midis, [47, 50, 53])
+
+    def test_regression_low_velocity_release_bounce_does_not_retrigger_note(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression() {},
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 4, 53, 21] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x80 | 4, 53, 0] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 6, 53, 1] })")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('note-on ignored release bounce F3')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual(len([call for call in calls if call[0] == "startSustainedNote" and call[1] == 53]), 1, calls)
+        self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'stopSustainedNote' && call[1] === 53)")
+        self.assertEqual(self.page.locator(".midi-held").count(), 0)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("note-on ignored release bounce F3 midi=53 raw=53 velocity=1 channel=7", log)
+
+    def test_regression_low_velocity_retrigger_during_short_hold_does_not_double_start_voice(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression() {},
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 14, 53, 75] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x80 | 14, 53, 0] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 3, 53, 11] })")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('note-on ignored release bounce F3 midi=53 raw=53 velocity=11 channel=4')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual(len([call for call in calls if call[0] == "startSustainedNote" and call[1] == 53]), 1, calls)
+        self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'stopSustainedNote' && call[1] === 53)")
+
+    def test_regression_immediate_note_off_is_delayed_to_preserve_chord_member(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() {},
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity, performance.now()]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi, performance.now()]); },
+              setExpression() {},
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 2, 53, 38] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x80 | 2, 53, 0] })")
+        calls_before_delay = self.page.evaluate("() => window.__ssliCalls")
+        self.assertIn(["startSustainedNote", 53, 69], [call[:3] for call in calls_before_delay])
+        self.assertFalse(any(call[0] == "stopSustainedNote" and call[1] == 53 for call in calls_before_delay), calls_before_delay)
+        self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'stopSustainedNote' && call[1] === 53)")
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("note-off delayed short hold F3 midi=53 raw=53 channel=3", log)
+
+    def test_regression_midi_note_on_color_is_distinct_from_root_white(self):
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getCurrentInstrument() { return 0; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
+              setExpression() {},
+              clearExpression() {}
+            }
+          };
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        root_color = self.page.locator(".key.tonic").first.evaluate("el => getComputedStyle(el).backgroundColor")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90, 48, 110] })")
+        self.page.wait_for_timeout(50)
+        metrics = self.page.locator(".key.midi-held").first.evaluate("""(el) => {
+          const style = getComputedStyle(el);
+          const nums = style.backgroundColor.match(/\\d+(?:\\.\\d+)?/g).map(Number);
+          const scale = Math.max(...nums.slice(0, 3)) <= 1 ? 255 : 1;
+          return {
+            color: style.backgroundColor,
+            outline: style.outlineColor,
+            red: nums[0] * scale,
+            green: nums[1] * scale,
+            blue: nums[2] * scale
+          };
+        }""")
+        self.assertNotEqual(metrics["color"], root_color)
+        self.assertGreater(metrics["blue"], metrics["red"] + 20, metrics)
+        self.assertGreater(metrics["blue"], metrics["green"], metrics)
+        self.assertIn("rgb", metrics["outline"])
 
     def test_regression_midi_voice_bursts_cleanup_all_ssli_sustained_voices_when_idle(self):
         self.open_audio_drawer()

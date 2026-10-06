@@ -16,7 +16,7 @@
   --scale-key: #8a7bd5;
   --path-key: #a693f5;
   --tonic-key: #f2f0e7;
-  --active-key: #edf9ff;
+  --active-key: #c7ebff;
   --shadow: rgba(0, 0, 0, 0.28);
 }
 
@@ -515,6 +515,13 @@ input[type="range"]:focus-visible {
     "bottom";
 }
 
+.exquis-device[data-orientation="vertical"][data-rotation="180"] {
+  grid-template-areas:
+    "bottom"
+    "keys"
+    "top";
+}
+
 .exquis-device[data-orientation="horizontal"] {
   width: max-content;
   max-width: 100%;
@@ -523,6 +530,11 @@ input[type="range"]:focus-visible {
   align-items: center;
   column-gap: 6px;
   padding: 5px 7px;
+}
+
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] {
+  grid-template-columns: 132px auto 84px;
+  grid-template-areas: "top keys bottom";
 }
 
 .edge-controls {
@@ -586,6 +598,22 @@ input[type="range"]:focus-visible {
   padding: 0 22px 2px;
 }
 
+.exquis-device[data-orientation="vertical"][data-rotation="180"] .edge-encoder-row,
+.exquis-device[data-orientation="vertical"][data-rotation="180"] .edge-action-row {
+  display: flex;
+  flex-direction: row-reverse;
+}
+
+.exquis-device[data-orientation="vertical"][data-rotation="180"] .edge-bottom-deck {
+  grid-template-columns: 58px minmax(150px, 1fr) 58px;
+}
+
+.exquis-device[data-orientation="vertical"][data-rotation="180"] .edge-select-group,
+.exquis-device[data-orientation="vertical"][data-rotation="180"] .edge-undo-group {
+  display: flex;
+  flex-direction: row-reverse;
+}
+
 .edge-bottom-deck {
   display: grid;
   grid-template-columns: 58px minmax(150px, 1fr) 58px;
@@ -638,6 +666,11 @@ input[type="range"]:focus-visible {
   justify-items: center;
 }
 
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-encoder-row {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
 .exquis-device[data-orientation="horizontal"] .edge-control {
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto;
@@ -662,17 +695,36 @@ input[type="range"]:focus-visible {
 .exquis-device[data-orientation="horizontal"] .edge-bottom-deck {
   grid-template-columns: 1fr;
   gap: 3px;
+  order: 2;
 }
 
 .exquis-device[data-orientation="horizontal"] .edge-action-row {
   grid-template-columns: 1fr;
   gap: 3px;
   justify-items: center;
+  order: 1;
 }
 
 .exquis-device[data-orientation="horizontal"] .edge-select-group,
 .exquis-device[data-orientation="horizontal"] .edge-undo-group {
   grid-template-columns: 1fr 1fr;
+}
+
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-bottom-controls {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-bottom-deck {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-action-row,
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-select-group,
+.exquis-device[data-orientation="horizontal"][data-rotation="180"] .edge-undo-group {
+  display: flex;
+  flex-direction: column-reverse;
 }
 
 .edge-control {
@@ -992,11 +1044,11 @@ input[type="range"]:focus-visible {
 
 .key.midi-held {
   opacity: 1 !important;
-  background: color-mix(in srgb, var(--active-key) var(--midi-level, 70%), #327bcb) !important;
+  background: color-mix(in srgb, var(--active-key) var(--midi-level, 70%), #1f72c8) !important;
   color: #101418;
-  outline: calc(1px + var(--midi-pressure, 0.4) * 4px) solid rgba(230, 247, 255, 0.95);
+  outline: calc(2px + var(--midi-pressure, 0.4) * 4px) solid rgba(180, 232, 255, 0.98);
   outline-offset: 2px;
-  box-shadow: 0 0 calc(8px + var(--midi-pressure, 0.4) * 30px) rgba(164, 216, 255, 0.92);
+  box-shadow: 0 0 calc(10px + var(--midi-pressure, 0.4) * 32px) rgba(112, 197, 255, 0.95);
   z-index: 7;
 }
 
@@ -1365,6 +1417,17 @@ input[type="range"]:focus-visible {
 
 .fx-row {
   grid-template-columns: 1fr 1fr;
+}
+
+.performance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(98px, 0.9fr);
+  gap: 6px;
+  align-items: end;
+}
+
+.performance-row label {
+  min-width: 0;
 }
 
 .filter-row {

@@ -153,56 +153,10 @@
   var SURFACE_HORIZONTAL_W = 620;
   var LOCAL_MASTER_GAIN = 2.6;
   var DEFAULT_PERFORMANCE_VOLUME = 80;
-  var SSLI_NORMALIZATION_BASE_VOLUME = 80;
-  var SSLI_NORMALIZATION_MAX_OUTPUT_GAIN = 8;
-  var SSLI_MATURE_ENGINE_NORMALIZATION = { instrumentVolume: 100, outputGain: 4.0 };
+  var SSLI_NORMALIZATION_BASE_VOLUME = DEFAULT_PERFORMANCE_VOLUME;
+  var SSLI_NORMALIZATION_MAX_OUTPUT_GAIN = 1;
+  var SSLI_MATURE_ENGINE_NORMALIZATION = null;
   var SSLI_PRESET_NORMALIZATION = {
-    'FM::SYNTH BASS FM': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::GLASS FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Synth FM BASSOON': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::WARM FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Balafon FM': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Erhu FM': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Synth FM PICCOLO': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::CHOIR FM PAD': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Dark Chant': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Glassy Keys': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::FM CHIPTUNE': { instrumentVolume: 100, outputGain: 8.0 },
-    'FM::Synthwave Lead': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Choir Pad FM': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Angel Choir': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::12-STRING GUITAR': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Pop Pad': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Retro Stab': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Talk Box FM': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Poly-5 FM': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Vocal Formant Ah': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Voltage Drop': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::E.PIANO 2': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::DX RHODES': { instrumentVolume: 100, outputGain: 5.5 },
-    'FM::DX Rhodes': { instrumentVolume: 100, outputGain: 5.5 },
-    'FM::FM Wurlitzer': { instrumentVolume: 100, outputGain: 5.5 },
-    'FM::WURLITZER FM': { instrumentVolume: 100, outputGain: 5.5 },
-    'FM::Retro Tine Piano': { instrumentVolume: 100, outputGain: 5.5 },
-    'FM::Crystal EP': { instrumentVolume: 100, outputGain: 5.0 },
-    'Physical::Metallic Drone': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Rain on Metal': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Feedback Resonator': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Struck Ice': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Glass Marimba': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Gamelan Metallophone': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Mbira': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Bowed Plate': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Struck Springs': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Bowed Bass Pluck': { instrumentVolume: 100, outputGain: 8.0 },
-    'Physical::Whale Song': { instrumentVolume: 100, outputGain: 7.0 },
-    'FM::Northern Lights': { instrumentVolume: 100, outputGain: 8.0 },
-    'subtractive::Celesta': { instrumentVolume: 100, outputGain: 4.0 },
-    'subtractive::Celesta II': { instrumentVolume: 100, outputGain: 4.0 },
-    'subtractive::Electric Piano (Rhodes)': { instrumentVolume: 100, outputGain: 7.0 },
-    'Subtractive::Celesta': { instrumentVolume: 100, outputGain: 4.0 },
-    'Subtractive::Celesta II': { instrumentVolume: 100, outputGain: 4.0 },
-    'Subtractive::Electric Piano (Rhodes)': { instrumentVolume: 100, outputGain: 7.0 }
   };
   var SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS = 360;
   var SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS = 320;
@@ -1041,6 +995,13 @@
   }
 
   function normalizeSsliPresetPayload(payload, SL) {
+    if (payload && payload.engine === 'physical' && payload.settings) {
+      var physical = payload.settings.physicalSettings || {};
+      ['model', 'damping', 'brightness', 'excitation', 'bodySize', 'pickPosition', 'decayTime', 'bowPressure', 'bowPosition', 'breathPressure', 'embouchure', 'strikePosition', 'hardness', 'material'].forEach(function(key) {
+        if (payload.settings[key] != null && physical[key] == null) physical[key] = payload.settings[key];
+      });
+      payload.settings.physicalSettings = physical;
+    }
     if (!payload || !payload.settings || !payload.settings.filter) return payload;
     var filter = payload.settings.filter;
     if (typeof filter.freq !== 'number') return payload;
@@ -1091,8 +1052,37 @@
     var runtimePreset = findSsliRuntimePreset(SL, selected, engineName);
     var payload = clonePreset(runtimePreset || selected.preset);
     payload.engine = toSsliEngineType(engineName, SL);
+    applyExhibitPresetCorrections(payload);
     normalizeSsliPresetPayload(payload, SL);
     return payload;
+  }
+
+  function applyExhibitPresetCorrections(payload) {
+    if (!payload || !payload.engine || !payload.name) return payload;
+    var corrected = getCorrectedFallbackPreset(payload.engine, payload.name);
+    if (!corrected || !corrected.settings) return payload;
+    payload.settings = clonePreset(corrected.settings);
+    logEvent('audio', 'SSLI preset corrected engine=' + payload.engine + ' preset=' + payload.name);
+    return payload;
+  }
+
+  function getCorrectedFallbackPreset(engine, presetName) {
+    var library = SSLI_PRESETS[engine] || {};
+    var presets = library.presets || [];
+    var correctionName = presetName;
+    if (engine === 'subtractive') {
+      var subtractiveNameMap = {
+        'Synth Brass Section': 'Brass Section',
+        'Synth Brass Section II': 'Brass Section II'
+      };
+      correctionName = subtractiveNameMap[presetName] || presetName;
+    }
+    for (var i = 0; i < presets.length; i++) {
+      if (presets[i] && presets[i].name === correctionName && (presets[i].exhibitTimbreCorrection || engine === 'physical')) {
+        return presets[i];
+      }
+    }
+    return null;
   }
 
   function applySelectedSsliPreset() {
@@ -1105,16 +1095,17 @@
     var SL = host.SynthLab;
     var presetKey = currentSsliPresetKey();
     var preset = getSsliPresetPayload(SL);
-    if (lastAppliedSsliPresetKey === presetKey && objectKeyCount(midiVoices) > 0) {
+    if (lastAppliedSsliPresetKey === presetKey && objectKeyCount(midiVoices) > 0 && hasSsliInstrumentOutput(SL)) {
       return true;
     }
-    if (lastAppliedSsliPresetKey === presetKey && preset && verifySsliPresetRuntime(SL, preset, false)) return true;
+    if (lastAppliedSsliPresetKey === presetKey && preset && hasSsliInstrumentOutput(SL) && verifySsliPresetRuntime(SL, preset, false)) return true;
     var readiness = describeSsliReadiness(SL, 'apply');
     if (!preset || readiness !== 'ready') {
       logEvent('audio', 'SSLI preset apply failed: ' + (!preset ? 'missing selected runtime preset' : readiness) + ' preset=' + state.soundPresetId);
       scheduleSsliPresetApplyRetry(!preset ? 'missing selected runtime preset' : readiness);
       return false;
     }
+    ensureSsliAudioReady(SL);
     if (SL.audio.stopAllSustained) SL.audio.stopAllSustained();
     cleanupSsliEngineVoices(SL, 'before preset apply');
     if (SL.audio.getCtx) {
@@ -1129,6 +1120,13 @@
     logEvent('audio', 'SSLI preset applied engine=' + preset.engine + ' preset=' + state.soundPresetId);
     verifySsliPresetRuntime(SL, preset, true);
     return true;
+  }
+
+  function hasSsliInstrumentOutput(SL) {
+    if (!SL || !SL.audio || !SL.audio.getInstruments) return false;
+    var inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+    var instruments = SL.audio.getInstruments() || [];
+    return Boolean(instruments[inst] && instruments[inst].masterOutput);
   }
 
   function scheduleSsliPresetApplyRetry(reason) {
@@ -1278,7 +1276,7 @@
   function ensureSsliAudioReady(SL) {
     if (!SL || !SL.audio) return;
     if (SL.audio.getCtx) SL.audio.getCtx();
-    if (SL.audio.initEffectChain) SL.audio.initEffectChain();
+    if (SL.audio.initEffectChain && !hasSsliInstrumentOutput(SL)) SL.audio.initEffectChain();
     if (!SL.__exquisEnginesInitialized) {
       [
         'fm', 'physical', 'additive', 'granular', 'vocoderSynth',
@@ -1411,6 +1409,20 @@
     } else if (state.pressureCurve === 'hard') {
       level = level * level;
     }
+    // Source: MIDI 1.0 Detailed Specification, Channel Voice Message
+    // note-on velocity is transmitted as a 7-bit velocity value. Keep the
+    // default linear curve linear; only the explicit UI pressure curves remap it.
+    return Math.max(1, Math.min(127, Math.round(level * 127)));
+  }
+
+  function playableFmMidiVelocity(velocity) {
+    var raw = Math.max(1, Math.min(127, Math.round(velocity || 1)));
+    var level = raw / 127;
+    // Source: MIDI 1.0 Detailed Specification, Channel Voice Message defines
+    // note-on velocity as 7-bit key-strike velocity; Dexed/msfa dx7note.cc
+    // ScaleVelocity() then applies that MIDI velocity through each operator's
+    // velocity sensitivity. Exquis pressure is controller pressure, so translate
+    // it to a playable note-on velocity before the unmodified DX7 patch math.
     return Math.max(1, Math.min(127, Math.round(Math.sqrt(level) * 127)));
   }
 
@@ -1439,7 +1451,19 @@
     if (instrument.masterOutput && instrument.masterOutput.gain && typeof instrument.masterOutput.gain.value === 'number') {
       var current = instrument.masterOutput.gain.value;
       if (Math.abs(current - outputGain) >= 0.01) {
-        instrument.masterOutput.gain.value = outputGain;
+        var ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+        var param = instrument.masterOutput.gain;
+        var now = ctx && typeof ctx.currentTime === 'number' ? ctx.currentTime : 0;
+        // Web Audio AudioParam automation prevents gain discontinuities that
+        // sound like clicks/pops when normalization changes at note start.
+        // Original source: W3C Web Audio API, AudioParam setTargetAtTime().
+        if (param.cancelScheduledValues && param.setValueAtTime && param.setTargetAtTime) {
+          param.cancelScheduledValues(now);
+          param.setValueAtTime(Math.max(0.0001, current || 0.0001), now);
+          param.setTargetAtTime(outputGain, now, 0.012);
+        } else {
+          param.value = outputGain;
+        }
         logEvent('audio', 'SSLI normalization output preset=' + state.soundPresetId + ' gain=' + outputGain.toFixed(2));
       }
     } else if (normalization && normalization.outputGain) {
@@ -1918,6 +1942,7 @@
     var physicalModel = instrumentType === 'physical' ? getCurrentPhysicalModel(SL) : '';
     var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? (options.velocityLoadVoices || effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices)) : 0;
     var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(velocity);
+    var fmVelocity = playableFmMidiVelocity(velocity);
     if (physicalModel === 'strike') {
       playableVelocity = Math.max(8, Math.round(playableVelocity * 0.25));
     }
@@ -1925,7 +1950,16 @@
       logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel + (options.expectedVoiceCount ? ' expectedVoices=' + options.expectedVoiceCount : ''));
     }
     logEvent('audio', 'SSLI call startSustainedNote midi=' + midi + ' note=' + noteLabelFromMidi(midi) + ' inst=' + inst + ' engine=' + instrumentType + ' activeBefore=' + heldSsliVoiceCount());
-    SL.audio.startSustainedNote(midi, playableVelocity);
+    if (instrumentType === 'fm' && SL.fm && SL.fm.noteOn) {
+      SL.fm.noteOn(midi, fmVelocity, inst);
+      if (SL.audio.getActiveOscillators) {
+        SL.audio.getActiveOscillators().set(midi, { fm: true });
+      }
+      if (SL.audio.highlightNote) SL.audio.highlightNote(midi, true);
+      logEvent('audio', 'SSLI FM direct sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + fmVelocity);
+    } else {
+      SL.audio.startSustainedNote(midi, playableVelocity);
+    }
     if (window.__exquisLatencyProbe && Array.isArray(window.__exquisLatencyProbe.starts)) {
       window.__exquisLatencyProbe.starts.push({ midi: midi, at: Date.now() });
     }
@@ -1933,7 +1967,7 @@
       logEvent('audio', 'SSLI physical note-on pressure captured ' + noteLabelFromMidi(midi) + ' pressure=' + Math.max(1, velocity || 1) + ' audioUpdate=note-on-velocity-only');
     }
     state.audioStatus = 'Audio: SSLI held ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId);
+    logEvent('audio', 'SSLI MIDI sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + (instrumentType === 'fm' ? fmVelocity : playableVelocity) + ' pressure=' + Math.max(1, velocity || 1) + ' preset=' + state.soundPresetId);
     startAudioScope();
     render();
     return true;
@@ -1971,7 +2005,9 @@
     if (!fastMidiPath) verifySsliPresetRuntime(SL, preset, true);
     if (getCurrentSsliInstrumentType(SL) !== 'physical' || getCurrentPhysicalModel(SL) !== 'pluck') return false;
     if (!fastMidiPath) ensureSsliPerformanceGain(SL, inst);
-    var playableVelocity = playableSsliMidiVelocity(velocity);
+    var requestedVoiceLoad = Math.max(0, Math.round(options.velocityLoadVoices || 0));
+    var effectiveVoices = requestedVoiceLoad < PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES ? 0 : requestedVoiceLoad;
+    var playableVelocity = playablePhysicalMidiVelocity(velocity, effectiveVoices);
     var duration = Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000));
     SL.physical.noteOn(midi, playableVelocity, inst);
     state.audioStatus = 'Audio: SSLI plucked ' + noteLabelFromMidi(midi) + '.';
@@ -2401,15 +2437,11 @@
         pressurePolicy: options.pressurePolicy || 'onset-only',
         articulationFamily: options.articulationFamily || 'plucked'
       };
-      midiVoices[key].oneShotNoteOffTimer = window.setTimeout(function() {
-        var voice = midiVoices[key];
-        var runtimeHost = getSsliHost();
-        var runtimeSL = runtimeHost && runtimeHost.SynthLab;
-        if (!runtimeSL || !runtimeSL.physical || !runtimeSL.physical.noteOff) return;
-        runtimeSL.physical.noteOff(midi, runtimeSL.audio && runtimeSL.audio.getCurrentInstrument ? runtimeSL.audio.getCurrentInstrument() : 0);
-        if (voice && voice.oneShot) voice.oneShotNoteOffSent = true;
-        logEvent('audio', 'SSLI plucked one-shot note-off ' + noteLabelFromMidi(midi) + ' after ' + Math.round(Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000)) * 1000) + 'ms');
-      }, Math.round(Math.max(120, Math.min(600, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS)))));
+      // Karplus-Strong plucks decay through the loop damping after excitation;
+      // sending noteOff at a fixed timer artificially damps the string.
+      // Original source: Karplus & Strong (1983), CMJ 7(2).
+      midiVoices[key].oneShotNoteOffSent = true;
+      logEvent('audio', 'SSLI plucked one-shot natural decay ' + noteLabelFromMidi(midi));
       midiVoices[key].oneShotCleanupTimer = window.setTimeout(function() {
         var voice = midiVoices[key];
         if (!voice || !voice.oneShot) return;

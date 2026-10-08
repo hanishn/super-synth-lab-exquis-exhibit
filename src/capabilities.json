@@ -321,6 +321,7 @@
         "sweep can drive six Exquis-style MIDI notes on independent channels with continuously varying pressure",
         "sweep writes JSON and CSV artifacts with engine, category, preset, status, diagnostic log excerpt, browser errors, SSLI instrument type/settings evidence, and live audio signature evidence",
         "sweep samples the SSLI analyser after playback and records waveform peak/RMS plus spectrum peak/RMS, waveform hash, and spectrum hash so preset output can be compared repeatably",
+        "comprehensive audio acceptance forces the mature Subtractive, FM, and Physical catalog through six-note MIDI, full selected-catalog coverage, final-output analyser capture, and repeatable waveform/spectrum/settings hashes",
         "single-note normalization rows include recommended per-preset instrument volume and remaining global output multiplier for the configured target RMS",
         "single-note normalization acceptance sweeps require full mature-engine catalog coverage and fail on missing normalization logs, low-level outliers without measured overrides, or clipping",
         "six-note MIDI sweep samples the actual audible SSLI output and fails on silence, engine mismatches, material clipping, or missing voice cleanup",
@@ -329,6 +330,8 @@
       ],
       "testIds": [
         "test_capabilities_document_repeatable_preset_sweep",
+        "test_comprehensive_audio_acceptance_requires_final_output_evidence",
+        "test_comprehensive_audio_acceptance_defaults_force_full_mature_six_note_sweep",
         "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
         "test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels",
         "test_regression_mature_normalization_fixture_matches_live_catalog_size",

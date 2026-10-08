@@ -135,8 +135,61 @@ class StaticExhibitTests(unittest.TestCase):
     def test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior(self):
         import build
 
-        self.assertEqual([patch.name for patch in build.SSLI_INDEX_PATCHES], ["disable-stale-service-worker"])
+        self.assertEqual(
+            [patch.name for patch in build.SSLI_INDEX_PATCHES],
+            [
+                "disable-stale-service-worker",
+                "fm-engine-requires-instrument-output",
+                "fm-fallback-active-voice-makeup-gain",
+                "subtractive-direct-midi-linear-velocity-amplitude",
+                "subtractive-sustained-linear-velocity-amplitude",
+                "subtractive-fallback-active-voice-rms-makeup",
+                "fm-fallback-dx7-matrix-routing",
+                "fm-fallback-dx7-algorithm-matrix",
+                "fm-fallback-dx7-operator-source-fields",
+                "fm-fallback-dx7-operator-source-params",
+                "fm-fallback-dx7-keyon-gain-and-frequency",
+                "fm-fallback-pass-midi-note-to-operators",
+            ],
+        )
         self.assertTrue(all(patch.name and patch.before and patch.after for patch in build.SSLI_INDEX_PATCHES))
+        self.assertEqual(
+            [patch.name for patch in build.SSLI_WORKLET_PATCHES],
+            [
+                "fm-worklet-dx7-gain-lookup",
+                "fm-worklet-dx7-detune-frequency",
+                "fm-worklet-dx7-envelope-level-curve",
+                "fm-worklet-dx7-envelope-rate-scaling-state",
+                "fm-worklet-dx7-envelope-qrate",
+                "fm-worklet-dx7-operator-level-curve",
+                "fm-worklet-dx7-operator-kls-state",
+                "fm-worklet-dx7-operator-kls-params",
+                "fm-worklet-dx7-velocity-scaling",
+                "fm-worklet-dx7-combined-log-domain-gain",
+                "fm-worklet-dx7-operator-rate-scaling",
+                "fm-worklet-dx7-pass-midi-note-to-operators",
+                "fm-worklet-dx7-feedback-scale",
+                "fm-worklet-dx7-bus-algorithm-routing",
+                "fm-worklet-remove-non-dx7-per-voice-soft-clipper",
+            ],
+        )
+        self.assertTrue(all(patch.name and patch.before and patch.after for patch in build.SSLI_WORKLET_PATCHES))
+        worklet_text = (ROOT / "ssli/assets/fm-worklet.js").read_text(encoding="utf-8")
+        self.assertIn("DX7_ALGOS", worklet_text)
+        self.assertIn("Original source: Dexed/msfa env.cc and dx7note.cc", worklet_text)
+        self.assertIn("Source: Dexed/msfa fm_core.cc opcode-based algorithm routing", worklet_text)
+        self.assertIn("Original source: Dexed/msfa fm_op_kernel.cc compute_fb()", worklet_text)
+        self.assertIn("dx7CombinedOperatorGain(envLevel, this.amplitude)", worklet_text)
+        self.assertIn("DX7_FEEDBACK_SCALE[dx7Fb] = Math.pow(2, dx7Fb - 9)", worklet_text)
+        self.assertIn("detuneRatio = 0.0209 * Math.exp(-0.396 * logfreq", worklet_text)
+        self.assertIn("dx7KbdRateScale(midiNote, this.rateScaling)", worklet_text)
+        self.assertIn("((Math.max(0, Math.min(99, rate || 0)) * 41) >> 6)", worklet_text)
+        self.assertIn("modInput * TWO_PI", worklet_text)
+        self.assertIn("carrier outputs; it does not divide audible carriers by carrier count", worklet_text)
+        self.assertNotIn("if (fbLevel > FB_SOFT_CLIP_THRESHOLD)", worklet_text)
+        self.assertNotIn("sample /= carriers.length", worklet_text)
+        self.assertNotIn("sample /= Math.max(1, carriers.length)", worklet_text)
+        self.assertNotIn("Math.PI * Math.pow(2, (fb - 7) / 2)", worklet_text)
         with TemporaryDirectory() as tmp:
             target = Path(tmp) / "index.html"
             with self.assertRaisesRegex(RuntimeError, "Missing SSLI runtime patch target"):
@@ -169,13 +222,13 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("SL.physical.noteOn(midi, playableVelocity, inst);", body)
         self.assertIn("decay=natural", body)
         self.assertNotIn("playNoteOnInstrument", body)
-        self.assertIn("oneShotNoteOffTimer", app)
-        self.assertIn("runtimeSL.physical.noteOff", app)
+        self.assertIn("SSLI plucked one-shot natural decay", app)
+        self.assertNotIn("SSLI plucked one-shot note-off ' + noteLabelFromMidi(midi) + ' after", app)
 
     def test_regression_physical_worklet_scales_six_voice_polyphony_headroom(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
         self.assertIn("polyphonyMixGain", worklet_text)
-        self.assertIn("numActive > 4 ? 4 / numActive : 1", worklet_text)
+        self.assertIn("numActive > 4 ? 4 / numActive : Math.sqrt(4 / Math.max(1, numActive))", worklet_text)
         self.assertIn("PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain", worklet_text)
 
     def test_regression_physical_voice_headroom_has_no_pitch_specific_pluck_hack(self):
@@ -184,8 +237,20 @@ class StaticExhibitTests(unittest.TestCase):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         self.assertNotIn("semitoneJamGuard", app_text)
         self.assertNotIn("hasRecentPhysicalSemitoneNeighbor", app_text)
+        self.assertIn("var PLUCK_OUTPUT_SCALE = 9.0;", worklet_text)
+        self.assertIn("Original source: Karplus &", worklet_text)
+        self.assertIn("nextExcitationNoise", worklet_text)
+        self.assertIn("Numerical Recipes", worklet_text)
+        pluck_section = worklet_text.split("class PluckModel", 1)[1].split("noteOff()", 1)[0]
+        self.assertNotIn("Math.random", pluck_section)
         self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.0;", worklet_text)
         self.assertNotIn("var PLUCK_OUTPUT_SCALE = 1.0;", ssli_text)
+
+    def test_regression_ssli_output_normalization_uses_audio_param_smoothing(self):
+        app_text = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        self.assertIn("Original source: W3C Web Audio API, AudioParam setTargetAtTime().", app_text)
+        self.assertIn("param.setTargetAtTime(outputGain, now, 0.012)", app_text)
+        self.assertNotIn("instrument.masterOutput.gain.value = outputGain", app_text)
 
     def test_regression_ssli_runtime_cannot_be_served_from_stale_service_worker(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
@@ -243,6 +308,77 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn('"subtractive"', self.bundle)
         self.assertIn('"Wurlitzer EP"', self.bundle)
         self.assertIn('"fxPresets"', self.bundle)
+
+    def test_regression_fm_key_presets_use_exhibit_timbre_corrections(self):
+        library = json.loads((ROOT / "src/vendor/ssli/presets/fm-presets.json").read_text(encoding="utf-8"))
+        corrected_names = {
+            "DX RHODES",
+            "DX Rhodes",
+            "E.PIANO 1",
+            "E.PIANO 2",
+            "TINE PIANO",
+            "Retro Tine Piano",
+            "WURLITZER FM",
+            "FM Wurlitzer",
+            "Crystal EP",
+            "CLAVINET",
+            "CELESTA",
+            "BRASS 1",
+            "BASS 1",
+        }
+        presets = {preset["name"]: preset for preset in library["presets"]}
+        from dexed import Patch
+
+        def dx7_settings(reference):
+            bank_name, voice_name = reference.split(":", 1)
+            bank = Patch.load_bank(str(ROOT / "tests" / "fixtures" / "dx7" / (bank_name.lower() + ".syx")))
+            patch = next(item for item in bank if item.name.strip().upper() == voice_name.upper())
+            return {
+                "algorithm": patch.algorithm + 1,
+                "feedback": patch.feedback,
+                "operators": [
+                    {
+                        "ratioCoarse": op.frequency_coarse,
+                        "ratioFine": op.frequency_fine,
+                        "frequencyMode": op.frequency_mode,
+                        "level": op.output_level,
+                        "detune": op.detune,
+                        "velocitySens": op.velocity_sensitivity,
+                        "rateScaling": op.rate_scaling,
+                        "breakPoint": op.breakpoint,
+                        "leftDepth": op.left_depth,
+                        "rightDepth": op.right_depth,
+                        "leftCurve": op._left_curve,
+                        "rightCurve": op._right_curve,
+                        "envelope": {
+                            "R1": op.envelope.rates[0],
+                            "R2": op.envelope.rates[1],
+                            "R3": op.envelope.rates[2],
+                            "R4": op.envelope.rates[3],
+                            "L1": op.envelope.levels[0],
+                            "L2": op.envelope.levels[1],
+                            "L3": op.envelope.levels[2],
+                            "L4": op.envelope.levels[3],
+                        },
+                    }
+                    for op in patch.op
+                ],
+            }
+
+        for name in corrected_names:
+            preset = presets[name]
+            self.assertTrue(preset.get("exhibitTimbreCorrection"), name)
+            settings = preset["settings"]
+            if preset.get("dx7Reference"):
+                self.assertEqual(settings, dx7_settings(preset["dx7Reference"]), name)
+            else:
+                self.assertLessEqual(settings["feedback"], 2, name)
+
+    def test_regression_runtime_fm_presets_use_corrected_exhibit_settings(self):
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        self.assertIn("applyExhibitPresetCorrections(payload)", app)
+        self.assertIn("exhibitTimbreCorrection", app)
+        self.assertIn("SSLI preset corrected engine=fm", app)
         self.assertIn('"lead-solo"', self.bundle)
 
     def test_ssli_vendor_data_has_expected_shape(self):
@@ -311,6 +447,12 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("recommendedInstrumentVolume", text)
         self.assertIn("recommendedGlobalMultiplier", text)
         self.assertIn("SL.audio.getAnalyser() final output path", text)
+        self.assertIn("comprehensive-audio-acceptance", text)
+        self.assertIn("validate_comprehensive_audio_acceptance", text)
+        self.assertIn("comprehensiveAudioAcceptance", text)
+        self.assertIn("requiredPresetCount", text)
+        self.assertIn("audio was not captured from final SSLI output analyser", text)
+        self.assertRegex(text, r"trigger: 'six-note-midi'[\s\S]{1,800}samples: count")
         self.assertIn("getFloatTimeDomainData", text)
         self.assertIn("apply_duplicate_signature_failures", text)
         self.assertIn("duplicateSignatureGroups", text)
@@ -360,6 +502,83 @@ class StaticExhibitTests(unittest.TestCase):
         clean["audioSignature"]["voiceCleanup"] = {"heldNotes": 0, "midiVoices": 0, "ssliActiveOscillators": 0}
         clean["audioSignature"]["diagnosticLog"] = "current run held=0 local=0 ssli=0"
         self.assertEqual(sweep.validate_audio_behavior(clean, "six-note-midi"), [])
+        narrow = json.loads(json.dumps(clean))
+        narrow["audioSignature"]["peak"] = 0.002
+        narrow["audioSignature"]["rms"] = 0.0004
+        narrow["audioSignature"]["spectrumPeak"] = 0.7
+        narrow["audioSignature"]["spectrumRms"] = 0.04
+        self.assertEqual(sweep.validate_audio_behavior(narrow, "six-note-midi"), [])
+        silent = json.loads(json.dumps(clean))
+        silent["audioSignature"]["peak"] = 0.001
+        silent["audioSignature"]["rms"] = 0.0004
+        silent["audioSignature"]["spectrumPeak"] = 0.001
+        self.assertIn("audio energy too low", "; ".join(sweep.validate_audio_behavior(silent, "six-note-midi")))
+
+    def test_comprehensive_audio_acceptance_requires_final_output_evidence(self):
+        sweep = load_module("tools/preset_sweep.py", "preset_sweep_for_comprehensive_acceptance_test")
+        base = {
+            "engine": "fm",
+            "engineLabel": "FM",
+            "audioSignature": {
+                "available": True,
+                "trigger": "six-note-midi",
+                "instrumentType": "fm",
+                "engineSettingsKeys": ["operators"],
+                "engineSettingsHash": "engine-hash",
+                "settingsHash": "settings-hash",
+                "peak": 0.22,
+                "rms": 0.06,
+                "p95Peak": 0.31,
+                "peakToRms": 3.6,
+                "spectrumPeak": 0.12,
+                "spectrumRms": 0.04,
+                "clipRatio": 0.0,
+                "waveformHash": "wave-hash",
+                "spectrumHash": "spectrum-hash",
+                "samples": 32,
+                "analyserPath": "SL.audio.getAnalyser() final output path",
+                "analyserArmedBeforeTrigger": True,
+                "diagnosticLog": "current run held=0 local=0 ssli=0",
+                "voiceCleanup": {"heldNotes": 0, "midiVoices": 0, "ssliActiveOscillators": 0},
+            },
+        }
+        self.assertEqual(sweep.validate_comprehensive_audio_acceptance(base, "six-note-midi"), [])
+
+        boosted_output = json.loads(json.dumps(base))
+        boosted_output["audioSignature"]["diagnosticLog"] = "SSLI normalization preset=Subtractive::A volume=100 output=4.00"
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(boosted_output, "six-note-midi"))
+        self.assertIn("output boost compensation is not allowed", errors)
+
+        wrong_path = json.loads(json.dumps(base))
+        wrong_path["audioSignature"]["analyserPath"] = "browser node"
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(wrong_path, "six-note-midi"))
+        self.assertIn("audio was not captured from final SSLI output analyser", errors)
+
+        missing_repeatable_evidence = json.loads(json.dumps(base))
+        missing_repeatable_evidence["audioSignature"]["samples"] = 0
+        missing_repeatable_evidence["audioSignature"]["waveformHash"] = ""
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(missing_repeatable_evidence, "six-note-midi"))
+        self.assertIn("too few analyser frames", errors)
+        self.assertIn("missing waveformHash", errors)
+
+    def test_comprehensive_audio_acceptance_defaults_force_full_mature_six_note_sweep(self):
+        sweep = load_module("tools/preset_sweep.py", "preset_sweep_for_comprehensive_defaults_test")
+        args = SimpleNamespace(
+            comprehensive_audio_acceptance=True,
+            trigger="single-midi",
+            mature_engines_only=False,
+            require_full_catalog=False,
+            one_per_category=True,
+            limit=10,
+            audio_sample_ms=650,
+        )
+        sweep.apply_comprehensive_audio_defaults(args)
+        self.assertEqual(args.trigger, "six-note-midi")
+        self.assertTrue(args.mature_engines_only)
+        self.assertTrue(args.require_full_catalog)
+        self.assertFalse(args.one_per_category)
+        self.assertEqual(args.limit, 0)
+        self.assertGreaterEqual(args.audio_sample_ms, 900)
 
     def test_preset_sweep_duplicate_signature_detection_flags_same_category_presets(self):
         sweep = load_module("tools/preset_sweep.py", "preset_sweep_for_duplicate_test")
@@ -509,8 +728,10 @@ class StaticExhibitTests(unittest.TestCase):
             "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
             "test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels",
             "test_regression_mature_normalization_fixture_matches_live_catalog_size",
-            "test_regression_measured_quiet_presets_have_explicit_normalization_overrides",
+            "test_regression_mature_preset_normalization_does_not_boost_output",
             "test_regression_mature_engine_normalization_uses_canonical_engine_keys",
+            "test_regression_fm_key_presets_use_exhibit_timbre_corrections",
+            "test_regression_runtime_fm_presets_use_corrected_exhibit_settings",
         }
         playwright_regressions = {
             name for name in dir(playwright_module.PlaywrightExhibitTests)
@@ -547,29 +768,18 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertEqual(fixture["sweptPresetCount"], mature_count)
         self.assertGreaterEqual(len(fixture["requiredOverrides"]), 40)
 
-    def test_regression_measured_quiet_presets_have_explicit_normalization_overrides(self):
+    def test_regression_mature_preset_normalization_does_not_boost_output(self):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
-        fixture = json.loads((ROOT / "tests/fixtures/ssli_mature_normalization_required_overrides.json").read_text(encoding="utf-8"))
-        table = {}
-        for preset, instrument_volume, output_gain in re.findall(
+        self.assertIn("var SSLI_MATURE_ENGINE_NORMALIZATION = null", app)
+        self.assertIn("var SSLI_NORMALIZATION_MAX_OUTPUT_GAIN = 1", app)
+        boosted = []
+        for preset, _instrument_volume, output_gain in re.findall(
             r"'([^']+)':\s*\{\s*instrumentVolume:\s*([0-9.]+),\s*outputGain:\s*([0-9.]+)\s*\}",
             app,
         ):
-            table[preset] = {
-                "instrumentVolume": float(instrument_volume),
-                "outputGain": float(output_gain),
-            }
-        missing = []
-        weak = []
-        for row in fixture["requiredOverrides"]:
-            preset = row["preset"]
-            normalization = table.get(preset)
-            if normalization is None:
-                missing.append(preset)
-            elif normalization["instrumentVolume"] < 100 or normalization["outputGain"] <= 4:
-                weak.append((preset, normalization))
-        self.assertEqual(missing, [])
-        self.assertEqual(weak, [])
+            if float(output_gain) > 1:
+                boosted.append((preset, float(output_gain)))
+        self.assertEqual(boosted, [])
 
     def test_regression_mature_engine_normalization_uses_canonical_engine_keys(self):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")

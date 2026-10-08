@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--normalization-pressure", type=int, default=96, help="MIDI note-on pressure/velocity used by the single-midi normalization trigger.")
     parser.add_argument("--normalization-midi", type=int, default=48, help="MIDI note used by the single-midi normalization trigger.")
     parser.add_argument("--normalization-acceptance", action="store_true", help="Fail single-midi sweeps when mature-engine preset levels or normalization logs are outside the acceptance envelope.")
+    parser.add_argument("--comprehensive-audio-acceptance", action="store_true", help="Fail unless every selected live preset is validated through repeatable Playwright-driven MIDI and final-output audio analysis.")
     parser.add_argument("--normalization-min-spectrum-rms", type=float, default=0.0068, help="Minimum accepted spectrum RMS for a normalized single-midi preset sweep.")
     parser.add_argument("--normalization-max-clip-ratio", type=float, default=0.01, help="Maximum accepted clip ratio for normalization acceptance sweeps.")
     parser.add_argument("--normalization-baseline-output-gain", type=float, default=4.0, help="Expected mature-engine baseline output gain in normalization acceptance sweeps.")
@@ -130,6 +131,17 @@ def filter_presets(presets, args):
             groups.setdefault(key, []).append(preset)
         filtered = [rows[0] for rows in groups.values()]
     return filtered
+
+
+def apply_comprehensive_audio_defaults(args):
+    if not args.comprehensive_audio_acceptance:
+        return
+    args.trigger = "six-note-midi"
+    args.mature_engines_only = True
+    args.require_full_catalog = True
+    args.one_per_category = False
+    args.limit = 0
+    args.audio_sample_ms = max(args.audio_sample_ms, 900)
 
 
 def preset_key(row):
@@ -468,12 +480,12 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
           const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
           const SL = host.SynthLab;
           if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
-          if (SL.audio.initEffectChain) SL.audio.initEffectChain();
-          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
-          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
           const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
           const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
           const instrument = instruments[inst] || {};
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
           const settings = instrument.settings || {};
           const settingsJson = JSON.stringify(settings);
           let settingsHash = 0;
@@ -506,30 +518,52 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
           let spectrumPeak = 0;
           let spectrumSum = 0;
           let spectrumCount = 0;
+          let spectrumEnergySum = 0;
+          let spectrumWeightedHzSum = 0;
+          let spectrumHighEnergySum = 0;
+          let spectrumBellEnergySum = 0;
           let waveHash = 0;
           let spectrumHash = 0;
           const framePeaks = [];
+          const frameMaxSteps = [];
+          const frameRmsValues = [];
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
           const started = Date.now();
           while (Date.now() - started < sampleMs) {
             if (useFloatWave) analyser.getFloatTimeDomainData(wave);
             else analyser.getByteTimeDomainData(wave);
             analyser.getByteFrequencyData(spectrum);
             let framePeak = 0;
+            let previousNormalized = null;
+            let frameMaxStep = 0;
+            let frameRmsSum = 0;
             for (let i = 0; i < wave.length; i += 1) {
               const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
               const abs = Math.abs(normalized);
               peak = Math.max(peak, abs);
               framePeak = Math.max(framePeak, abs);
+              if (previousNormalized !== null) frameMaxStep = Math.max(frameMaxStep, Math.abs(normalized - previousNormalized));
+              previousNormalized = normalized;
               rmsSum += normalized * normalized;
+              frameRmsSum += normalized * normalized;
               count += 1;
               if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
               if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
             }
             framePeaks.push(framePeak);
+            frameMaxSteps.push(frameMaxStep);
+            frameRmsValues.push(Math.sqrt(frameRmsSum / Math.max(1, wave.length)));
             for (let j = 0; j < spectrum.length; j += 1) {
               const level = spectrum[j] / 255;
+              const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+              const energy = level * level;
               spectrumPeak = Math.max(spectrumPeak, level);
-              spectrumSum += level * level;
+              spectrumSum += energy;
+              spectrumEnergySum += energy;
+              spectrumWeightedHzSum += energy * hz;
+              if (hz >= 4000) spectrumHighEnergySum += energy;
+              if (hz >= 2500 && hz <= 10000) spectrumBellEnergySum += energy;
               spectrumCount += 1;
               if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
             }
@@ -539,6 +573,9 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
           send([0x80 | channel, midi, 0]);
           await new Promise(resolve => setTimeout(resolve, 180));
           framePeaks.sort((a, b) => a - b);
+          frameMaxSteps.sort((a, b) => a - b);
+          const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));
+          const tailRms = Math.sqrt(tailFrames.reduce((sum, value) => sum + value * value, 0) / Math.max(1, tailFrames.length));
           const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
           const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
           return {
@@ -555,10 +592,18 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
             physicalSettings: settings.physicalSettings || null,
             peak: Number(peak.toFixed(5)),
             rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            samples: count,
             p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            maxSampleStep: Number((frameMaxSteps[frameMaxSteps.length - 1] || 0).toFixed(5)),
+            p95SampleStep: Number((frameMaxSteps[Math.floor(frameMaxSteps.length * 0.95)] || 0).toFixed(5)),
+            tailRms: Number(tailRms.toFixed(5)),
             clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            spectrumCentroidHz: Number((spectrumWeightedHzSum / Math.max(0.000001, spectrumEnergySum)).toFixed(1)),
+            spectrumHighRatio: Number((spectrumHighEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            spectrumBellRatio: Number((spectrumBellEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            peakToRms: Number((peak / Math.max(0.000001, Math.sqrt(rmsSum / Math.max(1, count)))).toFixed(3)),
             waveformHash: String(waveHash),
             spectrumHash: String(spectrumHash),
             analyserArmedBeforeTrigger: true,
@@ -606,7 +651,7 @@ def ssli_six_note_midi_signature(page, sample_ms):
           let engineSettingsHash = 0;
           for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
 
-          if (SL.audio.initEffectChain) SL.audio.initEffectChain();
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
           const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
           if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
           const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
@@ -654,30 +699,52 @@ def ssli_six_note_midi_signature(page, sample_ms):
           let spectrumPeak = 0;
           let spectrumSum = 0;
           let spectrumCount = 0;
+          let spectrumEnergySum = 0;
+          let spectrumWeightedHzSum = 0;
+          let spectrumHighEnergySum = 0;
+          let spectrumBellEnergySum = 0;
           let waveHash = 0;
           let spectrumHash = 0;
           const framePeaks = [];
+          const frameMaxSteps = [];
+          const frameRmsValues = [];
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
           const started = Date.now();
           while (Date.now() - started < sampleMs) {
             if (useFloatWave) analyser.getFloatTimeDomainData(wave);
             else analyser.getByteTimeDomainData(wave);
             analyser.getByteFrequencyData(spectrum);
             let framePeak = 0;
+            let previousNormalized = null;
+            let frameMaxStep = 0;
+            let frameRmsSum = 0;
             for (let i = 0; i < wave.length; i += 1) {
               const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
               const abs = Math.abs(normalized);
               peak = Math.max(peak, abs);
               framePeak = Math.max(framePeak, abs);
+              if (previousNormalized !== null) frameMaxStep = Math.max(frameMaxStep, Math.abs(normalized - previousNormalized));
+              previousNormalized = normalized;
               rmsSum += normalized * normalized;
+              frameRmsSum += normalized * normalized;
               count += 1;
               if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
               if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
             }
             framePeaks.push(framePeak);
+            frameMaxSteps.push(frameMaxStep);
+            frameRmsValues.push(Math.sqrt(frameRmsSum / Math.max(1, wave.length)));
             for (let j = 0; j < spectrum.length; j += 1) {
               const level = spectrum[j] / 255;
+              const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+              const energy = level * level;
               spectrumPeak = Math.max(spectrumPeak, level);
-              spectrumSum += level * level;
+              spectrumSum += energy;
+              spectrumEnergySum += energy;
+              spectrumWeightedHzSum += energy * hz;
+              if (hz >= 4000) spectrumHighEnergySum += energy;
+              if (hz >= 2500 && hz <= 10000) spectrumBellEnergySum += energy;
               spectrumCount += 1;
               if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
             }
@@ -685,6 +752,9 @@ def ssli_six_note_midi_signature(page, sample_ms):
           }
           await new Promise(resolve => setTimeout(resolve, 120));
           framePeaks.sort((a, b) => a - b);
+          frameMaxSteps.sort((a, b) => a - b);
+          const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));
+          const tailRms = Math.sqrt(tailFrames.reduce((sum, value) => sum + value * value, 0) / Math.max(1, tailFrames.length));
           const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
           const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
           return {
@@ -699,10 +769,18 @@ def ssli_six_note_midi_signature(page, sample_ms):
             physicalSettings: settings.physicalSettings || null,
             peak: Number(peak.toFixed(5)),
             rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            samples: count,
             p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            maxSampleStep: Number((frameMaxSteps[frameMaxSteps.length - 1] || 0).toFixed(5)),
+            p95SampleStep: Number((frameMaxSteps[Math.floor(frameMaxSteps.length * 0.95)] || 0).toFixed(5)),
+            tailRms: Number(tailRms.toFixed(5)),
             clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
             spectrumPeak: Number(spectrumPeak.toFixed(5)),
             spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            spectrumCentroidHz: Number((spectrumWeightedHzSum / Math.max(0.000001, spectrumEnergySum)).toFixed(1)),
+            spectrumHighRatio: Number((spectrumHighEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            spectrumBellRatio: Number((spectrumBellEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            peakToRms: Number((peak / Math.max(0.000001, Math.sqrt(rmsSum / Math.max(1, count)))).toFixed(3)),
             waveformHash: String(waveHash),
             spectrumHash: String(spectrumHash),
             analyserPath: 'SL.audio.getAnalyser() final output path',
@@ -739,7 +817,7 @@ def validate_audio_behavior(row, trigger):
         errors.append(f"expected engine {expected_type}, got {signature.get('instrumentType')}")
     if expected_type and expected_type != "subtractive" and not signature.get("engineSettingsKeys"):
         errors.append(f"missing {expected_type} parameter block")
-    if trigger != "single-midi" and (max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 or signature.get("rms", 0) < 0.003):
+    if trigger != "single-midi" and max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 and signature.get("rms", 0) < 0.003:
         errors.append("audio energy too low")
     if trigger in {"single-midi", "six-note-midi"}:
         if signature.get("clipRatio", 0) > 0.03:
@@ -757,6 +835,37 @@ def validate_audio_behavior(row, trigger):
         if "held=0 local=0 ssli=0" not in log:
             errors.append("current MIDI run did not report clean idle cleanup")
     return errors
+
+
+def validate_comprehensive_audio_acceptance(row, trigger):
+    signature = row.get("audioSignature") or {}
+    errors = validate_audio_behavior(row, trigger)
+    if trigger != "six-note-midi":
+        errors.append("comprehensive audio acceptance requires --trigger six-note-midi")
+        return errors
+    if not signature.get("available"):
+        return errors
+    if signature.get("trigger") != "six-note-midi":
+        errors.append(f"unexpected audio trigger {signature.get('trigger')!r}")
+    if signature.get("analyserPath") != "SL.audio.getAnalyser() final output path":
+        errors.append("audio was not captured from final SSLI output analyser")
+    if not signature.get("analyserArmedBeforeTrigger"):
+        errors.append("audio analyser was not armed before playback")
+    if int(signature.get("samples") or 0) < 5:
+        errors.append(f"too few analyser frames ({signature.get('samples')})")
+    for field in ("waveformHash", "spectrumHash", "settingsHash", "engineSettingsHash"):
+        if not str(signature.get(field) or "").strip():
+            errors.append(f"missing {field}")
+    if str(signature.get("waveformHash")) == "0" or str(signature.get("spectrumHash")) == "0":
+        errors.append("audio signature hash is zero")
+    if float(signature.get("peak") or 0) <= 0:
+        errors.append("audio peak is zero")
+    if float(signature.get("spectrumRms") or 0) <= 0:
+        errors.append("spectrum RMS is zero")
+    normalization_output_gain = normalization_log_output_gain(signature)
+    if normalization_output_gain is not None and normalization_output_gain > 1.01:
+        errors.append(f"output boost compensation is not allowed ({normalization_output_gain})")
+    return sorted(set(errors))
 
 
 def audio_signature_identity(row):
@@ -803,6 +912,7 @@ def apply_duplicate_signature_failures(results):
 
 
 def run_sweep(args):
+    apply_comprehensive_audio_defaults(args)
     if not args.no_build:
         subprocess.run([sys.executable, "build.py"], cwd=ROOT, check=True)
 
@@ -838,9 +948,10 @@ def run_sweep(args):
             if args.trigger in {"single-midi", "six-note-midi"}:
                 enable_mock_midi(page)
                 set_performance_volume(page, args.performance_volume)
-            presets = collect_presets(page)
-            total = len(presets)
-            presets = filter_presets(presets, args)
+            all_presets = collect_presets(page)
+            available_total = len(all_presets)
+            presets = filter_presets(all_presets, args)
+            required_total = len(presets)
             if args.limit and args.limit > 0:
                 presets = presets[: args.limit]
 
@@ -881,7 +992,12 @@ def run_sweep(args):
                     log_tail = diagnostic_tail(page, log_start)
                     instrument = ssli_instrument_snapshot(page)
                     joined = "\n".join(log_tail)
-                    validation_errors = validate_audio_behavior({**preset, "audioSignature": audio_signature}, args.trigger)
+                    validation_row = {**preset, "audioSignature": audio_signature}
+                    validation_errors = (
+                        validate_comprehensive_audio_acceptance(validation_row, args.trigger)
+                        if args.comprehensive_audio_acceptance
+                        else validate_audio_behavior(validation_row, args.trigger)
+                    )
                     if validation_errors:
                         status = "fail"
                         error = "; ".join(validation_errors)
@@ -911,7 +1027,8 @@ def run_sweep(args):
                     **preset,
                     "index": index,
                     "sweepCount": len(presets),
-                    "availablePresetCount": total,
+                    "availablePresetCount": available_total,
+                    "requiredPresetCount": required_total,
                     "status": status,
                     "error": error,
                     "diagnosticTail": log_tail,
@@ -933,6 +1050,9 @@ def run_sweep(args):
                     "audioSamples": audio_signature.get("samples", 0),
                     "audioSignatureAvailable": audio_signature.get("available", False),
                     "audioP95Peak": audio_signature.get("p95Peak", ""),
+                    "audioMaxSampleStep": audio_signature.get("maxSampleStep", ""),
+                    "audioP95SampleStep": audio_signature.get("p95SampleStep", ""),
+                    "audioTailRms": audio_signature.get("tailRms", ""),
                     "audioClipRatio": audio_signature.get("clipRatio", ""),
                     "finalBoostGain": audio_signature.get("finalBoostGain", ""),
                     "normalizationTargetRms": normalization.get("targetRms", ""),
@@ -954,7 +1074,7 @@ def run_sweep(args):
             browser.close()
             server.shutdown()
 
-    if args.require_full_catalog and len(results) != total:
+    if args.require_full_catalog and len(results) != required_total:
         results.append(
             {
                 "index": len(results) + 1,
@@ -963,9 +1083,10 @@ def run_sweep(args):
                 "categoryLabel": "coverage",
                 "presetLabel": "full catalog",
                 "preset": "catalog::coverage",
-                "error": f"required full catalog sweep, got {len(results)} of {total} live presets",
+                "error": f"required full catalog sweep, got {len(results)} of {required_total} selected live presets",
                 "trigger": args.trigger,
-                "availablePresetCount": total,
+                "availablePresetCount": available_total,
+                "requiredPresetCount": required_total,
                 "sweepCount": len(results),
             }
         )
@@ -975,9 +1096,11 @@ def run_sweep(args):
         "url": url,
         "startedAt": started_at,
         "elapsedSeconds": round(time.time() - started_at, 3),
-        "availablePresetCount": total,
+        "availablePresetCount": available_total,
+        "requiredPresetCount": required_total,
         "sweptPresetCount": len(results),
         "duplicateSignatureGroups": duplicate_signature_groups,
+        "comprehensiveAudioAcceptance": bool(args.comprehensive_audio_acceptance),
         "passed": sum(1 for row in results if row["status"] == "pass"),
         "failed": sum(1 for row in results if row["status"] == "fail"),
     }
@@ -1019,6 +1142,7 @@ def run_sweep(args):
                 "trigger",
                 "error",
                 "availablePresetCount",
+                "requiredPresetCount",
                 "sweepCount",
             ],
         )

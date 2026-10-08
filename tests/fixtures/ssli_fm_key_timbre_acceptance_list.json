@@ -1,0 +1,79 @@
+[
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::CELESTA",
+    "presetLabel": "CELESTA",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::CLAVINET",
+    "presetLabel": "CLAVINET",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::DX RHODES",
+    "presetLabel": "DX RHODES",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::E.PIANO 1",
+    "presetLabel": "E.PIANO 1",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::E.PIANO 2",
+    "presetLabel": "E.PIANO 2",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::TINE PIANO",
+    "presetLabel": "TINE PIANO",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Keys",
+    "preset": "FM::WURLITZER FM",
+    "presetLabel": "WURLITZER FM",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Vintage",
+    "preset": "FM::DX Rhodes",
+    "presetLabel": "DX Rhodes",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Vintage",
+    "preset": "FM::FM Wurlitzer",
+    "presetLabel": "FM Wurlitzer",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Vintage",
+    "preset": "FM::Retro Tine Piano",
+    "presetLabel": "Retro Tine Piano",
+    "status": "fail"
+  },
+  {
+    "engine": "FM",
+    "category": "Vintage",
+    "preset": "FM::Crystal EP",
+    "presetLabel": "Crystal EP",
+    "status": "fail"
+  }
+]

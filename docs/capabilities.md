@@ -148,16 +148,17 @@ When duplicate physical cells share the same exact MIDI note, incoming MIDI feed
 
 ### Repeatable Preset Sweep
 
-Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live final SSLI output path through `SL.audio.getAnalyser()` for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`. Normalization sweeps use `--trigger single-midi` with a fixed MIDI note and pressure, then report the per-preset instrument-volume recommendation plus any remaining global-output multiplier needed to hit the target RMS. Acceptance normalization sweeps must add `--normalization-acceptance --require-full-catalog` so missing normalization logs, low-level outliers without measured overrides, clipping, and incomplete preset coverage fail the run.
+Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live final SSLI output path through `SL.audio.getAnalyser()` for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`. Comprehensive audio acceptance uses `--comprehensive-audio-acceptance`; it forces the mature Subtractive/FM/Physical catalog, six-note MIDI playback, full selected-catalog coverage, final-output analyser capture, repeatable waveform/spectrum/settings hashes, and JSON/CSV evidence. Normalization sweeps use `--trigger single-midi` with a fixed MIDI note and pressure, then report the per-preset instrument-volume recommendation plus any remaining global-output multiplier needed to hit the target RMS. Acceptance normalization sweeps must add `--normalization-acceptance --require-full-catalog` so missing normalization logs, low-level outliers without measured overrides, clipping, and incomplete preset coverage fail the run.
 
 The required mature-engine poly-pressure procedure is:
 
 ```powershell
+python tools/preset_sweep.py --comprehensive-audio-acceptance --output-dir tmp_preset_sweep_mature_comprehensive_audio
 python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full
 python tools/preset_sweep.py --mature-engines-only --trigger single-midi --normalization-acceptance --require-full-catalog --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_mature_acceptance
 ```
 
-That command sweeps every live UI preset under Subtractive, FM, and Physical, drives six Exquis-style MIDI notes on independent channels, continuously varies their channel pressure, samples the actual audible SSLI output, and fails on silence, engine mismatch, duplicate signatures within the same engine/category, clipping, browser errors, stale-log-only cleanup, or missing current voice cleanup from the app's diagnostic state snapshot.
+The comprehensive audio command sweeps every live UI preset under Subtractive, FM, and Physical, drives six Exquis-style MIDI notes on independent channels, continuously varies their channel pressure, samples the actual audible SSLI output, and fails on silence, engine mismatch, duplicate signatures within the same engine/category, clipping, browser errors, stale-log-only cleanup, missing current voice cleanup from the app's diagnostic state snapshot, incomplete selected-catalog coverage, or missing repeatable final-output signature evidence.
 
 The diagnostic console remains reachable at all times. Its collapsed state is a compact action strip, and Audio Diag opens a right-side console drawer on desktop/laptop viewports so logs can be read while the keyboard remains visible.
 
@@ -175,6 +176,7 @@ Useful commands:
 python tools/preset_sweep.py --limit 10
 python tools/preset_sweep.py --engine Physical --category Plucked --preset-contains Koto
 python tools/preset_sweep.py --output-dir tmp_preset_sweep_full
+python tools/preset_sweep.py --comprehensive-audio-acceptance --output-dir tmp_preset_sweep_mature_comprehensive_audio
 python tools/preset_sweep.py --trigger single-midi --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_full
 python tools/preset_sweep.py --mature-engines-only --trigger single-midi --normalization-acceptance --require-full-catalog --normalization-pressure 96 --normalization-target-rms 0.08 --output-dir tmp_preset_normalization_mature_acceptance
 python tools/preset_sweep.py --mature-engines-only --trigger six-note-midi --audio-sample-ms 900 --output-dir tmp_preset_sweep_mature_poly_full

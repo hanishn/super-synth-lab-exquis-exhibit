@@ -68,6 +68,127 @@ var SINE_TABLE_MASK = SINE_TABLE_SIZE - 1;
 // Per-voice output scaling; keeps multi-voice sum below clipping
 var VOICE_OUTPUT_GAIN = 0.18;
 
+// DX7/Dexed operator gain scaling.
+// Original source: Dexed/msfa env.cc and dx7note.cc
+// (scaleoutlevel(), ScaleVelocity(), and Exp2 log-domain gain).
+// https://github.com/asb2m10/dexed/tree/master/Source/msfa
+var DX7_LEVEL_LUT = [0, 5, 9, 13, 17, 20, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 42, 43, 45, 46];
+var DX7_VELOCITY_DATA = [
+  0, 70, 86, 97, 106, 114, 121, 126, 132, 138, 142, 148, 152, 156, 160, 163,
+  166, 170, 173, 174, 178, 181, 184, 186, 189, 190, 194, 196, 198, 200, 202,
+  205, 206, 209, 211, 214, 216, 218, 220, 222, 224, 225, 227, 229, 230, 232,
+  233, 235, 237, 238, 240, 241, 242, 243, 244, 246, 246, 248, 249, 250, 251,
+  252, 253, 254
+];
+var DX7_EXP_SCALE_DATA = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 19, 23, 27,
+  33, 39, 47, 56, 66, 80, 94, 110, 126, 142, 158, 174,
+  190, 206, 222, 238, 250
+];
+
+function dx7ScaleOutlevel(level) {
+  level = Math.max(0, Math.min(99, Math.round(level || 0)));
+  // Source: Dexed/msfa env.cc scaleoutlevel().
+  if (level >= 20) return 28 + level;
+  return DX7_LEVEL_LUT[level] || 0;
+}
+
+function dx7ScaleVelocity(velocity, sensitivity) {
+  var clampedVelocity = Math.max(0, Math.min(127, Math.round(velocity || 0)));
+  var sens = Math.max(0, Math.min(7, Math.round(sensitivity || 0)));
+  // Source: Dexed/msfa dx7note.cc ScaleVelocity().
+  var velValue = DX7_VELOCITY_DATA[clampedVelocity >> 1] - 239;
+  return (((sens * velValue + 7) >> 3) << 4);
+}
+
+function dx7GainFromActualLevel(actualLevel) {
+  actualLevel = Math.max(16, actualLevel);
+  // Source: Dexed/msfa env.cc Exp2 gain followed by INT32_TO_FLOAT_SCALE:
+  // actuallevel 3840 maps to unity final float gain.
+  return Math.pow(2, (actualLevel - 3840) / 256);
+}
+
+function dx7EnvelopeLevelToLinear(level) {
+  level = Math.max(0, Math.min(99, Math.round(level || 0)));
+  if (level === 0) return 0;
+  // Source: Dexed/msfa env.cc actuallevel envelope component.
+  return ((dx7ScaleOutlevel(level) >> 1) << 6);
+}
+
+function dx7OperatorGain(level, velocity, sensitivity) {
+  level = Math.max(0, Math.min(99, Math.round(level || 0)));
+  if (level === 0) return 0;
+  var outlevel = Math.min(127, dx7ScaleOutlevel(level));
+  // Source: Dexed/msfa dx7note.cc: outlevel = scaleoutlevel(level) << 5 + ScaleVelocity().
+  outlevel = (outlevel << 5) + dx7ScaleVelocity(velocity, sensitivity);
+  return Math.max(0, outlevel);
+}
+
+function dx7ScaleCurve(group, depth, curve) {
+  group = Math.max(0, Math.round(group || 0));
+  depth = Math.max(0, Math.min(99, Math.round(depth || 0)));
+  curve = Math.max(0, Math.min(3, Math.round(curve || 0)));
+  var scale;
+  if (curve === 0 || curve === 3) {
+    scale = (group * depth * 329) >> 12;
+  } else {
+    var rawExp = DX7_EXP_SCALE_DATA[Math.min(group, DX7_EXP_SCALE_DATA.length - 1)];
+    scale = (rawExp * depth * 329) >> 15;
+  }
+  if (curve < 2) scale = -scale;
+  return scale;
+}
+
+function dx7ScaleLevel(midiNote, breakPoint, leftDepth, rightDepth, leftCurve, rightCurve) {
+  // Source: Dexed/msfa dx7note.cc ScaleLevel() and ScaleCurve().
+  var offset = Math.round(midiNote || 0) - Math.round(breakPoint || 0) - 17;
+  if (offset >= 0) {
+    return dx7ScaleCurve(Math.floor((offset + 1) / 3), rightDepth, rightCurve);
+  }
+  return dx7ScaleCurve(Math.floor(-(offset - 1) / 3), leftDepth, leftCurve);
+}
+
+function dx7CombinedOperatorGain(envelopeLevel, operatorOutlevel) {
+  // Source: Dexed/msfa env.cc combines EG level + operator outlevel before Exp2.
+  return dx7GainFromActualLevel(envelopeLevel + operatorOutlevel - 4256);
+}
+
+function dx7KbdRateScale(midiNote, rateScaling) {
+  // Source: Dexed/msfa dx7note.cc ScaleRate().
+  var x = Math.min(31, Math.max(0, Math.floor((midiNote || 0) / 3) - 7));
+  return ((Math.max(0, Math.min(7, rateScaling || 0)) * x) >> 3);
+}
+
+// Source: Dexed/msfa fm_core.cc algorithm opcode table.
+var DX7_ALGOS = [
+  [0xc1,0x11,0x11,0x14,0x01,0x14],[0x01,0x11,0x11,0x14,0xc1,0x14],
+  [0xc1,0x11,0x14,0x01,0x11,0x14],[0xc1,0x11,0x94,0x01,0x11,0x14],
+  [0xc1,0x14,0x01,0x14,0x01,0x14],[0xc1,0x94,0x01,0x14,0x01,0x14],
+  [0xc1,0x11,0x05,0x14,0x01,0x14],[0x01,0x11,0xc5,0x14,0x01,0x14],
+  [0x01,0x11,0x05,0x14,0xc1,0x14],[0x01,0x05,0x14,0xc1,0x11,0x14],
+  [0xc1,0x05,0x14,0x01,0x11,0x14],[0x01,0x05,0x05,0x14,0xc1,0x14],
+  [0xc1,0x05,0x05,0x14,0x01,0x14],[0xc1,0x05,0x11,0x14,0x01,0x14],
+  [0x01,0x05,0x11,0x14,0xc1,0x14],[0xc1,0x11,0x02,0x25,0x05,0x14],
+  [0x01,0x11,0x02,0x25,0xc5,0x14],[0x01,0x11,0x11,0xc5,0x05,0x14],
+  [0xc1,0x14,0x14,0x01,0x11,0x14],[0x01,0x05,0x14,0xc1,0x14,0x14],
+  [0x01,0x14,0x14,0xc1,0x14,0x14],[0xc1,0x14,0x14,0x14,0x01,0x14],
+  [0xc1,0x14,0x14,0x01,0x14,0x04],[0xc1,0x14,0x14,0x14,0x04,0x04],
+  [0xc1,0x14,0x14,0x04,0x04,0x04],[0xc1,0x05,0x14,0x01,0x14,0x04],
+  [0x01,0x05,0x14,0xc1,0x14,0x04],[0x04,0xc1,0x11,0x14,0x01,0x14],
+  [0xc1,0x14,0x01,0x14,0x04,0x04],[0x04,0xc1,0x11,0x14,0x04,0x04],
+  [0xc1,0x14,0x04,0x04,0x04,0x04],[0xc4,0x04,0x04,0x04,0x04,0x04]
+];
+var DX7_FEEDBACK_OP = [0,4,0,2,0,1,0,2,4,3,0,4,0,0,4,0,4,3,0,3,3,0,0,0,0,0,3,1,0,1,0,0];
+var DX7_FEEDBACK_SCALE = [0];
+for (var dx7Fb = 1; dx7Fb <= 7; dx7Fb++) {
+  // Source: Dexed/msfa fm_op_kernel.cc compute_fb() phase feedback shift.
+  DX7_FEEDBACK_SCALE[dx7Fb] = Math.pow(2, dx7Fb - 9);
+}
+
+// Source: Dexed Python package algorithms.py, decoded from DX7 algorithm
+// modulation matrices; mods are [target, source] operator indices.
+var DX7_ALGORITHM_MATRIX = [{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[4,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[4,5]],"fb":[1,1]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[4,5]],"fb":[5,5]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[4,5]],"fb":[3,5]},{"carriers":[0,2,4],"mods":[[0,1],[2,3],[4,5]],"fb":[5,5]},{"carriers":[0,2,4],"mods":[[0,1],[2,3],[4,5]],"fb":[4,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[3,3]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[1,1]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[2,5]],"fb":[1,1]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[2,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[3,5]],"fb":[1,1]},{"carriers":[0],"mods":[[0,1],[0,2],[0,4],[2,3],[4,5]],"fb":[5,5]},{"carriers":[0],"mods":[[0,1],[0,2],[0,4],[2,3],[4,5]],"fb":[1,1]},{"carriers":[0],"mods":[[0,1],[0,2],[0,3],[3,4],[4,5]],"fb":[2,2]},{"carriers":[0,3,4],"mods":[[0,1],[1,2],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[0,2],[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,1,3,4],"mods":[[0,2],[1,2],[3,5],[4,5]],"fb":[2,2]},{"carriers":[0,2,3,4],"mods":[[0,1],[2,5],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3,4],"mods":[[1,2],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4],"mods":[[2,5],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4],"mods":[[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[1,2],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,2,5],"mods":[[0,1],[2,3],[3,4]],"fb":[4,4]},{"carriers":[0,1,2,4],"mods":[[2,3],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,5],"mods":[[2,3],[3,4]],"fb":[4,4]},{"carriers":[0,1,2,3,4],"mods":[[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4,5],"mods":[],"fb":[5,5]}];
+
 // ============================================================
 // DX7 Envelope Generator
 // ============================================================
@@ -112,6 +233,7 @@ class DX7Envelope {
     this.levels = [99, 99, 99, 0];   // L1-L4 (0-99)
     this.cachedTarget = 0;     // Cached target level (linear)
     this.cachedIncrement = 0;  // Cached rate increment per sample
+    this.rateScalingOffset = 0;
   }
 
   setParams(r1, r2, r3, r4, l1, l2, l3, l4) {
@@ -138,24 +260,17 @@ class DX7Envelope {
     this.cachedIncrement = this.dx7RateToIncrement(this.rates[3]);
   }
 
-  // Convert DX7 level (0-99) to linear amplitude.
-  // Power curve (x^2.5) approximates the DX7's perceptual scaling:
-  // level 99 -> 1.0, level 70 -> ~0.36, level 50 -> ~0.11
+  // Convert DX7 level (0-99) to a Dexed-compatible linear gain.
   dx7LevelToLinear(level) {
-    if (level === 0) return 0;
-    return Math.pow(level / 99, 2.5);
+    return dx7EnvelopeLevelToLinear(level);
   }
 
-  // Convert DX7 rate (0-99) to linear increment per sample.
-  // The DX7 envelope rate is exponential: each ~6 rate units doubles the speed.
-  // Formula: rate_dB_per_sec = 0.2819 * 2^(rate * 0.16)
-  // Normalized to 96 dB dynamic range (16-bit audio floor).
-  // Rate 99 ~ 2ms full traverse; Rate 50 ~ 3 seconds; Rate 0 ~ minutes.
+  // Convert DX7 rate (0-99) to envelope increment using Dexed's qrate math.
+  // Source: Dexed/msfa env.cc qrate/inc calculation.
   dx7RateToIncrement(rate) {
-    // rate in dB/s ~ 0.2819 * 2^(rate * 0.16)
-    var dbPerSec = 0.2819 * Math.pow(2, rate * 0.16);
-    var dbPerSample = dbPerSec / this.sampleRate;
-    return dbPerSample / 96; // Normalize to 0..1 range (96 dB dynamic range)
+    var qrate = Math.min(63, (((Math.max(0, Math.min(99, rate || 0)) * 41) >> 6) + (this.rateScalingOffset || 0)));
+    var inc = (4 + (qrate & 3)) << (2 + 6 + (qrate >> 2));
+    return (inc / 65536 / 64) * (44100 / this.sampleRate);
   }
 
   process() {
@@ -249,15 +364,22 @@ class FMOperator {
     this.amplitude = 0;    // Computed from outputLevel
     this.ratioCoarse = 1;
     this.ratioFine = 0;
+    this.frequencyMode = 0;
     this.detune = 7;       // 7 = center (0 cents offset)
     this.velocitySens = 0;
     this.rateScaling = 0;
+    this.breakPoint = 39;
+    this.leftDepth = 0;
+    this.rightDepth = 0;
+    this.leftCurve = 0;
+    this.rightCurve = 0;
     this.velocityScale = 1;
   }
 
   setParams(params) {
     if (params.ratioCoarse !== undefined) this.ratioCoarse = params.ratioCoarse;
     if (params.ratioFine !== undefined) this.ratioFine = params.ratioFine;
+    if (params.frequencyMode !== undefined) this.frequencyMode = params.frequencyMode;
     if (params.level !== undefined) {
       this.outputLevel = params.level;
       this.amplitude = this.levelToAmplitude(params.level);
@@ -265,6 +387,11 @@ class FMOperator {
     if (params.detune !== undefined) this.detune = params.detune;
     if (params.velocitySens !== undefined) this.velocitySens = params.velocitySens;
     if (params.rateScaling !== undefined) this.rateScaling = params.rateScaling;
+    if (params.breakPoint !== undefined) this.breakPoint = params.breakPoint;
+    if (params.leftDepth !== undefined) this.leftDepth = params.leftDepth;
+    if (params.rightDepth !== undefined) this.rightDepth = params.rightDepth;
+    if (params.leftCurve !== undefined) this.leftCurve = params.leftCurve;
+    if (params.rightCurve !== undefined) this.rightCurve = params.rightCurve;
     if (params.envelope) {
       var e = params.envelope;
       this.envelope.setParams(e.R1, e.R2, e.R3, e.R4, e.L1, e.L2, e.L3, e.L4);
@@ -277,8 +404,7 @@ class FMOperator {
   // For a modulator, this amplitude IS the modulation index -- higher
   // modulator level = more sidebands = brighter timbre.
   levelToAmplitude(level) {
-    if (level === 0) return 0;
-    return Math.pow(2, (level - 99) / 8);
+    return dx7OperatorGain(level, 127, 0);
   }
 
   // Compute the operator's base frequency from a note frequency.
@@ -299,31 +425,53 @@ class FMOperator {
     }
     ratio *= (1 + this.ratioFine * 0.01);
 
-    // Detune: +-7 cents, value 7 = center (one cent = 1/1200 of an octave)
-    var detuneCents = (this.detune - 7);
-    var detuneMultiplier = Math.pow(2, detuneCents / 1200);
+    if (this.frequencyMode) {
+      // Source: Dexed/msfa dx7note.cc fixed-frequency branch in osc_freq().
+      this.frequency = Math.pow(10, (this.ratioCoarse & 3) + this.ratioFine / 100);
+      // Source: Dexed/msfa dx7note.cc fixed-frequency branch applies detune
+      // only above center detune.
+      var fixedDetuneHz = this.detune > 7 ? 13457 * (this.detune - 7) / (1 << 24) : 0;
+      this.phaseInc = (this.frequency + fixedDetuneHz) / this.sampleRate;
+      return;
+    }
 
-    this.frequency = noteFreq * ratio * detuneMultiplier;
+    this.frequency = noteFreq * ratio;
+    var detuneHz = 0;
+    if (this.detune !== 7) {
+      // Source: Dexed/msfa dx7note.cc operator detune calculation:
+      // detune is derived from the base note log frequency before applying
+      // coarse/fine ratio multipliers.
+      var logfreq = Math.log2(Math.max(1e-9, noteFreq)) * (1 << 24);
+      var detuneRatio = 0.0209 * Math.exp(-0.396 * logfreq / (1 << 24)) / 7;
+      var logOffset = detuneRatio * logfreq * (this.detune - 7);
+      detuneHz = this.frequency * (Math.pow(2, logOffset / (1 << 24)) - 1);
+    }
     // Pre-compute phase increment to avoid division in the hot loop
-    this.phaseInc = this.frequency / this.sampleRate;
+    this.phaseInc = (this.frequency + detuneHz) / this.sampleRate;
   }
 
-  keyOn(noteFreq, velocity) {
+  keyOn(noteFreq, velocity, midiNote) {
+    this.envelope.rateScalingOffset = dx7KbdRateScale(midiNote, this.rateScaling);
     this.computeFrequency(noteFreq);
     // Randomize initial phase to decorrelate simultaneous voices.
     // Without this, playing a chord would sum phase-locked sines,
     // producing unnaturally sharp transients.
     this.phase = Math.random();
 
-    // Velocity sensitivity: linear crossfade between full (1.0) and
-    // velocity-proportional amplitude. sens=0 = organ (no dynamics),
-    // sens=7 = full piano-like dynamics.
-    // On a MODULATOR, velocity sensitivity controls brightness dynamics:
-    // harder strikes = brighter tone (more modulation index).
-    // This is critical for realistic electric piano patches.
-    var velNorm = velocity / 127;
-    var sens = this.velocitySens / 7;
-    this.velocityScale = 1 - sens + sens * velNorm;
+    var levelScaling = dx7ScaleLevel(
+      midiNote,
+      this.breakPoint,
+      this.leftDepth,
+      this.rightDepth,
+      this.leftCurve,
+      this.rightCurve
+    );
+    var scaledOutlevel = Math.min(127, dx7ScaleOutlevel(this.outputLevel) + levelScaling);
+    // Source: Dexed/msfa dx7note.cc applies ScaleLevel() before shifting the
+    // operator outlevel and adding ScaleVelocity().
+    scaledOutlevel = Math.max(0, scaledOutlevel);
+    this.amplitude = (scaledOutlevel << 5) + dx7ScaleVelocity(velocity, this.velocitySens);
+    this.velocityScale = 1;
 
     this.envelope.keyOn();
   }
@@ -370,9 +518,10 @@ class FMOperator {
     var s0 = SINE_TABLE[i0 & SINE_TABLE_MASK];
     var out = s0 + frac * (SINE_TABLE[(i0 + 1) & SINE_TABLE_MASK] - s0);
 
-    // Final output = sine * envelope * level * velocity
+    // Final output = sine * combined DX7 log-domain operator gain.
+    // Source: Dexed/msfa env.cc combines EG level and operator outlevel before Exp2.
     var envLevel = this.envelope.process();
-    return out * envLevel * this.amplitude * this.velocityScale;
+    return out * dx7CombinedOperatorGain(envLevel, this.amplitude) * this.velocityScale;
   }
 
   isFinished() {
@@ -584,7 +733,7 @@ class FMVoice {
       } else {
         this.operators[i].setParams(opSettings);
       }
-      this.operators[i].keyOn(noteFreq, vel);
+      this.operators[i].keyOn(noteFreq, vel, midiNote);
     }
 
     // Pre-compile modulation routes for this algorithm
@@ -612,17 +761,11 @@ class FMVoice {
     }
   }
 
-  // Convert DX7 feedback level (0-7, 3 bits) to radians of self-modulation.
-  // Feedback 0 = pure sine. Each step roughly doubles the modulation depth.
-  // At feedback 3-4, the waveform approximates a sawtooth.
-  // At feedback 7, the operator output approaches white noise.
-  // The DX7 hardware used exactly this 3-bit exponential mapping.
-  // Formula: scale = pi * 2^((fb - 7) / 2)
+  // Dexed/msfa feedback scale in phase cycles.
+  // Source: Dexed/msfa fm_op_kernel.cc compute_fb().
   feedbackToScale(fb) {
-    // DX7 feedback 0-7 mapped to modulation scale
-    // 0 = no feedback, 7 = maximum
-    if (fb === 0) return 0;
-    return Math.PI * Math.pow(2, (fb - 7) / 2);
+    fb = Math.max(0, Math.min(7, Math.round(fb || 0)));
+    return DX7_FEEDBACK_SCALE[fb] || 0;
   }
 
   // ---------------------------------------------------------------
@@ -660,53 +803,46 @@ class FMVoice {
       return 0;
     }
 
-    var algo = this.cachedAlgo;
-    if (!algo) return 0;
+    // Source: Dexed Python package algorithms.py, decoded from DX7 algorithm
+    // modulation matrices. Each mod entry is [target, source].
+    var alg = DX7_ALGORITHM_MATRIX[(this.algorithm || 1) - 1];
+    if (!alg) return 0;
 
-    // Local variable aliases avoid repeated property lookups in the hot loop
     var ops = this.operators;
     var out = this.opOutputs;
-    var opMod = this.opModSources;
-    var fbOp = algo.feedbackOp;
-    var fbLevel = this.feedbackLevel;
-    var fbValue = this.feedbackValue;
+    for (var oi = 0; oi < 6; oi++) out[oi] = 0;
+    var feedbackPair = this.feedbackPair || [0, 0];
+    this.feedbackPair = feedbackPair;
+    var fbScale = this.feedbackLevel;
+    var fb = alg.fb || [5, 5];
+    var fbSource = fb[0];
+    var fbTarget = fb[1];
 
-    // Process operators top-down (6->1) so modulators compute before carriers
     for (var i = 5; i >= 0; i--) {
       var modInput = 0;
-
-      // Sum modulation inputs from pre-compiled sources
-      var sources = opMod[i];
-      for (var m = 0; m < sources.length; m++) {
-        modInput += out[sources[m]];
+      var mods = alg.mods;
+      for (var mi = 0; mi < mods.length; mi++) {
+        if (mods[mi][0] === i) modInput += out[mods[mi][1]];
+      }
+      if (i === fbTarget) {
+        modInput += fbScale > 0 ? (feedbackPair[0] + feedbackPair[1]) * fbScale : 0;
       }
 
-      // Add feedback if this is the feedback operator
-      if (i === fbOp) {
-        modInput += fbValue * fbLevel;
-      }
+      // Source: Dexed/msfa Sin::lookup phase units; browser worklet uses radians.
+      var opOut = ops[i].process(modInput * TWO_PI);
+      out[i] = opOut;
 
-      // Process operator: sin(2*pi*f*t + modInput) * envelope * amplitude
-      out[i] = ops[i].process(modInput);
-
-      // Store for one-sample feedback delay
-      if (i === fbOp) {
-        fbValue = out[i];
+      if (i === fbSource) {
+        feedbackPair[1] = feedbackPair[0];
+        feedbackPair[0] = opOut;
       }
     }
 
-    this.feedbackValue = fbValue;
-
-    // Sum carrier outputs -- these are the operators that produce audible sound
     var sample = 0;
-    var carriers = algo.carriers;
-    for (var c = 0; c < carriers.length; c++) {
-      sample += out[carriers[c]];
-    }
-
-    // Normalize by carrier count: Algorithm 32 (6 carriers) would be
-    // 6x louder than Algorithm 7 (1 carrier) without this
-    sample /= carriers.length;
+    var carriers = alg.carriers;
+    for (var c = 0; c < carriers.length; c++) sample += out[carriers[c]];
+    // Source: Dexed/msfa fm_core.cc opcode-based algorithm routing sums
+    // carrier outputs; it does not divide audible carriers by carrier count.
 
     // ~8ms fade-in ramp eliminates click/pop from abrupt onset
     if (this.fadeInCounter < this.fadeInSamples) {
@@ -714,16 +850,9 @@ class FMVoice {
       this.fadeInCounter++;
     }
 
-    // Per-voice soft clipper for high feedback values.
-    // At feedback >= 6, the operator can self-oscillate into extreme
-    // amplitudes. tanh() provides smooth saturation that preserves
-    // the fundamental while taming the peaks.
-    var FB_SOFT_CLIP_THRESHOLD = 2.0;
-    var TANH_SCALE = 0.8;
-    var INV_TANH_SCALE = 1.0 / Math.tanh(TANH_SCALE);
-    if (fbLevel > FB_SOFT_CLIP_THRESHOLD) {
-      sample = Math.tanh(sample * TANH_SCALE) * INV_TANH_SCALE;
-    }
+    // No per-voice feedback clipper here.
+    // Original source: Dexed/msfa fm_op_kernel.cc compute_fb() applies feedback
+    // through fixed-point phase scaling, not a tanh stage inside the voice.
 
     return sample;
   }
@@ -939,12 +1068,17 @@ class FMWorkletProcessor extends AudioWorkletProcessor {
 
     var voices = this.voices;
     var bufLen = channel.length;
+    // Active-voice makeup gain: for uncorrelated voices, summed RMS grows as
+    // sqrt(N), so a one-note line should not keep the same headroom reserve as
+    // a four-note chord. Original source: Smith, Physical Audio Signal
+    // Processing, RMS power addition for uncorrelated signals.
+    var voiceMakeupGain = Math.sqrt(4 / Math.max(1, aviLen));
 
     // Per-sample loop: sum all active voices, then soft-clip
     for (var s = 0; s < bufLen; s++) {
       var sample = 0;
       for (var v = 0; v < aviLen; v++) {
-        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN;
+        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN * voiceMakeupGain;
       }
       // Global soft clipper: Pade approximant of tanh
       // Keeps output in [-1, +1] with smooth saturation curve

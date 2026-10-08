@@ -48,6 +48,12 @@ This rebuilds:
 
 ## Testing
 
+Install the Python test dependencies once:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
 ```powershell
 python -m unittest tests.test_exhibit_static tests.test_exhibit_playwright
 ```

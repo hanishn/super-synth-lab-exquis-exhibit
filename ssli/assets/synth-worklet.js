@@ -902,6 +902,12 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       channel[i] = 0;
     }
 
+    // Active-voice makeup gain: for uncorrelated voices, summed RMS grows as
+    // sqrt(N), so a one-note line should not keep the same headroom reserve as
+    // a four-note chord. Original source: Smith, Physical Audio Signal
+    // Processing, RMS power addition for uncorrelated signals.
+    var voiceMakeupGain = Math.sqrt(64 / Math.max(1, aviLen));
+
     // Generate audio for each active voice only
     for (var v = 0; v < aviLen; v++) {
       var voice = this.voices[avi[v]];
@@ -911,10 +917,9 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
             voice.startDelaySamples--;
           } else {
             var sample = this.generateVoiceSample(voice, sampleDuration);
-            // 0.12 master gain prevents clipping when many voices overlap.
-            // With 64 voices at full amplitude, raw sum could reach ~64.0;
-            // 0.12 brings the peak to ~7.7, which the soft clipper handles.
-            channel[i] += sample * 0.12 * voice.velocityGain;
+            // 0.12 ~= 1/sqrt(64) reserves 64-voice RMS headroom; voiceMakeupGain
+            // restores normal single-note level and recedes as polyphony rises.
+            channel[i] += sample * 0.12 * voice.velocityGain * voiceMakeupGain;
           }
         }
       }

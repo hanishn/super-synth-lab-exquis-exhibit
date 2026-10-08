@@ -1,0 +1,4 @@
+dexed-py==0.3.0
+numpy
+playwright
+scipy

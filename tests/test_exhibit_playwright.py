@@ -87,15 +87,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "waveform_must_show_visible_signal": "test_regression_test_tone_scope_draws_visible_waveform",
         "test_tone_scope_must_use_real_audio_not_mocked_analyser": "test_regression_real_test_tone_drives_scope_without_mocked_audio_context",
         "ssli_midi_sustain_must_use_user_performance_volume": "test_regression_ssli_midi_sustain_uses_performance_volume",
-        "celesta_midi_must_use_measured_preset_normalization_gain": "test_regression_ssli_celesta_uses_preset_normalization_gain",
-        "rhodes_midi_must_use_measured_preset_normalization_gain": "test_regression_ssli_rhodes_uses_measured_preset_normalization_gain",
+        "celesta_midi_must_not_use_output_boost_compensation": "test_regression_ssli_celesta_does_not_use_output_boost_compensation",
+        "rhodes_midi_must_not_use_output_boost_compensation": "test_regression_ssli_rhodes_does_not_use_output_boost_compensation",
         "ssli_midi_sustain_must_not_wrap_runtime_output": "test_regression_ssli_midi_sustain_does_not_wrap_runtime_output",
-        "exquis_midi_must_inverse_ssli_velocity_curve_without_global_expression": "test_regression_exquis_midi_inverses_ssli_velocity_curve_without_global_expression",
+        "exquis_midi_must_use_linear_velocity_without_global_expression": "test_regression_exquis_midi_uses_linear_velocity_without_global_expression",
         "exquis_live_pressure_must_not_stack_expression_gain_into_garble": "test_regression_live_pressure_caps_expression_gain_during_repeated_play",
         "staggered_physical_plucked_chords_must_not_use_solo_boost_or_idle_cleanup": "test_regression_staggered_physical_plucked_chords_keep_chord_headroom",
         "repeated_exquis_chords_must_not_accumulate_playback_latency": "test_regression_repeated_exquis_chords_do_not_accumulate_playback_latency",
         "diagnostic_logging_must_not_block_midi_hot_path": "test_regression_diagnostic_logging_is_batched_off_hot_path",
-        "fm_midi_must_use_raw_velocity_without_global_expression": "test_regression_fm_midi_uses_raw_velocity_without_global_expression",
+        "fm_midi_must_translate_exquis_pressure_without_global_expression": "test_regression_fm_midi_translates_exquis_pressure_without_global_expression",
         "low_register_subtractive_poly_must_remain_audible": "test_regression_low_register_subtractive_poly_preserves_volume",
         "mpe_channel_reuse_must_release_previous_voice": "test_regression_mpe_channel_reuse_releases_previous_voice",
         "mpe_same_note_new_channel_must_release_previous_owner": "test_regression_mpe_same_note_on_new_channel_releases_previous_ssli_owner",
@@ -170,6 +170,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "midi_preset_cache_must_verify_live_ssli_engine": "test_regression_midi_reapplies_preset_when_live_ssli_engine_does_not_match_cache",
         "midi_ssli_fallback_must_report_missing_runtime_api": "test_regression_midi_reports_missing_ssli_runtime_api_before_local_fallback",
         "ssli_preset_selection_must_retry_when_runtime_loads_late": "test_regression_preset_selection_retries_when_ssli_runtime_loads_late",
+        "fm_dx_rhodes_must_not_be_noisy_poppy_or_bell_like": "test_regression_fm_dx_rhodes_uat_audio_acceptance",
+        "uat_quiet_spot_presets_must_clear_single_note_floor": "test_regression_uat_quiet_spot_presets_clear_single_note_floor",
+        "physical_marimba_c3_must_not_be_blown_out_relative_to_c4": "test_regression_physical_marimba_c3_is_balanced_against_c4",
+        "uat_spot_presets_must_not_require_hard_velocity_for_loudness": "test_regression_uat_spot_presets_have_medium_velocity_loudness",
+        "uat_fm_spot_presets_must_not_collapse_to_same_timbre": "test_regression_uat_fm_spot_presets_do_not_collapse_to_same_timbre",
     }
 
     @classmethod
@@ -2504,6 +2509,392 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreater(float(row["audioRms"]), 0.003, row)
         self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
 
+    def test_regression_fm_dx_rhodes_uat_audio_acceptance(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_fm_dx_rhodes_uat"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "FM",
+                "--category",
+                "Keys",
+                "--preset-contains",
+                "DX RHODES",
+                "--trigger",
+                "six-note-midi",
+                "--audio-sample-ms",
+                "1200",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(payload["results"]), 1, payload)
+        row = payload["results"][0]
+        self.assertEqual(row["presetLabel"], "DX RHODES", row)
+        self.assertEqual(row["instrumentType"], "fm", row)
+        self.assertIn("SSLI preset corrected engine=fm preset=DX RHODES", row["audioSignature"]["diagnosticLog"])
+        self.assertEqual(
+            result.returncode,
+            0,
+            "DX RHODES UAT failure must be machine-detectable before user retest. "
+            "User reported: very noisy/poppy, very bell-like. "
+            f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}",
+        )
+        self.assertEqual(payload["summary"]["failed"], 0, payload)
+        self.assertGreater(float(row["audioRms"]), 0.003, row)
+        self.assertLessEqual(float(row["audioRms"]), 0.35, row)
+        self.assertLessEqual(float(row["audioP95Peak"]), 0.75, row)
+        self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
+        signature = row["audioSignature"]
+        self.assertLessEqual(float(signature["peakToRms"]), 5.0, row)
+        reference_cases = [
+            ("Keys", "FM::DX RHODES", "tests/fixtures/dx7/vrc110a.syx", "VicRhodes\\"),
+            ("Keys", "FM::E.PIANO 1", "tests/fixtures/dx7/rom1a.syx", "E.PIANO 1"),
+            ("Keys", "FM::TINE PIANO", "tests/fixtures/dx7/vrc108a.syx", "FullTines"),
+            ("Keys", "FM::WURLITZER FM", "tests/fixtures/dx7/vrc110a.syx", "WurliChrs\\"),
+        ]
+        reference_payloads = []
+        for category, preset, bank, voice in reference_cases:
+            reference_output = ROOT / "tmp_fm_reference_compare_unittest_dx_rhodes" / (preset.replace("::", "_").replace(".", "_") + ".json")
+            reference = subprocess.run(
+                [
+                    "python",
+                    "tools/fm_reference_compare.py",
+                    "--no-build",
+                    "--category",
+                    category,
+                    "--preset",
+                    preset,
+                    "--reference-bank",
+                    bank,
+                    "--reference-voice",
+                    voice,
+                    "--max-centroid-ratio-delta",
+                    "1.0",
+                    "--output",
+                    str(reference_output),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                timeout=120,
+            )
+            reference_payload = json.loads(reference_output.read_text(encoding="utf-8"))
+            reference_payloads.append(reference_payload)
+            self.assertEqual(
+                reference.returncode,
+                0,
+                f"{preset} must match the Yamaha/Dexed reference, not only generic spectral thresholds. "
+                f"payload={json.dumps(reference_payload, indent=2)}"
+                f"\nstdout={reference.stdout}\nstderr={reference.stderr}",
+            )
+            self.assertEqual(reference_payload["status"], "pass", reference_payload)
+
+        diversity_output_dir = ROOT / "tmp_preset_sweep_unittest_fm_key_diversity"
+        diversity = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "FM",
+                "--category",
+                "Keys",
+                "--preset-list-file",
+                "tests/fixtures/ssli_fm_key_timbre_acceptance_list.json",
+                "--trigger",
+                "six-note-midi",
+                "--audio-sample-ms",
+                "1200",
+                "--output-dir",
+                str(diversity_output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        self.assertEqual(diversity.returncode, 0, diversity.stdout + diversity.stderr)
+        diversity_payload = json.loads((diversity_output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        rows_by_label = {item["presetLabel"]: item for item in diversity_payload["results"]}
+        exhibit_centroids = [
+            float(rows_by_label[label]["audioSignature"]["spectrumCentroidHz"])
+            for label in ("DX RHODES", "TINE PIANO", "WURLITZER FM")
+        ]
+        self.assertGreaterEqual(
+            max(exhibit_centroids) - min(exhibit_centroids),
+            400,
+            {
+                "message": "User reported FM keys all sound very similar; exhibit must preserve source-truth timbre spread.",
+                "exhibitCentroids": exhibit_centroids,
+                "rows": {label: rows_by_label[label] for label in ("DX RHODES", "TINE PIANO", "WURLITZER FM")},
+            },
+        )
+
+    def test_regression_fm_dx_rhodes_normal_pressure_is_playable(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_fm_dx_rhodes_normal_pressure"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "FM",
+                "--category",
+                "Keys",
+                "--preset-contains",
+                "DX RHODES",
+                "--trigger",
+                "single-midi",
+                "--normalization-midi",
+                "48",
+                "--normalization-pressure",
+                "48",
+                "--audio-sample-ms",
+                "1200",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = payload["results"][0]
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        self.assertEqual(row["presetLabel"], "DX RHODES", row)
+        self.assertEqual(row["instrumentType"], "fm", row)
+        self.assertGreaterEqual(float(row["audioRms"]), 0.055, row)
+        self.assertGreaterEqual(float(row["audioPeak"]), 0.120, row)
+        self.assertLessEqual(float(row["audioClipRatio"]), 0.01, row)
+
+    def test_regression_uat_fm_spot_presets_do_not_collapse_to_same_timbre(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_fm_uat_spot_timbre_diversity"
+        preset_list = ROOT / "tmp_fm_uat_spot_timbre_list.json"
+        preset_list.write_text(json.dumps([
+            {"engine": "FM", "category": "Keys", "preset": "FM::CELESTA", "presetLabel": "CELESTA", "status": "fail"},
+            {"engine": "FM", "category": "Keys", "preset": "FM::DX RHODES", "presetLabel": "DX RHODES", "status": "fail"},
+            {"engine": "FM", "category": "Brass", "preset": "FM::BRASS 1", "presetLabel": "BRASS 1", "status": "fail"},
+            {"engine": "FM", "category": "Bass", "preset": "FM::BASS 1", "presetLabel": "BASS 1", "status": "fail"},
+        ]), encoding="utf-8")
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "FM",
+                "--preset-list-file",
+                str(preset_list),
+                "--trigger",
+                "six-note-midi",
+                "--audio-sample-ms",
+                "1200",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rows_by_label = {item["presetLabel"]: item for item in payload["results"]}
+        labels = ("CELESTA", "DX RHODES", "BRASS 1", "BASS 1")
+        spectrum_hashes = {rows_by_label[label]["audioSpectrumHash"] for label in labels}
+        waveform_hashes = {rows_by_label[label]["audioWaveformHash"] for label in labels}
+        centroids = [float(rows_by_label[label]["audioSignature"]["spectrumCentroidHz"]) for label in labels]
+        self.assertEqual(len(spectrum_hashes), len(labels), rows_by_label)
+        self.assertEqual(len(waveform_hashes), len(labels), rows_by_label)
+        self.assertGreaterEqual(max(centroids) - min(centroids), 900, {"centroids": centroids, "rows": rows_by_label})
+
+    def test_regression_uat_quiet_spot_presets_clear_single_note_floor(self):
+        cases = [
+            ("Subtractive", "Celesta", "Celesta", 0.008, 0.035),
+            ("Subtractive", "Synth Brass", "Synth Brass Section", 0.025, 0.080),
+            ("Subtractive", "Saw Lead", "Saw Lead", 0.024, 0.060),
+            ("FM", "CELESTA", "CELESTA", 0.010, 0.025),
+            ("FM", "BRASS 1", "BRASS 1", 0.010, 0.025),
+            ("FM", "BASS 1", "BASS 1", 0.020, 0.035),
+            ("Physical", "Nylon Guitar", "Nylon Guitar", 0.006, 0.030),
+        ]
+        for engine, contains, label, min_rms, min_peak in cases:
+            with self.subTest(engine=engine, preset=label):
+                output_dir = ROOT / f"tmp_preset_sweep_unittest_quiet_{engine}_{contains}".replace(" ", "_").replace(".", "_")
+                result = subprocess.run(
+                    [
+                        "python",
+                        "tools/preset_sweep.py",
+                        "--no-build",
+                        "--engine",
+                        engine,
+                        "--preset-contains",
+                        contains,
+                        "--trigger",
+                        "single-midi",
+                        "--normalization-midi",
+                        "48",
+                        "--audio-sample-ms",
+                        "1400",
+                        "--output-dir",
+                        str(output_dir),
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    timeout=120,
+                )
+                payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+                row = next(item for item in payload["results"] if item["presetLabel"] == label)
+                self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+                if engine == "Physical" and label == "Nylon Guitar":
+                    physical_settings = row["audioSignature"]["physicalSettings"]
+                    self.assertEqual(physical_settings["model"], "pluck", row)
+                    self.assertEqual(physical_settings["excitation"], "pick", row)
+                    self.assertEqual(physical_settings["bodySize"], 60, row)
+                    self.assertGreaterEqual(float(row["audioSignature"]["spectrumCentroidHz"]), 700, row)
+                    self.assertGreaterEqual(float(row["audioSignature"]["spectrumHighRatio"]), 0.01, row)
+                self.assertGreaterEqual(float(row["audioRms"]), min_rms, row)
+                self.assertGreaterEqual(float(row["audioPeak"]), min_peak, row)
+                self.assertLessEqual(float(row["audioMaxSampleStep"]), 0.12, row)
+                self.assertLessEqual(float(row["audioP95SampleStep"]), 0.08, row)
+                self.assertLessEqual(float(row["audioClipRatio"]), 0.01, row)
+
+    def test_regression_physical_marimba_c3_is_balanced_against_c4(self):
+        rows = {}
+        for midi, note in ((48, "C3"), (60, "C4")):
+            output_dir = ROOT / f"tmp_preset_sweep_unittest_marimba_{note.lower()}"
+            result = subprocess.run(
+                [
+                    "python",
+                    "tools/preset_sweep.py",
+                    "--no-build",
+                    "--engine",
+                    "Physical",
+                    "--preset-contains",
+                    "Marimba",
+                    "--trigger",
+                    "single-midi",
+                    "--normalization-midi",
+                    str(midi),
+                    "--audio-sample-ms",
+                    "1400",
+                    "--output-dir",
+                    str(output_dir),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                timeout=120,
+            )
+            payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+            row = next(item for item in payload["results"] if item["presetLabel"] == "Marimba")
+            self.assertEqual(result.returncode, 0, f"{note} row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+            rows[note] = row
+        self.assertLessEqual(float(rows["C3"]["audioP95Peak"]), 0.20, rows)
+        self.assertLessEqual(float(rows["C3"]["audioPeak"]), 0.30, rows)
+        self.assertLessEqual(float(rows["C3"]["audioP95Peak"]) / max(0.001, float(rows["C4"]["audioP95Peak"])), 3.5, rows)
+        self.assertLessEqual(float(rows["C3"]["audioClipRatio"]), 0.01, rows)
+
+    def test_regression_uat_spot_presets_have_medium_velocity_loudness(self):
+        cases = [
+            ("Subtractive", "Celesta", "Celesta", 0.008, 0.028),
+            ("Subtractive", "Synth Brass", "Synth Brass Section", 0.025, 0.080),
+            ("Subtractive", "Saw Lead", "Saw Lead", 0.040, 0.100),
+            ("FM", "CELESTA", "CELESTA", 0.040, 0.130),
+            ("FM", "DX RHODES", "DX RHODES", 0.055, 0.120),
+            ("FM", "BRASS 1", "BRASS 1", 0.120, 0.240),
+            ("FM", "BASS 1", "BASS 1", 0.055, 0.100),
+            ("Physical", "Nylon Guitar", "Nylon Guitar", 0.0095, 0.055),
+        ]
+        for engine, contains, label, min_rms, min_peak in cases:
+            with self.subTest(engine=engine, preset=label):
+                output_dir = ROOT / f"tmp_preset_sweep_unittest_medium_velocity_{engine}_{contains}".replace(" ", "_").replace(".", "_")
+                result = subprocess.run(
+                    [
+                        "python",
+                        "tools/preset_sweep.py",
+                        "--no-build",
+                        "--engine",
+                        engine,
+                        "--preset-contains",
+                        contains,
+                        "--trigger",
+                        "single-midi",
+                        "--normalization-midi",
+                        "48",
+                        "--normalization-pressure",
+                        "64",
+                        "--audio-sample-ms",
+                        "1200",
+                        "--output-dir",
+                        str(output_dir),
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    timeout=120,
+                )
+                payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+                row = next(item for item in payload["results"] if item["presetLabel"] == label)
+                self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+                if engine == "Physical" and label == "Nylon Guitar":
+                    physical_settings = row["audioSignature"]["physicalSettings"]
+                    self.assertEqual(physical_settings["model"], "pluck", row)
+                    self.assertEqual(physical_settings["excitation"], "pick", row)
+                    self.assertEqual(physical_settings["bodySize"], 60, row)
+                    self.assertGreaterEqual(float(row["audioSignature"]["spectrumCentroidHz"]), 700, row)
+                    self.assertGreaterEqual(float(row["audioSignature"]["spectrumHighRatio"]), 0.01, row)
+                self.assertGreaterEqual(float(row["audioRms"]), min_rms, row)
+                self.assertGreaterEqual(float(row["audioPeak"]), min_peak, row)
+                max_sample_step = 0.30 if engine == "FM" and label == "BRASS 1" else 0.12
+                self.assertLessEqual(float(row["audioMaxSampleStep"]), max_sample_step, row)
+                self.assertLessEqual(float(row["audioP95SampleStep"]), 0.08, row)
+                self.assertLessEqual(float(row["audioClipRatio"]), 0.01, row)
+
+    def test_regression_physical_nylon_guitar_does_not_ring_like_sustained_pad(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_physical_nylon_long_release"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "Physical",
+                "--preset-contains",
+                "Nylon Guitar",
+                "--trigger",
+                "single-midi",
+                "--normalization-midi",
+                "48",
+                "--normalization-pressure",
+                "64",
+                "--audio-sample-ms",
+                "2600",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = next(item for item in payload["results"] if item["presetLabel"] == "Nylon Guitar")
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        self.assertLessEqual(float(row["audioRms"]), 0.015, row)
+        self.assertLessEqual(float(row["audioTailRms"]), 0.003, row)
+        self.assertLessEqual(float(row["audioClipRatio"]), 0.01, row)
+
     def test_regression_sound_selectors_use_live_ssli_preset_api_when_available(self):
         self.open_audio_drawer()
         self.page.evaluate("""
@@ -3904,10 +4295,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.assertEqual(metrics["pressure"], [], metrics)
         self.assertEqual(metrics["stops"], [], metrics)
-        self.assertEqual([call[1] for call in metrics["physicalOff"]], [55, 52, 48], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
         self.assertEqual(metrics["sustained"], [], metrics)
         self.assertIn("SSLI plucked pressure ignored after onset", metrics["log"])
-        self.assertIn("SSLI plucked one-shot note-off", metrics["log"])
+        self.assertIn("SSLI plucked one-shot natural decay", metrics["log"])
         self.assertIn("SSLI plucked one-shot", metrics["log"])
 
     def test_regression_plucked_held_one_shot_keeps_voice_ownership_until_note_off(self):
@@ -4772,13 +5163,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 97] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["setInstrumentVolume", 0, 100], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 111 and call[3] == 100 and call[4] == 4 for call in calls), calls)
+        self.assertIn(["setInstrumentVolume", 0, 80], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 97 and call[3] == 80 and call[4] == 1 for call in calls), calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("SSLI instrument inst=0 type=subtractive volume=42->100", log)
-        self.assertIn("SSLI normalization preset=subtractive::Wurlitzer EP volume=100 output=4.00", log)
+        self.assertIn("SSLI instrument inst=0 type=subtractive volume=42->80", log)
+        self.assertNotIn("SSLI normalization preset=subtractive::Wurlitzer EP", log)
 
-    def test_regression_ssli_celesta_uses_preset_normalization_gain(self):
+    def test_regression_ssli_celesta_does_not_use_output_boost_compensation(self):
         self.open_audio_drawer()
         celesta_value = self.page.locator('[data-testid="sound-preset-select"]').evaluate(
             """select => [...select.options].find((option) => option.textContent.trim() === 'Celesta').value"""
@@ -4821,14 +5212,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
         self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["setInstrumentVolume", 0, 100], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[3] == 100 and call[4] == 4 for call in calls), calls)
+        self.assertIn(["setInstrumentVolume", 0, 80], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 96 and call[3] == 80 and call[4] == 1 for call in calls), calls)
         self.page.wait_for_timeout(80)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("SSLI normalization output preset=" + celesta_value + " gain=4.00", log)
-        self.assertIn("SSLI normalization preset=" + celesta_value + " volume=100 output=4.00", log)
+        self.assertNotIn("SSLI normalization output preset=" + celesta_value, log)
+        self.assertNotIn("SSLI normalization preset=" + celesta_value, log)
 
-    def test_regression_ssli_rhodes_uses_measured_preset_normalization_gain(self):
+    def test_regression_ssli_rhodes_does_not_use_output_boost_compensation(self):
         self.open_audio_drawer()
         rhodes_value = self.page.locator('[data-testid="sound-preset-select"]').evaluate(
             """select => [...select.options].find((option) => option.textContent.trim() === 'Electric Piano (Rhodes)').value"""
@@ -4871,13 +5262,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
         self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["setInstrumentVolume", 0, 100], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[3] == 100 and call[4] == 7 for call in calls), calls)
+        self.assertIn(["setInstrumentVolume", 0, 80], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 96 and call[3] == 80 and call[4] == 1 for call in calls), calls)
         self.page.wait_for_timeout(80)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("SSLI normalization output preset=" + rhodes_value + " gain=7.00", log)
+        self.assertNotIn("SSLI normalization output preset=" + rhodes_value, log)
 
-    def test_regression_exquis_midi_inverses_ssli_velocity_curve_without_global_expression(self):
+    def test_regression_exquis_midi_uses_linear_velocity_without_global_expression(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -4918,13 +5309,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 113], calls)
+        self.assertIn(["startSustainedNote", 48, 101], calls)
         self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("pressure=101", log)
         self.assertNotIn("SSLI expression pressure=", log)
 
-    def test_regression_fm_midi_uses_raw_velocity_without_global_expression(self):
+    def test_regression_fm_midi_translates_exquis_pressure_without_global_expression(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -4946,6 +5337,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
               stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); },
               setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
               clearExpression() {}
+            },
+            fm: {
+              noteOn(midi, velocity, inst) { window.__ssliCalls.push(['fmNoteOn', midi, velocity, inst]); },
+              noteOff(midi, inst) { window.__ssliCalls.push(['fmNoteOff', midi, inst]); }
             }
           };
           window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -4958,9 +5353,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 48, 127] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 48, 48] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 50, 64] })")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x96, 52, 127] })")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 127], calls)
+        self.assertIn(["fmNoteOn", 48, 78, 0], calls)
+        self.assertIn(["fmNoteOn", 50, 90, 0], calls)
+        self.assertIn(["fmNoteOn", 52, 127, 0], calls)
+        self.assertFalse(any(call[0] == "startSustainedNote" for call in calls), calls)
         self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
 
     def test_regression_low_register_subtractive_poly_preserves_volume(self):
@@ -5197,9 +5597,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         })
         """)
         self.assertEqual([call[1] for call in metrics["starts"]], [47, 50, 53], metrics)
-        self.assertEqual([call[1] for call in metrics["physicalOff"]], [47, 50, 53], metrics)
+        self.assertEqual(metrics["physicalOff"], [], metrics)
         self.assertIn("SSLI plucked one-shot D3 velocity=32 pressure=1 decay=natural preset=physical::Nylon Guitar", metrics["log"])
-        self.assertIn("SSLI plucked one-shot note-off B2 after 320ms", metrics["log"])
+        self.assertIn("SSLI plucked one-shot natural decay B2", metrics["log"])
         self.assertNotIn("SSLI engine all-notes-off after MIDI idle", metrics["log"])
         self.assertNotIn("boost=", metrics["log"])
 

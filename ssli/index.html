@@ -26523,7 +26523,11 @@ window.__SSL_PHYSICAL_WORKLET_CODE = `// Super Synth Lab - Physical Modelling Au
 // Per-voice output gain — keeps 4 simultaneous voices under the
 // soft-clipper knee (~0.9). 4 voices * 0.22 = 0.88 peak sum.
 var PHYS_VOICE_OUTPUT_GAIN = 0.22;
-var PLUCK_OUTPUT_SCALE = 3.0;
+// Karplus-Strong pluck excitation is an initial displacement/noise burst
+// followed by loop damping; set the pluck-family output scale separately from
+// sustained bowed/blown and struck modal models. Original source: Karplus &
+// Strong (1983), CMJ 7(2); Jaffe & Smith (1983), CMJ 7(2).
+var PLUCK_OUTPUT_SCALE = 9.0;
 // Pre-computed sine lookup table: avoids calling Math.sin() at audio
 // rate. Size is a power of 2 (4096) so we can use bitwise AND with
 // PHYS_SINE_MASK for fast modular indexing. At 4096 entries, the
@@ -26774,7 +26778,11 @@ class PluckModel {
     this.decayTime = 70;
     this.delayLength = 100;
     this.exciteRemaining = 0;
-    this.pickPosition = 0.5;
+    // Off-center plucking is the normal guitar/string case; a center pluck
+    // suppresses even harmonics and sounds unnaturally dull unless explicitly
+    // requested. Original source: Jaffe & Smith (1983), CMJ 7(2),
+    // pick-position filtering in extended Karplus-Strong.
+    this.pickPosition = 0.18;
     this.pickDelay = 0; // Pick position comb filter delay in samples
     this.baseFilterCoeff = 0.5;
   }
@@ -26787,7 +26795,11 @@ class PluckModel {
 
     // Brightness -> loop filter coefficient (higher = brighter)
     var bright = this.brightness / 100;
-    this.baseFilterCoeff = 0.5 + bright * 0.45;
+    // Brightness maps to loop-filter loss, not a second heavy mute. Plucked
+    // nylon should retain upper partials while still damping faster than the
+    // fundamental. Original source: Smith, Physical Audio Signal Processing,
+    // frequency-dependent decay via loop filters in string waveguides.
+    this.baseFilterCoeff = 0.82 + bright * 0.17;
     this.loopFilter.setCoeff(this.baseFilterCoeff);
 
     // Decay time controls maximum samples before voice reclaim
@@ -26797,8 +26809,11 @@ class PluckModel {
     // Body size affects a secondary lowpass (pre-output)
     this.bodyCoeff = 0.5 + (this.bodySize / 100) * 0.45;
 
-    // Pick position for comb filtering (suppress harmonics at multiples of 1/pickPos)
-    this.pickPosition = 0.13 + (this.bodySize / 100) * 0.35;
+    // Pick position is a string coordinate independent of resonating body size;
+    // plucking nearer the bridge leaves more upper partial energy. Original
+    // source: Jaffe & Smith (1983), CMJ 7(2), pick-position filtering in
+    // extended Karplus-Strong.
+    this.pickPosition = Math.max(0.05, Math.min(0.95, this.pickPosition));
     this.pickDelay = Math.max(1, Math.floor(this.delayLength * this.pickPosition));
 
     // Clear state
@@ -26807,8 +26822,17 @@ class PluckModel {
     this.loopFilter.clear();
     this.prevSample = 0;
 
-    // Excitation: fill delay line with shaped excitation
+    // Excitation: fill delay line with shaped excitation. Karplus-Strong uses
+    // noise as the initial string displacement; use deterministic pseudo-noise
+    // per note so automated audio acceptance is repeatable while preserving
+    // the noise-excited model. Original source: Karplus & Strong (1983), CMJ
+    // 7(2); linear congruential PRNG constants from Numerical Recipes.
     var vel = (velocity || 100) / 127;
+    var noiseSeed = ((Math.round(safeFreq * 1000) ^ (Math.round(velocity || 0) << 8) ^ Math.round(this.bodySize * 17)) >>> 0) || 1;
+    var nextExcitationNoise = function() {
+      noiseSeed = (1664525 * noiseSeed + 1013904223) >>> 0;
+      return (noiseSeed / 2147483648) - 1;
+    };
     var intPeriod = Math.ceil(period);
     var excLen = intPeriod;
 
@@ -26821,16 +26845,21 @@ class PluckModel {
       }
       for (var i = burstLen; i < intPeriod; i++) this.delayLine.write(0);
     } else if (this.excitation === 'pick') {
-      // Triangle-ish pick excitation with half-Hann window
-      var half = Math.floor(excLen / 2);
-      var safeHalf = half || 1;
+      // A picked string starts from a triangular displacement at the pluck
+      // point; the delay-line excitation is the change in that displacement,
+      // which preserves the pick discontinuity instead of smearing it into a
+      // quiet fundamental-heavy arch. Original source: Smith, Physical Audio
+      // Signal Processing, plucked string initial conditions; Jaffe & Smith
+      // (1983), CMJ 7(2), pick-position filtering in extended Karplus-Strong.
+      var pick = Math.max(0.05, Math.min(0.95, this.pickPosition || 0.5));
+      var previousDisplacement = 0;
       for (var i = 0; i < excLen; i++) {
-        var env = i < half ? i / safeHalf : (excLen - i) / ((excLen - half) || 1);
-        // Half-Hann window for smoother onset
-        var safeExcLenPick = excLen || 1;
-        var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLenPick));
-        var noise = (Math.random() * 2 - 1) * 0.15;
-        this.delayLine.write((env + noise) * hann * vel * 0.5);
+        var x = i / Math.max(1, excLen - 1);
+        var displacement = x < pick ? (x / pick) : ((1 - x) / (1 - pick));
+        var displacementDelta = displacement - previousDisplacement;
+        previousDisplacement = displacement;
+        var pickNoise = nextExcitationNoise() * 0.04 * (1 - x);
+        this.delayLine.write((displacementDelta * excLen * 0.18 + pickNoise) * vel);
       }
     } else {
       // Shaped noise burst: mix of filtered noise + short sine burst at fundamental
@@ -26843,7 +26872,7 @@ class PluckModel {
         var safeExcLen = excLen || 1;
         var hann = 0.5 * (1 - Math.cos(Math.PI * i / safeExcLen));
         // Noise component (simple one-pole lowpass for shaping)
-        var rawNoise = (Math.random() * 2 - 1);
+        var rawNoise = nextExcitationNoise();
         var filteredNoise = 0.6 * rawNoise + 0.4 * prevNoise;
         prevNoise = filteredNoise;
         // Sine burst at fundamental (fades out after half the period)
@@ -26883,8 +26912,13 @@ class PluckModel {
     var pickSample = this.delayLine.read(this.pickDelay);
     delayed = delayed - pickSample * 0.5;
 
-    // Two-point averaging (original KS algorithm) before loop filter
-    var averaged = (delayed + this.prevSample) * 0.5;
+    // Extended Karplus-Strong uses loop filtering to set frequency-dependent
+    // decay. Keep the original two-sample averager as the dark end of the
+    // brightness range instead of forcing every picked string through fixed
+    // 0.5 high-frequency loss. Original source: Jaffe & Smith (1983), CMJ
+    // 7(2); Smith, Physical Audio Signal Processing, loop-filter damping.
+    var averageMix = 0.5 + (this.brightness / 100) * 0.45;
+    var averaged = delayed * averageMix + this.prevSample * (1 - averageMix);
     this.prevSample = delayed;
 
     // One-pole loop filter for brightness/damping
@@ -26898,8 +26932,12 @@ class PluckModel {
     // Write back into delay line
     this.delayLine.write(filtered);
 
-    // DC block
-    var out = this.dcBlocker.process(filtered);
+    // Output is tapped from the delay-line string signal; the averaging and
+    // loop filter belong in the feedback/damping path. Tapping only the
+    // post-filter feedback sample over-damps picked transients. Original
+    // source: Karplus & Strong (1983), CMJ 7(2); Smith, Physical Audio Signal
+    // Processing, digital waveguide plucked-string loop filter placement.
+    var out = this.dcBlocker.process(delayed);
 
     // Check if effectively silent
     if (this.decayCounter > this.sampleRate * 0.5 && Math.abs(out) < 0.00001) {
@@ -27515,10 +27553,13 @@ class StrikeModel {
   getPartialRatios(material) {
     switch (material) {
       case 'wood':
-        // Bar modes: Euler-Bernoulli beam theory gives f_n ~ n^2 for a
-        // free-free bar. These measured ratios are from marimba bars.
-        return [1, 2.76, 5.40, 8.93, 13.34, 18.64, 24.82, 31.87,
-                39.81, 48.62, 58.31, 68.88, 80.33, 92.66, 105.86, 119.94];
+        // Tuned marimba bars are undercut so the first transverse modes sit
+        // near 1:4:10 rather than the 1:2.76:5.40 free-free rectangular beam
+        // ratios. Original source: Fletcher & Rossing, The Physics of
+        // Musical Instruments, Ch. 19; Bretos et al. (1999) marimba-bar
+        // measurements.
+        return [1, 4.0, 10.0, 20.0, 33.0, 49.0, 68.0, 90.0,
+                115.0, 143.0, 174.0, 208.0, 245.0, 285.0, 328.0, 374.0];
       case 'metal':
         // Metallic bar: nearly harmonic with slight stretching from
         // stiffness. The deviation from pure integers gives the
@@ -27592,18 +27633,26 @@ class StrikeModel {
         continue;
       }
 
-      // Frequency-dependent decay: higher modes decay faster (Q inversely proportional to mode number)
+      // Frequency-dependent decay: higher marimba/bar modes decay faster than
+      // the fundamental. Original source: Bork (1995), summarized in
+      // Rossing-style marimba tuning references: modal decay is roughly
+      // inverse to partial ratio for tuned 1:4:10 bars.
       var baseQ = 0.002 + (1 - this.decayTime / 100) * 0.02;
-      var modeQ = baseQ * (1 + i * 0.15); // Higher modes get wider bandwidth = faster decay
+      var decayRatio = Math.max(1, ratios[i] || 1);
+      var modeQ = baseQ * Math.sqrt(decayRatio) * (1 + i * 0.08);
       var bw = modeFreq * modeQ;
       this.configureMode(this.modes[i], modeFreq, Math.max(0.5, bw));
 
       // Gain: decreases for higher partials, modulated by hardness and strike position
       var positionGain = Math.abs(Math.sin(Math.PI * (i + 1) * strikePos));
       var spectralGain = Math.pow(hardnessFactor, i * 0.15);
-      var distanceDecay = 1 / (1 + i * 0.3);
+      // Modal excitation falls with mode number/frequency; total modal energy
+      // is proportional to squared modal amplitudes. Original source: modal
+      // summation energy orthogonality in Morse & Ingard, Theoretical
+      // Acoustics, Ch. 6.
+      var modalEnergyFalloff = 1 / Math.sqrt(Math.max(1, ratios[i] || 1));
 
-      this.modes[i].gain = vel * positionGain * spectralGain * distanceDecay;
+      this.modes[i].gain = vel * positionGain * spectralGain * modalEnergyFalloff;
       this.modes[i].y1 = 0;
       this.modes[i].y2 = 0;
     }
@@ -27612,7 +27661,12 @@ class StrikeModel {
     for (var i = 0; i < this.numModes; i++) {
       totalGain += Math.abs(this.modes[i].gain);
     }
-    this.outputScale = totalGain > 0 ? (0.8 / totalGain) : 1.0;
+    this.outputScale = totalGain > 0 ? (0.55 / totalGain) : 1.0;
+    // Low bars radiate less efficiently than mid-register bars; scale struck
+    // modal output by frequency below middle C instead of letting C3 dominate.
+    // Original source: Fletcher & Rossing, The Physics of Musical Instruments,
+    // Ch. 19, marimba bars and resonator radiation efficiency.
+    this.outputScale *= Math.min(1, freq / 261.6255653005986);
 
     // Contact time derived from hardness (harder = shorter contact)
     var contactMs = 0.5 + (1 - hardnessFactor) * 4.0; // 0.5ms to 4.5ms
@@ -27725,6 +27779,7 @@ class PhysicalVoice {
         this.pluck.brightness = settings.brightness != null ? settings.brightness : 60;
         this.pluck.excitation = settings.excitation || 'noise';
         this.pluck.bodySize = settings.bodySize != null ? settings.bodySize : 50;
+        this.pluck.pickPosition = settings.pickPosition != null ? settings.pickPosition : 0.18;
         this.pluck.decayTime = settings.decayTime != null ? settings.decayTime : 70;
         break;
 
@@ -27903,7 +27958,7 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
           if (params.damping != null) model.damping = params.damping;
           if (params.brightness != null) {
             model.brightness = params.brightness;
-            model.loopFilter.setCoeff(0.5 + (params.brightness / 100) * 0.45);
+            model.loopFilter.setCoeff(0.82 + (params.brightness / 100) * 0.17);
           }
           if (params.bodySize != null) model.bodySize = params.bodySize;
         } else if (v.modelType === 'bow') {
@@ -27937,10 +27992,14 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       return true;
     }
 
+    // Active-voice RMS makeup: summed uncorrelated voice power grows with N,
+    // so a single pluck should not retain four-voice headroom. Original
+    // source: Smith, Physical Audio Signal Processing, RMS power addition.
+    var polyphonyMixGain = numActive > 4 ? 4 / numActive : Math.sqrt(4 / Math.max(1, numActive));
     for (var s = 0; s < channel.length; s++) {
       var sample = 0;
       for (var a = 0; a < numActive; a++) {
-        sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN;
+        sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain;
       }
       // Pade [3/3] approximant of tanh for soft clipping (always-on):
       //   tanh(x) ~ x * (27 + x^2) / (27 + 9*x^2)
@@ -28494,6 +28553,8 @@ class FMVoice {
     this.algorithm = settings.algorithm || 1;
     this.feedbackLevel = this.feedbackToScale(settings.feedback || 0);
     this.feedbackValue = 0;
+    this.feedbackPair[0] = 0;
+    this.feedbackPair[1] = 0;
     this.instId = settings.instId || 0;
 
     // Per-voice velocity randomization
@@ -28911,12 +28972,17 @@ class FMWorkletProcessor extends AudioWorkletProcessor {
 
     var voices = this.voices;
     var bufLen = channel.length;
+    // Active-voice makeup gain: for uncorrelated voices, summed RMS grows as
+    // sqrt(N), so a one-note line should not keep the same headroom reserve as
+    // a four-note chord. Original source: Smith, Physical Audio Signal
+    // Processing, RMS power addition for uncorrelated signals.
+    var voiceMakeupGain = Math.sqrt(4 / Math.max(1, aviLen));
 
     // Per-sample loop: sum all active voices, then soft-clip
     for (var s = 0; s < bufLen; s++) {
       var sample = 0;
       for (var v = 0; v < aviLen; v++) {
-        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN;
+        sample += voices[avi[v]].process() * VOICE_OUTPUT_GAIN * voiceMakeupGain;
       }
       // Global soft clipper: Pade approximant of tanh
       // Keeps output in [-1, +1] with smooth saturation curve
@@ -29860,6 +29926,12 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       channel[i] = 0;
     }
 
+    // Active-voice makeup gain: for uncorrelated voices, summed RMS grows as
+    // sqrt(N), so a one-note line should not keep the same headroom reserve as
+    // a four-note chord. Original source: Smith, Physical Audio Signal
+    // Processing, RMS power addition for uncorrelated signals.
+    var voiceMakeupGain = Math.sqrt(64 / Math.max(1, aviLen));
+
     // Generate audio for each active voice only
     for (var v = 0; v < aviLen; v++) {
       var voice = this.voices[avi[v]];
@@ -29869,10 +29941,9 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
             voice.startDelaySamples--;
           } else {
             var sample = this.generateVoiceSample(voice, sampleDuration);
-            // 0.12 master gain prevents clipping when many voices overlap.
-            // With 64 voices at full amplitude, raw sum could reach ~64.0;
-            // 0.12 brings the peak to ~7.7, which the soft clipper handles.
-            channel[i] += sample * 0.12 * voice.velocityGain;
+            // 0.12 ~= 1/sqrt(64) reserves 64-voice RMS headroom; voiceMakeupGain
+            // restores normal single-note level and recedes as polyphony rises.
+            channel[i] += sample * 0.12 * voice.velocityGain * voiceMakeupGain;
           }
         }
       }
@@ -139906,7 +139977,10 @@ SL.screens = (function () {
       SL.analyzer.autoShowOnFirstNote();
     }
     var velLinear = (typeof velocity === 'number') ? (velocity / 127) : (100 / 127);
-    var velGain = velLinear * velLinear;
+    // MIDI velocity is a 7-bit linear performance control; nonlinear response
+    // belongs in the selected velocity curve, not in the engine gain law.
+    // Original source: MIDI 1.0 Detailed Specification, Note On velocity.
+    var velGain = velLinear;
     var activeOscs = SL.audio.getActiveOscillators();
     if (!activeOscs.has(midi)) {
 
@@ -139979,7 +140053,11 @@ SL.screens = (function () {
 
     var adsr = SL.audio.getADSR();
     var now = c.currentTime;
-    var peak = 0.12 * velGain;
+    // 0.12 reserves four-voice headroom in the direct fallback path; restore
+    // single-note level by the RMS power law as active voices change.
+    // Original source: Smith, Physical Audio Signal Processing, RMS power addition.
+    var activeVoiceCount = Math.max(1, activeOscs.size + 1);
+    var peak = 0.12 * velGain * Math.sqrt(4 / activeVoiceCount);
     var attackTime = Math.max(0.003, adsr.a);
 
     // Acquire a voice from the pool
@@ -143459,6 +143537,65 @@ SL.screens = (function () {
   // for detailed DSP commentary.
   // ---------------------------------------------------------------
 
+  // Source: Dexed Python package algorithms.py, decoded from DX7 algorithm
+  // modulation matrices; mods are [target, source] operator indices.
+  var DX7_ALGORITHM_MATRIX = [{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[4,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[4,5]],"fb":[1,1]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[4,5]],"fb":[5,5]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[4,5]],"fb":[3,5]},{"carriers":[0,2,4],"mods":[[0,1],[2,3],[4,5]],"fb":[5,5]},{"carriers":[0,2,4],"mods":[[0,1],[2,3],[4,5]],"fb":[4,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[3,3]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[4,5]],"fb":[1,1]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,3],"mods":[[0,1],[1,2],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[2,5]],"fb":[1,1]},{"carriers":[0,2],"mods":[[0,1],[2,3],[2,4],[2,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,2],"mods":[[0,1],[2,3],[3,4],[3,5]],"fb":[1,1]},{"carriers":[0],"mods":[[0,1],[0,2],[0,4],[2,3],[4,5]],"fb":[5,5]},{"carriers":[0],"mods":[[0,1],[0,2],[0,4],[2,3],[4,5]],"fb":[1,1]},{"carriers":[0],"mods":[[0,1],[0,2],[0,3],[3,4],[4,5]],"fb":[2,2]},{"carriers":[0,3,4],"mods":[[0,1],[1,2],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[0,2],[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,1,3,4],"mods":[[0,2],[1,2],[3,5],[4,5]],"fb":[2,2]},{"carriers":[0,2,3,4],"mods":[[0,1],[2,5],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3,4],"mods":[[1,2],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4],"mods":[[2,5],[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4],"mods":[[3,5],[4,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[1,2],[3,4],[3,5]],"fb":[5,5]},{"carriers":[0,1,3],"mods":[[1,2],[3,4],[3,5]],"fb":[2,2]},{"carriers":[0,2,5],"mods":[[0,1],[2,3],[3,4]],"fb":[4,4]},{"carriers":[0,1,2,4],"mods":[[2,3],[4,5]],"fb":[5,5]},{"carriers":[0,1,2,5],"mods":[[2,3],[3,4]],"fb":[4,4]},{"carriers":[0,1,2,3,4],"mods":[[4,5]],"fb":[5,5]},{"carriers":[0,1,2,3,4,5],"mods":[],"fb":[5,5]}];
+  var DX7_LEVEL_LUT = [0,5,9,13,17,20,23,25,27,29,31,33,35,37,39,41,42,43,45,46];
+  var DX7_VELOCITY_DATA = [0,70,86,97,106,114,121,126,132,138,142,148,152,156,160,163,166,170,173,174,178,181,184,186,189,190,194,196,198,200,202,205,206,209,211,214,216,218,220,222,224,225,227,229,230,232,233,235,237,238,240,241,242,243,244,246,246,248,249,250,251,252,253,254];
+  var DX7_EXP_SCALE_DATA = [0,1,2,3,4,5,6,7,8,9,11,14,16,19,23,27,33,39,47,56,66,80,94,110,126,142,158,174,190,206,222,238,250];
+  var DX7_FEEDBACK_SCALE = [0];
+  for (var dx7Fb = 1; dx7Fb <= 7; dx7Fb++) {
+    // Source: Dexed/msfa fm_op_kernel.cc compute_fb() phase feedback shift.
+    DX7_FEEDBACK_SCALE[dx7Fb] = Math.pow(2, dx7Fb - 9);
+  }
+  function dx7ScaleOutlevel(level) {
+    level = Math.max(0, Math.min(99, Math.round(level || 0)));
+    return level >= 20 ? 28 + level : (DX7_LEVEL_LUT[level] || 0);
+  }
+  function dx7ScaleVelocity(velocity, sensitivity) {
+    var velValue = DX7_VELOCITY_DATA[Math.max(0, Math.min(127, Math.round(velocity || 0))) >> 1] - 239;
+    return (((Math.max(0, Math.min(7, Math.round(sensitivity || 0))) * velValue + 7) >> 3) << 4);
+  }
+  function dx7EnvelopeLevelToLinear(level) {
+    level = Math.max(0, Math.min(99, Math.round(level || 0)));
+    if (level === 0) return 0;
+    return ((dx7ScaleOutlevel(level) >> 1) << 6);
+  }
+  function dx7GainFromActualLevel(actualLevel) {
+    actualLevel = Math.max(16, actualLevel);
+    // Source: Dexed/msfa env.cc Exp2 gain followed by INT32_TO_FLOAT_SCALE:
+    // actuallevel 3840 maps to unity final float gain.
+    return Math.pow(2, (actualLevel - 3840) / 256);
+  }
+  function dx7ScaleCurve(group, depth, curve) {
+    var scale;
+    if (curve === 0 || curve === 3) scale = (group * depth * 329) >> 12;
+    else scale = ((DX7_EXP_SCALE_DATA[Math.min(group, DX7_EXP_SCALE_DATA.length - 1)] || 0) * depth * 329) >> 15;
+    return curve < 2 ? -scale : scale;
+  }
+  function dx7ScaleLevel(midiNote, breakPoint, leftDepth, rightDepth, leftCurve, rightCurve) {
+    // Source: Dexed/msfa dx7note.cc ScaleLevel() and ScaleCurve().
+    var offset = Math.round(midiNote || 0) - Math.round(breakPoint || 0) - 17;
+    if (offset >= 0) return dx7ScaleCurve(Math.floor((offset + 1) / 3), rightDepth || 0, rightCurve || 0);
+    return dx7ScaleCurve(Math.floor(-(offset - 1) / 3), leftDepth || 0, leftCurve || 0);
+  }
+  function dx7CombinedOperatorGain(envelopeLevel, operatorOutlevel) {
+    // Source: Dexed/msfa env.cc combines EG level + operator outlevel before Exp2.
+    return dx7GainFromActualLevel(envelopeLevel + operatorOutlevel - 4256);
+  }
+  function dx7KbdRateScale(midiNote, rateScaling) {
+    // Source: Dexed/msfa dx7note.cc ScaleRate().
+    var x = Math.min(31, Math.max(0, Math.floor(Math.max(0, Math.round(midiNote || 0)) / 3) - 7));
+    return (Math.max(0, Math.min(7, Math.round(rateScaling || 0))) * x) >> 3;
+  }
+  function dx7FallbackOperatorGain(op, midiNote, velocity) {
+    var outlevel = Math.min(127, dx7ScaleOutlevel(op.outputLevel) + dx7ScaleLevel(midiNote, op.breakPoint, op.leftDepth, op.rightDepth, op.leftCurve, op.rightCurve));
+    outlevel = Math.max(0, (outlevel << 5) + dx7ScaleVelocity(velocity, op.velocitySens));
+    // Source: Dexed/msfa dx7note.cc computes operator outlevel in the same
+    // log-domain units later folded into env.cc actuallevel before Exp2.
+    return outlevel;
+  }
+
   // Minimal voice for fallback (runs on main thread)
   function FallbackOperator(sr) {
     this.phase = 0;
@@ -143468,8 +143605,19 @@ SL.screens = (function () {
     this.outputLevel = 0;
     this.ratioCoarse = 1;
     this.ratioFine = 0;
+    this.frequencyMode = 0;
     this.detune = 7;
     this.velocitySens = 0;
+    this.rateScaling = 0;
+    this.breakPoint = 39;
+    this.leftDepth = 0;
+    this.rightDepth = 0;
+    this.leftCurve = 0;
+    this.rightCurve = 0;
+    this.rateScalingOffset = 0;
+    this.gainCurrent = 0;
+    this.gainDelta = 0;
+    this.gainSamplesLeft = 0;
     this.velocityScale = 1;
     // Envelope state
     this.envStage = 0;
@@ -143483,15 +143631,19 @@ SL.screens = (function () {
   FallbackOperator.prototype.setParams = function(p) {
     if (p.ratioCoarse !== undefined) this.ratioCoarse = p.ratioCoarse;
     if (p.ratioFine !== undefined) this.ratioFine = p.ratioFine;
+    if (p.frequencyMode !== undefined) this.frequencyMode = p.frequencyMode;
     if (p.level !== undefined) {
       this.outputLevel = p.level;
-      // DX7 level-to-amplitude: approximately logarithmic.
-      // Level 99 = 0 dB (full), each step down ~0.75 dB.
-      // Formula: amplitude = 2^((level - 99) / 8)
-      this.amplitude = p.level === 0 ? 0 : Math.pow(2, (p.level - 99) / 8);
+      this.amplitude = dx7FallbackOperatorGain(this, 60, 127);
     }
     if (p.detune !== undefined) this.detune = p.detune;
     if (p.velocitySens !== undefined) this.velocitySens = p.velocitySens;
+    if (p.rateScaling !== undefined) this.rateScaling = p.rateScaling;
+    if (p.breakPoint !== undefined) this.breakPoint = p.breakPoint;
+    if (p.leftDepth !== undefined) this.leftDepth = p.leftDepth;
+    if (p.rightDepth !== undefined) this.rightDepth = p.rightDepth;
+    if (p.leftCurve !== undefined) this.leftCurve = p.leftCurve;
+    if (p.rightCurve !== undefined) this.rightCurve = p.rightCurve;
     if (p.envelope) {
       var e = p.envelope;
       this.envRates = [e.R1, e.R2, e.R3, e.R4];
@@ -143499,23 +143651,39 @@ SL.screens = (function () {
     }
   };
 
-  FallbackOperator.prototype.keyOn = function(noteFreq, velocity) {
-    // Operator frequency = noteFreq * ratio * detuneMultiplier.
-    // Coarse=0 is special: ratio becomes 0.5 (sub-octave).
-    // Fine adds 0-99% on top of coarse (100 subdivisions between ratios).
+  FallbackOperator.prototype.keyOn = function(noteFreq, velocity, midiNote) {
+    // Source: Dexed/msfa dx7note.cc osc_freq(): ratio mode is log-additive,
+    // equivalent to coarse * (1 + fine/100), with coarse 0 as the DX7
+    // half-frequency special case.
     var ratio = this.ratioCoarse === 0 ? 0.5 : this.ratioCoarse;
     ratio *= (1 + this.ratioFine * 0.01);
-    // Detune: value 7 = center (0 cents), range 0-14 = -7 to +7 cents
-    var detuneCents = this.detune - 7;
-    this.frequency = noteFreq * ratio * Math.pow(2, detuneCents / 1200);
-    // Random initial phase prevents phase-locked constructive interference
-    // between simultaneous voices (reduces harsh transients on chords)
+    if (this.frequencyMode) {
+      // Source: Dexed/msfa dx7note.cc fixed-frequency branch in osc_freq().
+      this.frequency = Math.pow(10, (this.ratioCoarse & 3) + this.ratioFine / 100);
+      if (this.detune > 7) {
+        // Source: Dexed/msfa dx7note.cc fixed-frequency branch adds detune
+        // in fixed-point frequency units only above center detune.
+        this.frequency += 13457 * (this.detune - 7) / (1 << 24);
+      }
+    } else {
+      this.frequency = noteFreq * ratio;
+      if (this.detune !== 7) {
+        // Source: Dexed/msfa dx7note.cc operator detune calculation:
+        // detune is derived from the base note log frequency before applying
+        // coarse/fine ratio multipliers.
+        var logfreq = Math.log2(Math.max(1e-9, noteFreq)) * (1 << 24);
+        var detuneRatio = 0.0209 * Math.exp(-0.396 * logfreq / (1 << 24)) / 7;
+        var logOffset = detuneRatio * logfreq * (this.detune - 7);
+        this.frequency += this.frequency * (Math.pow(2, logOffset / (1 << 24)) - 1);
+      }
+    }
     this.phase = Math.random();
-    // Velocity sensitivity: sens=0 -> organ-like, sens=7 -> full dynamic range.
-    // Linear crossfade between fixed amplitude (1.0) and velocity-scaled amplitude.
-    var velNorm = velocity / 127;
-    var sens = this.velocitySens / 7;
-    this.velocityScale = 1 - sens + sens * velNorm;
+    this.rateScalingOffset = dx7KbdRateScale(midiNote, this.rateScaling);
+    this.amplitude = dx7FallbackOperatorGain(this, midiNote, velocity);
+    this.gainCurrent = 0;
+    this.gainDelta = 0;
+    this.gainSamplesLeft = 0;
+    this.velocityScale = 1;
     this.envStage = 0;
     this.envReleased = false;
     this.envFinished = false;
@@ -143539,18 +143707,25 @@ SL.screens = (function () {
   // Formula: rate (dB/s) = 0.2819 * 2^(rate_value * 0.16)
   // See: FM-Engine-Architecture.md Section 4
   // ---------------------------------------------------------------
+  FallbackOperator.prototype.dx7RateToIncrement = function(rate) {
+    // Source: Dexed/msfa env.cc qrate/inc calculation.
+    var qrate = Math.min(63, (((Math.max(0, Math.min(99, rate || 0)) * 41) >> 6) + (this.rateScalingOffset || 0)));
+    var inc = (4 + (qrate & 3)) << (2 + 6 + (qrate >> 2));
+    return (inc / 65536 / 64) * (44100 / this.sampleRate);
+  };
+
   FallbackOperator.prototype.processEnv = function() {
     if (this.envFinished) return 0;
-    var tgtRaw = this.envLevels[this.envStage];
-    // Level mapping: power curve (x^2.5) approximates the DX7's
-    // roughly logarithmic level perception
-    var target = tgtRaw === 0 ? 0 : Math.pow(tgtRaw / 99, 2.5);
-    var rate = this.envRates[this.envStage];
-    // Convert rate to per-sample increment over 96 dB dynamic range
-    var dbPerSec = 0.2819 * Math.pow(2, rate * 0.16);
-    var inc = dbPerSec / (this.sampleRate * 96);
+    // Source: Dexed/msfa env.cc Env::advance(): targetlevel is the DX7
+    // envelope level plus operator outlevel before Exp2 gain conversion.
+    var target = Math.max(16, dx7EnvelopeLevelToLinear(this.envLevels[this.envStage]) + this.amplitude - 4256);
+    var inc = this.dx7RateToIncrement(this.envRates[this.envStage]) * 64;
     if (this.envLevel < target) {
-      this.envLevel += inc;
+      // Source: Dexed/msfa env.cc Env::getsample(): rising stages jump to
+      // 1716 then advance nonlinearly by (((17 << 24) - level) >> 24) * inc.
+      var jumpTarget = 1716;
+      if (this.envLevel < jumpTarget) this.envLevel = jumpTarget;
+      this.envLevel += (((17 * 16777216) - this.envLevel * 65536) / 16777216) * inc;
       if (this.envLevel >= target) { this.envLevel = target; this.advanceEnv(); }
     } else if (this.envLevel > target) {
       this.envLevel -= inc;
@@ -143563,9 +143738,9 @@ SL.screens = (function () {
 
   FallbackOperator.prototype.advanceEnv = function() {
     if (this.envReleased) {
-      if (this.envStage === 3 && this.envLevel <= 0.0001) {
+      if (this.envStage === 3 && this.envLevel <= 16.1) {
         this.envFinished = true;
-        this.envLevel = 0;
+        this.envLevel = 16;
       }
     } else {
       if (this.envStage < 2) this.envStage++;
@@ -143583,8 +143758,17 @@ SL.screens = (function () {
     // because it does not require integrating the modulator signal.
     // See: Chowning (1973), Section II; Puckette (2007), Section 5.3
     var out = Math.sin(2 * Math.PI * this.phase + modInput);
-    var env = this.processEnv();
-    return out * env * this.amplitude * this.velocityScale;
+    if (this.gainSamplesLeft <= 0) {
+      var actualLevel = this.processEnv();
+      var targetGain = dx7GainFromActualLevel(actualLevel);
+      // Source: Dexed/msfa env.cc renders gains in N=64 sample blocks and
+      // linearly interpolates dgain across the block.
+      this.gainDelta = (targetGain - this.gainCurrent) / 64;
+      this.gainSamplesLeft = 64;
+    }
+    this.gainCurrent += this.gainDelta;
+    this.gainSamplesLeft--;
+    return out * this.gainCurrent * this.velocityScale;
   };
 
   FallbackOperator.prototype.isFinished = function() {
@@ -143598,6 +143782,7 @@ SL.screens = (function () {
     this.algorithm = 1;
     this.feedbackLevel = 0;
     this.feedbackValue = 0;
+    this.feedbackPair = [0, 0];
     this.instId = 0;
     this.operators = [];
     for (var i = 0; i < 6; i++) {
@@ -143617,8 +143802,8 @@ SL.screens = (function () {
   // which produces near-noise. Each step halves/doubles the scale.
   // At feedback ~4, the operator approximates a sawtooth wave.
   FallbackVoice.prototype.feedbackToScale = function(fb) {
-    if (fb === 0) return 0;
-    return Math.PI * Math.pow(2, (fb - 7) / 2);
+    fb = Math.max(0, Math.min(7, Math.round(fb || 0)));
+    return DX7_FEEDBACK_SCALE[fb] || 0;
   };
 
   FallbackVoice.prototype.noteOn = function(midi, vel, freq, settings) {
@@ -143627,6 +143812,8 @@ SL.screens = (function () {
     this.algorithm = settings.algorithm || 1;
     this.feedbackLevel = this.feedbackToScale(settings.feedback || 0);
     this.feedbackValue = 0;
+    this.feedbackPair[0] = 0;
+    this.feedbackPair[1] = 0;
     this.instId = settings.instId || 0;
     // Short amplitude fade-in (~8ms) to prevent click/pop at onset
     this.fadeInSamples = Math.ceil(this.sampleRate * 0.008);
@@ -143678,7 +143865,7 @@ SL.screens = (function () {
       } else {
         this.operators[i].setParams(opSettings);
       }
-      this.operators[i].keyOn(freq, randomizedVel);
+      this.operators[i].keyOn(freq, randomizedVel, midi);
     }
   };
 
@@ -143702,28 +143889,36 @@ SL.screens = (function () {
       this.startDelaySamples--;
       return 0;
     }
-    var algo = ALGORITHMS[this.algorithm];
+    // Source: Dexed Python package algorithms.py, decoded from DX7 algorithm
+    // modulation matrices. Each mod entry is [target, source].
+    var algo = DX7_ALGORITHM_MATRIX[(this.algorithm || 1) - 1];
     if (!algo) return 0;
     var out = this.opOutputs;
-    // Top-down traversal: Op6(index 5) first, Op1(index 0) last
+    for (var oi = 0; oi < 6; oi++) out[oi] = 0;
+    var fb = algo.fb || [5, 5];
+    var fbSource = fb[0];
+    var fbTarget = fb[1];
     for (var i = 5; i >= 0; i--) {
       var modInput = 0;
-      // Gather modulation from all operators routed to this one
-      var mods = algo.modulations;
+      var mods = algo.mods;
       for (var m = 0; m < mods.length; m++) {
-        if (mods[m][1] === i) modInput += out[mods[m][0]];
+        if (mods[m][0] === i) modInput += out[mods[m][1]];
       }
-      // Feedback: one-sample delay of this operator's own output
-      if (i === algo.feedbackOp) modInput += this.feedbackValue * this.feedbackLevel;
-      out[i] = this.operators[i].process(modInput);
-      if (i === algo.feedbackOp) this.feedbackValue = out[i];
+      var feedbackPair = this.feedbackPair;
+      if (i === fbTarget) modInput += (feedbackPair[0] + feedbackPair[1]) * this.feedbackLevel;
+      // Source: Dexed/msfa Sin::lookup phase units; fallback oscillator uses
+      // radians internally, so convert routed phase cycles to radians here.
+      out[i] = this.operators[i].process(modInput * 2 * Math.PI);
+      if (i === fbSource) {
+        feedbackPair[1] = feedbackPair[0];
+        feedbackPair[0] = out[i];
+      }
     }
     var sample = 0;
     var carriers = algo.carriers;
     for (var c = 0; c < carriers.length; c++) sample += out[carriers[c]];
-    // Normalize: divide by carrier count so loudness stays consistent
-    // across algorithms regardless of how many carriers are active
-    sample /= carriers.length;
+    // Source: Dexed/msfa fm_core.cc opcode-based algorithm routing sums
+    // carrier outputs; it does not divide audible carriers by carrier count.
 
     // Apply fade-in ramp
     if (this.fadeInCounter < this.fadeInSamples) {
@@ -143759,12 +143954,21 @@ SL.screens = (function () {
         var voices = fallbackVoicesByInst[instIdx];
         node.onaudioprocess = function(event) {
           var output = event.outputBuffer.getChannelData(0);
+          var activeVoiceCount = 0;
+          for (var ai = 0; ai < voices.length; ai++) {
+            if (voices[ai].active) activeVoiceCount++;
+          }
+          // Active-voice makeup gain: for uncorrelated voices, summed RMS grows
+          // as sqrt(N), so one-note lines should not keep the same reserve as
+          // six-note chords. Original source: Smith, Physical Audio Signal
+          // Processing, RMS power addition for uncorrelated signals.
+          var voiceMakeupGain = Math.min(2.5, Math.sqrt(6 / Math.max(1, activeVoiceCount)));
           for (var s = 0; s < output.length; s++) {
             var sample = 0;
             for (var vi = 0; vi < voices.length; vi++) {
               if (voices[vi].active) {
-                // 0.18 scaling factor keeps multi-voice sum below clipping
-                sample += voices[vi].process() * 0.18;
+                // 0.18 scaling factor keeps multi-voice sum below clipping.
+                sample += voices[vi].process() * 0.18 * voiceMakeupGain;
               }
             }
             // Soft clipping via Pade approximant of tanh:
@@ -143850,9 +144054,6 @@ SL.screens = (function () {
 
         if (inst && inst.masterOutput) {
           destination = inst.masterOutput;
-          isDestinationResolved = true;
-        } else if (audioContext) {
-          destination = audioContext.destination;
           isDestinationResolved = true;
         }
 
@@ -144413,24 +144614,33 @@ SL.screens = (function () {
     var safeFreq = freq || 0.001;
     var period = this.sampleRate / safeFreq;
     this.delayLength = period - 0.5; // compensate for averaging filter group delay
-    this.loopFilter.setCoeff(0.5 + (this.brightness / 100) * 0.45);
+    // Brightness maps to loop-filter loss, not a second heavy mute. Original
+    // source: Smith, Physical Audio Signal Processing, frequency-dependent
+    // decay via loop filters in string waveguides.
+    this.loopFilter.setCoeff(0.82 + (this.brightness / 100) * 0.17);
     this.maxDecay = Math.floor(this.sampleRate * (1 + (this.decayTime / 100) * 9));
-    // Per-round-trip damping: the previous implementation used a per-sample
-    // multiplier `1 - damping*0.003` which at high frequencies (short period)
-    // compounds to complete silence in a few ms. We instead pick a per-round-trip
-    // loss fraction and spread it across `period` samples so decay is
-    // frequency-independent.
-    var DAMPING_PER_RT_MAX_LOSS = 0.015;        // damping=100 -> 1.5%/round trip
-    var dampingNorm = this.damping / 100;
-    var lossPerRoundTrip = dampingNorm * DAMPING_PER_RT_MAX_LOSS;
-    var minPeriodForDecay = 2.0;
-    var safePeriod = period < minPeriodForDecay ? minPeriodForDecay : period;
-    var guardedPeriod = safePeriod || 1;
-    this._perSampleDecay = Math.pow(1.0 - lossPerRoundTrip, 1.0 / guardedPeriod);
+    // A delay-line sample is attenuated once per round trip, so decayTime must
+    // map to that round-trip multiplier directly. Using a per-sample root here
+    // makes plucked strings ring far longer than their requested T60.
+    // Original source: Smith, Physical Audio Signal Processing, loop gain and
+    // T60 relation g = 10^(-3P/(T60*Fs)) for delay length P.
+    var dampingNorm = Math.max(0, Math.min(1, this.damping / 100));
+    var decaySeconds = 0.45 + (Math.max(0, Math.min(100, this.decayTime)) / 100) * 2.2;
+    var dampedDecaySeconds = decaySeconds * (1 - dampingNorm * 0.55);
+    this._perSampleDecay = Math.pow(10, (-3 * Math.max(2, period)) / (dampedDecaySeconds * this.sampleRate));
     this.decayCounter = 0;
     this.delayLine.clear(); this.dcBlocker.clear(); this.loopFilter.clear();
     for (var bfc = 0; bfc < this.bodyFilters.length; bfc++) { this.bodyFilters[bfc].clear(); }
+    // Deterministic excitation keeps Playwright audio acceptance repeatable
+    // while preserving the Karplus-Strong noise/displacement initial condition.
+    // Original source: Karplus & Strong (1983), CMJ 7(2); LCG constants from
+    // Numerical Recipes.
     var vel = (velocity || 100) / 127;
+    var noiseSeed = ((Math.round(safeFreq * 1000) ^ (Math.round(velocity || 0) << 8) ^ Math.round(this.bodySize * 17)) >>> 0) || 1;
+    var nextExcitationNoise = function() {
+      noiseSeed = (1664525 * noiseSeed + 1013904223) >>> 0;
+      return (noiseSeed / 2147483648) - 1;
+    };
     var intPeriod = Math.ceil(period);
     if (this.excitation === 'impulse') {
       // Short windowed impulse burst (half-Hann window, ~8% of period)
@@ -144441,15 +144651,24 @@ SL.screens = (function () {
       }
       for (var i = burstLen; i < intPeriod; i++) this.delayLine.write(0);
     } else if (this.excitation === 'pick') {
-      var half = Math.floor(intPeriod / 2);
-      var safeHalf = half || 1;
+      // A picked string starts from a triangular displacement at the pluck
+      // point; excite the loop with the displacement delta so the pick
+      // discontinuity is not smeared into a quiet fundamental-heavy arch.
+      // Original source: Smith, Physical Audio Signal Processing, plucked
+      // string initial conditions; Jaffe & Smith (1983), CMJ 7(2).
+      var pick = Math.max(0.05, Math.min(0.95, this.pickPosition || 0.18));
+      var previousDisplacement = 0;
       for (var i = 0; i < intPeriod; i++) {
-        var env = i < half ? i / safeHalf : (intPeriod - i) / ((intPeriod - half) || 1);
-        this.delayLine.write((env + (Math.random() * 2 - 1) * 0.15) * vel * 0.5);
+        var x = i / Math.max(1, intPeriod - 1);
+        var displacement = x < pick ? (x / pick) : ((1 - x) / (1 - pick));
+        var displacementDelta = displacement - previousDisplacement;
+        previousDisplacement = displacement;
+        var pickNoise = nextExcitationNoise() * 0.04 * (1 - x);
+        this.delayLine.write((displacementDelta * intPeriod * 0.18 + pickNoise) * vel);
       }
     } else {
       for (var i = 0; i < intPeriod; i++) {
-        this.delayLine.write((Math.random() * 2 - 1) * vel * 0.85);
+        this.delayLine.write(nextExcitationNoise() * vel * 0.85);
       }
     }
   };
@@ -144464,7 +144683,11 @@ SL.screens = (function () {
     var filtered = this.loopFilter.process(delayed);
     filtered *= this._perSampleDecay;
     this.delayLine.write(filtered);
-    var dry = this.dcBlocker.process(filtered);
+    // Output is tapped from the delay-line string signal; the loop filter is
+    // the feedback/damping path. Original source: Karplus & Strong (1983),
+    // CMJ 7(2); Smith, Physical Audio Signal Processing, waveguide loop
+    // filter placement.
+    var dry = this.dcBlocker.process(delayed);
     // Body resonance: sum bandpass-filtered versions mixed with dry signal
     var bodySum = 0;
     for (var bf = 0; bf < this.bodyFilters.length; bf++) {
@@ -145203,7 +145426,12 @@ SL.screens = (function () {
     for (var i = 0; i < this.numModes; i++) {
       totalGain += Math.abs(this.modes[i].gain);
     }
-    this.outputScale = totalGain > 0 ? (0.8 / totalGain) : 1.0;
+    this.outputScale = totalGain > 0 ? (0.55 / totalGain) : 1.0;
+    // Low bars radiate less efficiently than mid-register bars; scale struck
+    // modal output by frequency below middle C instead of letting C3 dominate.
+    // Original source: Fletcher & Rossing, The Physics of Musical Instruments,
+    // Ch. 19, marimba bars and resonator radiation efficiency.
+    this.outputScale *= Math.min(1, freq / 261.6255653005986);
     this.exciteSamples = Math.max(4, Math.floor(this.sampleRate * 0.002 * (1 + (1 - hardnessFactor) * 4)));
     this.exciteRemaining = this.exciteSamples;
     this.exciteLevel = vel * 1.2;
@@ -145282,6 +145510,7 @@ SL.screens = (function () {
         this.pluck.brightness = settings.brightness != null ? settings.brightness : 60;
         this.pluck.excitation = settings.excitation || 'noise';
         this.pluck.bodySize = settings.bodySize != null ? settings.bodySize : 50;
+        this.pluck.pickPosition = settings.pickPosition != null ? settings.pickPosition : 0.18;
         this.pluck.decayTime = settings.decayTime != null ? settings.decayTime : 70;
         break;
       case 'bow':
@@ -147332,9 +147561,6 @@ SL.screens = (function () {
 
         if (inst && inst.masterOutput) {
           destination = inst.masterOutput;
-          isDestinationResolved = true;
-        } else if (audioContext) {
-          destination = audioContext.destination;
           isDestinationResolved = true;
         }
 
@@ -150278,9 +150504,6 @@ SL.screens = (function () {
 
         if (inst && inst.masterOutput) {
           destination = inst.masterOutput;
-          isDestinationResolved = true;
-        } else if (audioContext) {
-          destination = audioContext.destination;
           isDestinationResolved = true;
         }
 
@@ -182167,8 +182390,10 @@ SL.screens = (function () {
     var releaseTime = SL.audio.sliderToTime(settings.adsr.r, 1000, 1000) / 1000;
 
     var velNorm = velocity / 127;
-    var velCurved = velNorm * velNorm;
-    var peak = velCurved * 0.12;
+    // MIDI velocity is a 7-bit linear performance control; the user-selected
+    // velocity curve is already applied before this direct WebAudio path.
+    // Original source: MIDI 1.0 Detailed Specification, Note On velocity.
+    var peak = velNorm * 0.12;
     var now = c.currentTime;
 
     // Master gain with ADSR attack + decay

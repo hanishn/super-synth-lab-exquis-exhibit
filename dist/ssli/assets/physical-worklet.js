@@ -564,8 +564,10 @@ class BowModel {
     this.bridgeLength = this.baseBridgeLength;
     this.neckLength = this.baseNeckLength;
 
-    // Bow pressure -> table slope (STK range ~2-8)
-    this.bowTableSlope = 5.0 - (this.bowPressure / 100) * 3.0;
+    // Bow pressure -> table slope. Original source: Cook/Perry STK BowTable
+    // exposes slope as the bow-pressure control; higher pressure stiffens the
+    // nonlinear friction curve instead of reducing it.
+    this.bowTableSlope = 2.0 + (this.bowPressure / 100) * 6.0;
 
     // Bow velocity from MIDI velocity (squared curve for audible range)
     var velNormBow = velocity / 127;
@@ -1397,6 +1399,10 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       case 'updateParams':
         this.updateParams(data.instId, data.params);
         break;
+
+      case 'updateNotePressure':
+        this.updateNotePressure(data.midiNote, data.instId, data.pressure);
+        break;
     }
   }
 
@@ -1448,6 +1454,35 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
         if (this.voices[i].active) {
           this.voices[i].noteOff();
         }
+      }
+    }
+  }
+
+  updateNotePressure(midiNote, instId, pressure) {
+    // Source for controller range: MIDI Association, MIDI 1.0 Detailed
+    // Specification defines poly/channel pressure as one 7-bit value. SSLI
+    // physical controls use 0-100 percent-style model parameters.
+    var value = Math.max(0, Math.min(127, pressure || 0));
+    var pct = value * (100 / 127);
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (!v.active || v.midiNote !== midiNote || v.instId !== instId) continue;
+      var model = v.currentModel;
+      if (!model) continue;
+      if (v.modelType === 'pluck') {
+        model.brightness = pct;
+        model.loopFilter.setCoeff(0.82 + (pct / 100) * 0.17);
+      } else if (v.modelType === 'bow') {
+        model.bowPressure = pct;
+        model.bowTableSlope = 2.0 + (pct / 100) * 6.0;
+        // Source: Smith, Physical Audio Signal Processing, bowed-string
+        // waveguide junction; bow force affects nonlinear friction and the
+        // drive applied at the bow/string contact point.
+        model.maxVelocity = model.baseMaxVelocity * (0.1 + (pct / 100) * 3.0);
+      } else if (v.modelType === 'blow') {
+        model.breathPressure = pct;
+      } else if (v.modelType === 'strike') {
+        model.hardness = pct;
       }
     }
   }

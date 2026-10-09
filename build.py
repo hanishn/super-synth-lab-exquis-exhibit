@@ -147,6 +147,85 @@ SSLI_INDEX_PATCHES = [
 """,
     ),
     TextPatch(
+        name="physical-engine-export-live-note-pressure",
+        before="""  function isReady() {
+    return isWorkletReady || shouldUseFallback;
+  }
+
+  function getDefaultSettings() {
+    return JSON.parse(JSON.stringify(DEFAULT_PHYSICAL_SETTINGS));
+  }
+""",
+        after="""  function updateNotePressure(midi, pressure, instId) {
+    if (instId === undefined) instId = 0;
+    // Source for controller range: MIDI Association, MIDI 1.0 Detailed
+    // Specification defines poly/channel pressure as one 7-bit value. SSLI
+    // physical controls use 0-100 percent-style model parameters.
+    var value = Math.max(0, Math.min(127, pressure || 0));
+    var pct = value * (100 / 127);
+    if (shouldUseFallback) {
+      var voices = fallbackVoicesByInst[instId] || [];
+      for (var i = 0; i < voices.length; i++) {
+        var v = voices[i];
+        if (!v.active || v.midiNote !== midi) continue;
+        var model = v.currentModel;
+        if (!model) continue;
+        if (v.modelType === 'pluck') {
+          model.brightness = pct;
+          model.loopFilter.setCoeff(0.82 + (pct / 100) * 0.17);
+        } else if (v.modelType === 'bow') {
+          model.bowPressure = pct;
+          model.bowTableSlope = 2.0 + (pct / 100) * 6.0;
+          // Source: Smith, Physical Audio Signal Processing, bowed-string
+          // waveguide junction; bow force affects nonlinear friction and the
+          // drive applied at the bow/string contact point.
+          model.maxVelocity = model.baseMaxVelocity * (0.1 + (pct / 100) * 3.0);
+        } else if (v.modelType === 'blow') {
+          model.breathPressure = pct;
+        } else if (v.modelType === 'strike') {
+          model.hardness = pct;
+        }
+      }
+    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
+      physicalWorkletNodes[instId].port.postMessage({
+        type: 'updateNotePressure',
+        midiNote: midi,
+        instId: instId,
+        pressure: value
+      });
+    }
+  }
+
+  function isReady() {
+    return isWorkletReady || shouldUseFallback;
+  }
+
+  function getDefaultSettings() {
+    return JSON.parse(JSON.stringify(DEFAULT_PHYSICAL_SETTINGS));
+  }
+""",
+    ),
+    TextPatch(
+        name="physical-engine-api-live-note-pressure",
+        before="""  SL.physical = {
+    init: init,
+    isReady: isReady,
+
+    noteOn: noteOn,
+    noteOff: noteOff,
+    allNotesOff: allNotesOff,
+""",
+        after="""  SL.physical = {
+    init: init,
+    isReady: isReady,
+
+    noteOn: noteOn,
+    noteOff: noteOff,
+    updateNotePressure: updateNotePressure,
+    allNotesOff: allNotesOff,
+""",
+    ),
+    TextPatch(
         name="fm-engine-requires-instrument-output",
         before="""        if (inst && inst.masterOutput) {
           destination = inst.masterOutput;
@@ -1156,6 +1235,17 @@ var PLUCK_OUTPUT_SCALE = 9.0;
 """,
     ),
     TextPatch(
+        name="physical-worklet-bow-pressure-slope-direction",
+        before="""    // Bow pressure -> table slope (STK range ~2-8)
+    this.bowTableSlope = 5.0 - (this.bowPressure / 100) * 3.0;
+""",
+        after="""    // Bow pressure -> table slope. Original source: Cook/Perry STK BowTable
+    // exposes slope as the bow-pressure control; higher pressure stiffens the
+    // nonlinear friction curve instead of reducing it.
+    this.bowTableSlope = 2.0 + (this.bowPressure / 100) * 6.0;
+""",
+    ),
+    TextPatch(
         name="physical-worklet-pluck-excitation-noise-source",
         before="""        var noise = (Math.random() * 2 - 1) * 0.15;
 """,
@@ -1368,6 +1458,59 @@ var PLUCK_OUTPUT_SCALE = 9.0;
       for (var a = 0; a < numActive; a++) {
         sample += voices[active[a]].process() * PHYS_VOICE_OUTPUT_GAIN * polyphonyMixGain;
       }
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-live-note-pressure-message",
+        before="""      case 'updateParams':
+        this.updateParams(data.instId, data.params);
+        break;
+""",
+        after="""      case 'updateParams':
+        this.updateParams(data.instId, data.params);
+        break;
+
+      case 'updateNotePressure':
+        this.updateNotePressure(data.midiNote, data.instId, data.pressure);
+        break;
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-live-note-pressure-params",
+        before="""  updateParams(instId, params) {
+    // Update parameters on active voices for live tweaking
+""",
+        after="""  updateNotePressure(midiNote, instId, pressure) {
+    // Source for controller range: MIDI Association, MIDI 1.0 Detailed
+    // Specification defines poly/channel pressure as one 7-bit value. SSLI
+    // physical controls use 0-100 percent-style model parameters.
+    var value = Math.max(0, Math.min(127, pressure || 0));
+    var pct = value * (100 / 127);
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (!v.active || v.midiNote !== midiNote || v.instId !== instId) continue;
+      var model = v.currentModel;
+      if (!model) continue;
+      if (v.modelType === 'pluck') {
+        model.brightness = pct;
+        model.loopFilter.setCoeff(0.82 + (pct / 100) * 0.17);
+      } else if (v.modelType === 'bow') {
+        model.bowPressure = pct;
+        model.bowTableSlope = 2.0 + (pct / 100) * 6.0;
+        // Source: Smith, Physical Audio Signal Processing, bowed-string
+        // waveguide junction; bow force affects nonlinear friction and the
+        // drive applied at the bow/string contact point.
+        model.maxVelocity = model.baseMaxVelocity * (0.1 + (pct / 100) * 3.0);
+      } else if (v.modelType === 'blow') {
+        model.breathPressure = pct;
+      } else if (v.modelType === 'strike') {
+        model.hardness = pct;
+      }
+    }
+  }
+
+  updateParams(instId, params) {
+    // Update parameters on active voices for live tweaking
 """,
     ),
 ]

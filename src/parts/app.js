@@ -324,6 +324,27 @@
     return String(channel) + ':' + String(midi);
   }
 
+  function rememberChannelHeldNote(channel, midi) {
+    if (channel === null || channel === undefined) return;
+    var key = String(channel);
+    if (!state.channelNotes[key]) state.channelNotes[key] = {};
+    state.channelNotes[key][midi] = true;
+  }
+
+  function forgetChannelHeldNote(channel, midi) {
+    if (channel === null || channel === undefined) return;
+    var key = String(channel);
+    var notes = state.channelNotes[key];
+    if (!notes) return;
+    delete notes[midi];
+    if (!Object.keys(notes).length) delete state.channelNotes[key];
+  }
+
+  function channelHeldMidiNotes(channel) {
+    var notes = state.channelNotes[String(channel)] || {};
+    return Object.keys(notes).map(function(midi) { return parseInt(midi, 10); }).filter(function(midi) { return Number.isFinite(midi); });
+  }
+
   function objectKeyCount(obj) {
     return Object.keys(obj || {}).length;
   }
@@ -1395,6 +1416,10 @@
 
   function pressureToSsliExpression(pressure) {
     var level = Math.max(0, Math.min(1, (pressure || 0) / 127));
+    // Source for pressure range: MIDI Association, MIDI 1.0 Detailed
+    // Specification, Channel Voice Messages define channel/poly pressure
+    // as one 7-bit pressure value. The curve is SSLI's bounded performance
+    // mapping to brightness/dynamics so aftertouch cannot stack unbounded gain.
     return {
       cutoffHz: 900 + level * 9100,
       gain: Math.max(0.75, Math.min(2, 0.75 + level * 1.25))
@@ -1654,6 +1679,7 @@
       articulationFamily: event.articulation.family || '',
       pressurePolicy: event.articulation.pressurePolicy || '',
       autoDampMs: event.articulation.autoDampMs || 0,
+      channel: event.channel,
       releasedBeforeStart: !state.heldNotes[event.key]
     });
     var held = state.heldNotes[event.key];
@@ -1699,11 +1725,11 @@
     });
   }
 
-  function scheduleMidiVoiceStart(key, midi, velocity, cellId) {
+  function scheduleMidiVoiceStart(key, midi, velocity, cellId, channel) {
     var articulation = selectedArticulation();
     var mode = articulation.onsetMode || 'immediate';
     if (mode === 'immediate' || mode === 'none') {
-      startMidiVoice(key, midi, velocity);
+      startMidiVoice(key, midi, velocity, { channel: channel });
       return;
     }
     removePendingArticulation(key);
@@ -1712,6 +1738,7 @@
       midi: midi,
       velocity: velocity,
       cellId: cellId || '',
+      channel: channel,
       articulation: articulation,
       sequence: articulationSequence++,
       enqueuedAt: Date.now()
@@ -1725,11 +1752,7 @@
     var voice = midiVoices[key];
     delete state.heldNotes[key];
     if (voice) {
-      Object.keys(state.channelNotes).forEach(function(channel) {
-        if (state.channelNotes[channel] === voice.midi && key === voiceKey(channel, voice.midi)) {
-          delete state.channelNotes[channel];
-        }
-      });
+      forgetChannelHeldNote(voice.channel, voice.midi);
     }
   }
 
@@ -1817,11 +1840,10 @@
 
   function updateSsliExpressionFromHeldNotes() {
     var host = getSsliHost();
-    if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) !== 'physical') {
-      return false;
-    }
-    if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
-      return false;
+    if (host && host.SynthLab) {
+      var instrumentType = getCurrentSsliInstrumentType(host.SynthLab);
+      if (instrumentType === 'physical') return false;
+      if (instrumentType === 'fm') return false;
     }
     var strongest = strongestHeldMidiPressure();
     if (strongest > 0) {
@@ -2434,6 +2456,7 @@
         oneShot: true,
         instrumentType: oneShotSL ? getCurrentSsliInstrumentType(oneShotSL) : 'physical',
         startedAt: Date.now(),
+        channel: options.channel,
         pressurePolicy: options.pressurePolicy || 'onset-only',
         articulationFamily: options.articulationFamily || 'plucked'
       };
@@ -2460,6 +2483,7 @@
         ssli: true,
         instrumentType: SL ? getCurrentSsliInstrumentType(SL) : '',
         startedAt: Date.now(),
+        channel: options.channel,
         pressurePolicy: options.pressurePolicy || '',
         articulationFamily: options.articulationFamily || ''
       };
@@ -2507,6 +2531,7 @@
       filter: filter,
       oscillators: oscNodes,
       releaseMs: adsr.r || 180,
+      channel: options.channel,
       startedAt: Date.now()
     };
     state.audioStatus = 'Audio: MIDI voice ' + noteLabelFromMidi(midi) + '.';
@@ -3366,9 +3391,7 @@
       return;
     }
     delete state.heldNotes[key];
-    if (channel !== null && state.channelNotes[channel] === midi) {
-      delete state.channelNotes[channel];
-    }
+    forgetChannelHeldNote(channel, midi);
     recentMidiNoteOffs[rawMidi] = Date.now();
     releaseMidiVoice(key, false);
     updateSsliExpressionFromHeldNotes();
@@ -3435,13 +3458,6 @@
       delete pendingShortNoteReleases[heldKey];
       delete pendingShortRawReleases[rawMidi];
     }
-    if (channel !== null && typeof state.channelNotes[channel] === 'number' && state.channelNotes[channel] !== midi) {
-      var previousMidi = state.channelNotes[channel];
-      var previousKey = voiceKey(channel, previousMidi);
-      delete state.heldNotes[previousKey];
-      releaseMidiVoice(previousKey, true);
-      logEvent('audio', 'released previous channel voice ' + noteLabelFromMidi(previousMidi) + ' before ' + noteLabelFromMidi(midi));
-    }
     releaseDuplicateMidiVoices(midi, heldKey);
     state.heldNotes[heldKey] = {
       midi: midi,
@@ -3453,8 +3469,9 @@
       channel: channel,
       startedAt: Date.now()
     };
-    if (channel !== null) state.channelNotes[channel] = midi;
-    scheduleMidiVoiceStart(heldKey, midi, velocity, hitCell ? hitCell.id : '');
+    rememberChannelHeldNote(channel, midi);
+    scheduleMidiVoiceStart(heldKey, midi, velocity, hitCell ? hitCell.id : '', channel);
+    updateSsliExpressionFromHeldNotes();
     logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only') + ' ' + midiCellDebug(hitCell));
     rememberRecentMidiChordNote(midi, velocity, channel, hitCell);
 
@@ -3524,8 +3541,9 @@
     } else if (status === 0xA0) {
       updateMidiPressure(displayMidiFromRaw(midi), velocity, 'poly-aftertouch', channel);
     } else if (status === 0xD0) {
-      var channelMidi = state.channelNotes[channel];
-      if (typeof channelMidi === 'number') updateMidiPressure(channelMidi, midi, 'channel-pressure', channel);
+      channelHeldMidiNotes(channel).forEach(function(channelMidi) {
+        updateMidiPressure(channelMidi, midi, 'channel-pressure', channel);
+      });
     } else if (status === 0xB0 && channel === 15) {
       var officialEdge = EXQUIS_EDGE_BY_OFFICIAL_ID[midi];
       if (midi >= 110 && midi <= 113) {

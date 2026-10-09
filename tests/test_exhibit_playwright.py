@@ -90,7 +90,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "celesta_midi_must_not_use_output_boost_compensation": "test_regression_ssli_celesta_does_not_use_output_boost_compensation",
         "rhodes_midi_must_not_use_output_boost_compensation": "test_regression_ssli_rhodes_does_not_use_output_boost_compensation",
         "ssli_midi_sustain_must_not_wrap_runtime_output": "test_regression_ssli_midi_sustain_does_not_wrap_runtime_output",
-        "exquis_midi_must_use_linear_velocity_without_global_expression": "test_regression_exquis_midi_uses_linear_velocity_without_global_expression",
+        "exquis_midi_must_use_linear_velocity_and_live_pressure_expression": "test_regression_exquis_midi_uses_linear_velocity_and_live_pressure_expression",
         "exquis_live_pressure_must_not_stack_expression_gain_into_garble": "test_regression_live_pressure_caps_expression_gain_during_repeated_play",
         "staggered_physical_plucked_chords_must_not_use_solo_boost_or_idle_cleanup": "test_regression_staggered_physical_plucked_chords_keep_chord_headroom",
         "repeated_exquis_chords_must_not_accumulate_playback_latency": "test_regression_repeated_exquis_chords_do_not_accumulate_playback_latency",
@@ -113,6 +113,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "pressure_zero_for_one_note_must_not_collapse_other_notes": "test_regression_pressure_zero_for_one_held_note_does_not_collapse_expression_for_other_notes",
         "single_note_pressure_zero_must_not_fall_back_to_velocity": "test_regression_single_note_pressure_zero_does_not_fall_back_to_velocity",
         "pressure_flood_must_not_spam_ssli_expression": "test_regression_pressure_flood_is_coalesced_before_ssli_expression",
+        "play_mode_pressure_must_affect_subtractive_audio": "test_regression_play_mode_pressure_changes_actual_subtractive_audio",
+        "play_mode_pressure_must_reach_physical_runtime": "test_regression_play_mode_pressure_reaches_actual_physical_runtime",
+        "same_channel_buttons_must_remain_independent": "test_regression_same_channel_buttons_keep_independent_held_voices",
         "enable_midi_must_be_first_prominent_side_rail_action": "test_regression_enable_midi_is_first_prominent_side_rail_action",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
@@ -2440,7 +2443,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(koto["rms"], 0.01, koto)
         self.assertGreaterEqual(koto["spectrumPeak"], 0.4, koto)
 
-    def test_regression_preset_sweep_runs_mature_engine_category_poly_pressure_audio(self):
+    def test_regression_preset_sweep_runs_mature_engine_category_continuous_poly_aftertouch_audio(self):
         output_dir = ROOT / "tmp_preset_sweep_unittest_mature_poly"
         result = subprocess.run(
             [
@@ -2450,7 +2453,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 "--mature-engines-only",
                 "--one-per-category",
                 "--trigger",
-                "six-note-midi",
+                "continuous-poly-pressure-midi",
                 "--audio-sample-ms",
                 "900",
                 "--output-dir",
@@ -2471,8 +2474,52 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["sweptPresetCount"], len(engine_categories), payload)
         self.assertGreaterEqual(payload["summary"]["sweptPresetCount"], 6, payload)
         for row in results:
-            self.assertEqual(row["trigger"], "six-note-midi", row)
+            self.assertEqual(row["trigger"], "continuous-poly-pressure-midi", row)
             self.assertTrue(row["audioSignatureAvailable"], row)
+            self.assertGreater(float(row["audioRms"]), 0.003, row)
+            self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
+            self.assertGreaterEqual(int(row["audioSignature"]["polyAftertouchEvents"]), 12, row)
+            self.assertEqual(int(row["audioSignature"]["channelPressureEvents"]), 0, row)
+
+    def test_regression_preset_sweep_runs_mature_engine_category_200_note_voice_stress_audio(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_mature_voice_stress"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--mature-engines-only",
+                "--one-per-category",
+                "--trigger",
+                "voice-stress-midi",
+                "--audio-sample-ms",
+                "1400",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=600,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        results = payload["results"]
+        engines = {row["engine"].lower() for row in results}
+        self.assertEqual(engines, {"fm", "physical", "subtractive"}, payload)
+        self.assertEqual(payload["summary"]["failed"], 0, payload)
+        self.assertGreaterEqual(payload["summary"]["sweptPresetCount"], 6, payload)
+        for row in results:
+            signature = row["audioSignature"]
+            self.assertEqual(row["trigger"], "voice-stress-midi", row)
+            self.assertTrue(row["audioSignatureAvailable"], row)
+            self.assertEqual(int(signature["noteOns"]), 200, row)
+            self.assertEqual(int(signature["noteOffs"]), 200, row)
+            self.assertGreaterEqual(int(signature["observedMaxHeld"]), 6, row)
+            self.assertGreaterEqual(int(signature["observedMaxLocalVoices"]), 6, row)
+            self.assertEqual(int(signature["voiceLossCount"]), 0, row)
+            self.assertGreaterEqual(int(signature["polyAftertouchSent"]), 200, row)
+            self.assertEqual(int(signature["channelPressureSent"]), 0, row)
             self.assertGreater(float(row["audioRms"]), 0.003, row)
             self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
 
@@ -4969,7 +5016,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
+        expression_calls = [call for call in calls if call[0] == "setExpression"]
+        self.assertGreaterEqual(len(expression_calls), 1, calls)
+        self.assertEqual(expression_calls[-1], ["setExpression", 7779, 1.695], calls)
         self.assertFalse(any(call == ["clearExpression"] for call in calls), calls)
 
     def test_regression_play_mode_chords_keep_independent_ssli_voice_ownership(self):
@@ -5019,6 +5068,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__mockChordInput.onmidimessage({ data: [0x82, 52, 0] });
         }
         """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'stopSustainedNote' && call[1] === 52)")
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertEqual([call[1] for call in calls if call[0] == "startSustainedNote"], [48, 52, 55], calls)
         self.assertEqual([call for call in calls if call[0] == "stopSustainedNote"], [["stopSustainedNote", 52]], calls)
@@ -5026,6 +5076,67 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(self.page.locator(".midi-held").count(), 2)
         self.assertIn("Play mode: score paused", self.page.locator('[data-testid="drill-score"]').inner_text())
         self.assertNotIn("released duplicate MIDI voice", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+
+    def test_regression_same_channel_buttons_keep_independent_held_voices(self):
+        self.open_audio_drawer()
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.evaluate("""
+        () => {
+          window.__ssliCalls = [];
+          const activeOscs = new Map();
+          window.SynthLab = {
+            presets: { apply() {} },
+            audio: {
+              getCtx() { return { state: 'running' }; },
+              initEffectChain() {},
+              getActiveOscillators() { return activeOscs; },
+              getCurrentInstrument() { return 0; },
+              getInstrumentType() { return 'subtractive'; },
+              getInstruments() { return [{ type: 'subtractive', settings: { filter: {}, effects: {} } }]; },
+              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained', activeOscs.size]); activeOscs.clear(); },
+              loadInstrumentSettings() {},
+              refreshFilter() {},
+              freqToSlider(v) { return v; },
+              qToSlider(v) { return v; },
+              setInstrumentVolume() {},
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
+              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); activeOscs.set(midi, { midi }); },
+              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); activeOscs.delete(midi); },
+              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
+              clearExpression() { window.__ssliCalls.push(['clearExpression']); }
+            }
+          };
+          window.__mockSameChannelInput = { id: 'same-channel-exquis', name: 'Same Channel Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockSameChannelInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockSameChannelInput && window.__mockSameChannelInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockSameChannelInput.onmidimessage({ data: [0x90, 48, 96] });
+          window.__mockSameChannelInput.onmidimessage({ data: [0x90, 52, 104] });
+          window.__mockSameChannelInput.onmidimessage({ data: [0xA0, 48, 118] });
+          window.__mockSameChannelInput.onmidimessage({ data: [0xA0, 52, 0] });
+          window.__mockSameChannelInput.onmidimessage({ data: [0x80, 52, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'stopSustainedNote' && call[1] === 52)")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "startSustainedNote"], [48, 52], calls)
+        self.assertEqual([call for call in calls if call[0] == "stopSustainedNote"], [["stopSustainedNote", 52]], calls)
+        self.assertEqual(self.page.evaluate("() => [...window.SynthLab.audio.getActiveOscillators().keys()]"), [48])
+        snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+        self.assertEqual(snapshot["heldNotes"], 1, snapshot)
+        self.assertEqual(snapshot["midiVoices"], 1, snapshot)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("poly-aftertouch C3 pressure=118", log)
+        self.assertIn("poly-aftertouch E3 pressure=0", log)
+        self.assertNotIn("released previous channel voice", log)
 
     def test_regression_single_note_pressure_zero_does_not_fall_back_to_velocity(self):
         self.open_audio_drawer()
@@ -5124,6 +5235,82 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLessEqual(len(expression_calls), 8, calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("SSLI expression skipped", log)
+
+    def test_regression_play_mode_pressure_changes_actual_subtractive_audio(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_subtractive_pressure_sweep"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "Subtractive",
+                "--category",
+                "Leads",
+                "--preset-contains",
+                "Saw Lead",
+                "--trigger",
+                "pressure-sweep-midi",
+                "--normalization-midi",
+                "48",
+                "--audio-sample-ms",
+                "900",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = next(item for item in payload["results"] if item["presetLabel"] == "Saw Lead")
+        signature = row["audioSignature"]
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        self.assertGreater(float(signature["lowRms"]), 0.002, row)
+        self.assertGreater(float(signature["rmsRatio"]), 1.18, row)
+        self.assertGreater(float(signature["centroidRatio"]), 1.05, row)
+        self.assertIn("SSLI expression pressure=120", signature["diagnosticLog"])
+
+    def test_regression_play_mode_pressure_reaches_actual_physical_runtime(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_physical_pressure_sweep"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "Physical",
+                "--category",
+                "Bowed",
+                "--preset-contains",
+                "Cello Sul Tasto",
+                "--trigger",
+                "pressure-sweep-midi",
+                "--normalization-midi",
+                "48",
+                "--audio-sample-ms",
+                "900",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = next(item for item in payload["results"] if item["presetLabel"] == "Cello Sul Tasto")
+        signature = row["audioSignature"]
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        response = max(
+            float(signature["rmsRatio"]),
+            1 / max(0.001, float(signature["rmsRatio"])),
+            float(signature["centroidRatio"]),
+            1 / max(0.001, float(signature["centroidRatio"])),
+        )
+        self.assertGreater(response, 1.25, row)
+        self.assertIn("SSLI physical per-note pressure updated C3 pressure=120", signature["diagnosticLog"])
 
     def test_regression_ssli_midi_sustain_uses_performance_volume(self):
         self.open_audio_drawer()
@@ -5268,7 +5455,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertNotIn("SSLI normalization output preset=" + rhodes_value, log)
 
-    def test_regression_exquis_midi_uses_linear_velocity_without_global_expression(self):
+    def test_regression_exquis_midi_uses_linear_velocity_and_live_pressure_expression(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -5310,10 +5497,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
         self.assertIn(["startSustainedNote", 48, 101], calls)
-        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
+        expression_calls = [call for call in calls if call[0] == "setExpression"]
+        self.assertGreaterEqual(len(expression_calls), 1, calls)
+        self.assertIn(["setExpression", 10000, 2], expression_calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("pressure=101", log)
-        self.assertNotIn("SSLI expression pressure=", log)
+        self.assertIn("SSLI expression pressure=127", log)
 
     def test_regression_fm_midi_translates_exquis_pressure_without_global_expression(self):
         self.open_audio_drawer()
@@ -5561,8 +5750,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertFalse(any(call[0] == "setExpression" for call in calls), calls)
-        self.assertFalse(any(call[0] == "clearExpression" for call in calls), calls)
+        expression_calls = [call for call in calls if call[0] == "setExpression"]
+        self.assertGreaterEqual(len(expression_calls), 2, calls)
+        self.assertTrue(all(call[2] <= 2 for call in expression_calls), calls)
+        self.assertTrue(any(call[1] >= 8000 for call in expression_calls), calls)
 
     def test_regression_staggered_physical_plucked_chords_keep_chord_headroom(self):
         self.open_audio_drawer()

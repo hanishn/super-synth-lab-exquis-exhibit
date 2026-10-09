@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument("--normalization-midi", type=int, default=48, help="MIDI note used by the single-midi normalization trigger.")
     parser.add_argument("--normalization-acceptance", action="store_true", help="Fail single-midi sweeps when mature-engine preset levels or normalization logs are outside the acceptance envelope.")
     parser.add_argument("--comprehensive-audio-acceptance", action="store_true", help="Fail unless every selected live preset is validated through repeatable Playwright-driven MIDI and final-output audio analysis.")
+    parser.add_argument("--voice-stress-acceptance", action="store_true", help="Fail unless every selected live preset survives a repeatable 200-note MIDI voice-stress sequence with final-output audio analysis.")
     parser.add_argument("--normalization-min-spectrum-rms", type=float, default=0.0068, help="Minimum accepted spectrum RMS for a normalized single-midi preset sweep.")
     parser.add_argument("--normalization-max-clip-ratio", type=float, default=0.01, help="Maximum accepted clip ratio for normalization acceptance sweeps.")
     parser.add_argument("--normalization-baseline-output-gain", type=float, default=4.0, help="Expected mature-engine baseline output gain in normalization acceptance sweeps.")
@@ -51,9 +52,16 @@ def parse_args():
     )
     parser.add_argument(
         "--trigger",
-        choices=["preview", "single-midi", "six-note-midi"],
+        choices=[
+            "preview",
+            "single-midi",
+            "six-note-midi",
+            "pressure-sweep-midi",
+            "continuous-poly-pressure-midi",
+            "voice-stress-midi",
+        ],
         default="preview",
-        help="Use normal preview playback, a controlled single-note MIDI normalization run, or a six-note Exquis-style MIDI pressure run.",
+        help="Use normal preview playback, controlled MIDI normalization, six-note channel pressure, held low/high pressure, continuous poly-aftertouch, or 200-note voice-stress audio capture.",
     )
     return parser.parse_args()
 
@@ -136,12 +144,23 @@ def filter_presets(presets, args):
 def apply_comprehensive_audio_defaults(args):
     if not args.comprehensive_audio_acceptance:
         return
-    args.trigger = "six-note-midi"
+    args.trigger = "continuous-poly-pressure-midi"
     args.mature_engines_only = True
     args.require_full_catalog = True
     args.one_per_category = False
     args.limit = 0
     args.audio_sample_ms = max(args.audio_sample_ms, 900)
+
+
+def apply_voice_stress_defaults(args):
+    if not args.voice_stress_acceptance:
+        return
+    args.trigger = "voice-stress-midi"
+    args.mature_engines_only = True
+    args.require_full_catalog = True
+    args.one_per_category = False
+    args.limit = 0
+    args.audio_sample_ms = max(args.audio_sample_ms, 1400)
 
 
 def preset_key(row):
@@ -618,6 +637,111 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
     )
 
 
+def ssli_pressure_sweep_midi_signature(page, sample_ms, midi):
+    return page.evaluate(
+        """
+        async ({ sampleMs, midi }) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const settings = instrument.settings || {};
+          const settingsJson = JSON.stringify(settings);
+          let settingsHash = 0;
+          for (let i = 0; i < settingsJson.length; i += 1) settingsHash = ((settingsHash << 5) - settingsHash + settingsJson.charCodeAt(i)) | 0;
+          const engineSettingsKey = {
+            fm: 'fmSettings',
+            physical: 'physicalSettings'
+          }[instrument.type || ''] || '';
+          const engineSettings = engineSettingsKey ? (settings[engineSettingsKey] || {}) : {
+            osc: settings.osc || null,
+            filter: settings.filter || null,
+            adsr: settings.adsr || null
+          };
+          const engineSettingsJson = JSON.stringify(engineSettings || {});
+          let engineSettingsHash = 0;
+          for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const wave = new Uint8Array(analyser.fftSize || 2048);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount || 1024);
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
+          async function capture(ms) {
+            const started = Date.now();
+            let rmsSum = 0, count = 0, weighted = 0, energySum = 0;
+            while (Date.now() - started < ms) {
+              analyser.getByteTimeDomainData(wave);
+              analyser.getByteFrequencyData(spectrum);
+              for (let i = 0; i < wave.length; i += 1) {
+                const n = (wave[i] - 128) / 128;
+                rmsSum += n * n;
+                count += 1;
+              }
+              for (let j = 0; j < spectrum.length; j += 1) {
+                const level = spectrum[j] / 255;
+                const energy = level * level;
+                const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+                weighted += energy * hz;
+                energySum += energy;
+              }
+              await new Promise(resolve => setTimeout(resolve, 16));
+            }
+            return {
+              rms: Math.sqrt(rmsSum / Math.max(1, count)),
+              centroid: weighted / Math.max(0.000001, energySum)
+            };
+          }
+          const channel = 4;
+          send([0x90 | channel, midi, 64]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          send([0xD0 | channel, 16]);
+          await new Promise(resolve => setTimeout(resolve, 120));
+          const low = await capture(Math.max(160, Math.round(sampleMs / 2)));
+          send([0xD0 | channel, 120]);
+          await new Promise(resolve => setTimeout(resolve, 120));
+          const high = await capture(Math.max(160, Math.round(sampleMs / 2)));
+          send([0xD0 | channel, 0]);
+          send([0x80 | channel, midi, 0]);
+          await new Promise(resolve => setTimeout(resolve, 120));
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          return {
+            available: true,
+            trigger: 'pressure-sweep-midi',
+            instrumentType: instrument.type || '',
+            settingsHash: String(settingsHash),
+            engineSettingsKey,
+            engineSettingsHash: String(engineSettingsHash),
+            engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
+            midi,
+            lowPressure: 16,
+            highPressure: 120,
+            lowRms: Number(low.rms.toFixed(5)),
+            highRms: Number(high.rms.toFixed(5)),
+            rmsRatio: Number((high.rms / Math.max(0.000001, low.rms)).toFixed(3)),
+            lowCentroidHz: Number(low.centroid.toFixed(1)),
+            highCentroidHz: Number(high.centroid.toFixed(1)),
+            centroidRatio: Number((high.centroid / Math.max(0.000001, low.centroid)).toFixed(3)),
+            diagnosticLog,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        {"sampleMs": sample_ms, "midi": int(midi)},
+    )
+
+
 def ssli_six_note_midi_signature(page, sample_ms):
     return page.evaluate(
         """
@@ -795,6 +919,454 @@ def ssli_six_note_midi_signature(page, sample_ms):
     )
 
 
+def ssli_continuous_poly_pressure_midi_signature(page, sample_ms):
+    return page.evaluate(
+        """
+        async (sampleMs) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          const settings = instrument.settings || {};
+          const settingsJson = JSON.stringify(settings);
+          let settingsHash = 0;
+          for (let i = 0; i < settingsJson.length; i += 1) settingsHash = ((settingsHash << 5) - settingsHash + settingsJson.charCodeAt(i)) | 0;
+          const engineSettingsKey = {
+            fm: 'fmSettings',
+            physical: 'physicalSettings'
+          }[instrument.type || ''] || '';
+          const engineSettings = engineSettingsKey ? (settings[engineSettingsKey] || {}) : {
+            osc: settings.osc || null,
+            filter: settings.filter || null,
+            adsr: settings.adsr || null
+          };
+          const engineSettingsJson = JSON.stringify(engineSettings || {});
+          let engineSettingsHash = 0;
+          for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
+          const wave = useFloatWave ? new Float32Array(analyser.fftSize) : new Uint8Array(analyser.fftSize);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount);
+          const first = { midi: 48, channel: 7, velocity: 104 };
+          send([0x90 | first.channel, first.midi, first.velocity]);
+          await new Promise(resolve => setTimeout(resolve, 30));
+          const notes = [
+            first,
+            { midi: 50, channel: 13, velocity: 108 },
+            { midi: 52, channel: 9, velocity: 96 },
+            { midi: 53, channel: 2, velocity: 116 },
+            { midi: 55, channel: 15, velocity: 92 },
+            { midi: 57, channel: 5, velocity: 122 }
+          ];
+          notes.slice(1).forEach((note, index) => setTimeout(() => send([0x90 | note.channel, note.midi, note.velocity]), 8 + index * 8));
+          const pressureFrames = [
+            [102, 108, 95, 116, 91, 123],
+            [112, 118, 104, 125, 99, 127],
+            [120, 126, 111, 127, 107, 124],
+            [116, 121, 106, 119, 101, 116],
+            [94, 104, 88, 106, 73, 98],
+            [68, 82, 51, 83, 38, 67],
+            [21, 44, 0, 37, 0, 29],
+            [0, 0, 0, 0, 0, 0]
+          ];
+          pressureFrames.forEach((frameValues, frameIndex) => {
+            frameValues.forEach((pressure, noteIndex) => {
+              const note = notes[noteIndex];
+              setTimeout(() => send([0xA0 | note.channel, note.midi, pressure]), 80 + frameIndex * 45 + noteIndex * 5);
+            });
+          });
+          notes.forEach((note, index) => {
+            setTimeout(() => {
+              send([0xA0 | note.channel, note.midi, 0]);
+              send([0x80 | note.channel, note.midi, 0]);
+            }, 480 + index * 12);
+          });
+
+          let peak = 0;
+          let rmsSum = 0;
+          let count = 0;
+          let clipped = 0;
+          let spectrumPeak = 0;
+          let spectrumSum = 0;
+          let spectrumCount = 0;
+          let spectrumEnergySum = 0;
+          let spectrumWeightedHzSum = 0;
+          let spectrumHighEnergySum = 0;
+          let spectrumBellEnergySum = 0;
+          let waveHash = 0;
+          let spectrumHash = 0;
+          const framePeaks = [];
+          const frameMaxSteps = [];
+          const frameRmsValues = [];
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
+          const started = Date.now();
+          while (Date.now() - started < sampleMs) {
+            if (useFloatWave) analyser.getFloatTimeDomainData(wave);
+            else analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
+            let framePeak = 0;
+            let previousNormalized = null;
+            let frameMaxStep = 0;
+            let frameRmsSum = 0;
+            for (let i = 0; i < wave.length; i += 1) {
+              const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
+              const abs = Math.abs(normalized);
+              peak = Math.max(peak, abs);
+              framePeak = Math.max(framePeak, abs);
+              if (previousNormalized !== null) frameMaxStep = Math.max(frameMaxStep, Math.abs(normalized - previousNormalized));
+              previousNormalized = normalized;
+              rmsSum += normalized * normalized;
+              frameRmsSum += normalized * normalized;
+              count += 1;
+              if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
+            }
+            framePeaks.push(framePeak);
+            frameMaxSteps.push(frameMaxStep);
+            frameRmsValues.push(Math.sqrt(frameRmsSum / Math.max(1, wave.length)));
+            for (let j = 0; j < spectrum.length; j += 1) {
+              const level = spectrum[j] / 255;
+              const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+              const energy = level * level;
+              spectrumPeak = Math.max(spectrumPeak, level);
+              spectrumSum += energy;
+              spectrumEnergySum += energy;
+              spectrumWeightedHzSum += energy * hz;
+              if (hz >= 4000) spectrumHighEnergySum += energy;
+              if (hz >= 2500 && hz <= 10000) spectrumBellEnergySum += energy;
+              spectrumCount += 1;
+              if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
+            }
+            await new Promise(resolve => setTimeout(resolve, 16));
+          }
+          await new Promise(resolve => setTimeout(resolve, 120));
+          framePeaks.sort((a, b) => a - b);
+          frameMaxSteps.sort((a, b) => a - b);
+          const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));
+          const tailRms = Math.sqrt(tailFrames.reduce((sum, value) => sum + value * value, 0) / Math.max(1, tailFrames.length));
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const polyAftertouchEvents = (diagnosticLog.match(/poly-aftertouch/g) || []).length;
+          const channelPressureEvents = (diagnosticLog.match(/channel-pressure/g) || []).length;
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          return {
+            available: true,
+            trigger: 'continuous-poly-pressure-midi',
+            instrumentType: instrument.type || '',
+            settingsHash: String(settingsHash),
+            settingsKeys: Object.keys(settings).sort(),
+            engineSettingsKey,
+            engineSettingsHash: String(engineSettingsHash),
+            engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
+            physicalSettings: settings.physicalSettings || null,
+            peak: Number(peak.toFixed(5)),
+            rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            samples: count,
+            p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            maxSampleStep: Number((frameMaxSteps[frameMaxSteps.length - 1] || 0).toFixed(5)),
+            p95SampleStep: Number((frameMaxSteps[Math.floor(frameMaxSteps.length * 0.95)] || 0).toFixed(5)),
+            tailRms: Number(tailRms.toFixed(5)),
+            clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            spectrumCentroidHz: Number((spectrumWeightedHzSum / Math.max(0.000001, spectrumEnergySum)).toFixed(1)),
+            spectrumHighRatio: Number((spectrumHighEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            spectrumBellRatio: Number((spectrumBellEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            peakToRms: Number((peak / Math.max(0.000001, Math.sqrt(rmsSum / Math.max(1, count)))).toFixed(3)),
+            waveformHash: String(waveHash),
+            spectrumHash: String(spectrumHash),
+            analyserPath: 'SL.audio.getAnalyser() final output path',
+            analyserArmedBeforeTrigger: true,
+            diagnosticLog,
+            polyAftertouchEvents,
+            channelPressureEvents,
+            continuousPressureFrames: pressureFrames.length,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        sample_ms,
+    )
+
+
+def ssli_voice_stress_midi_signature(page, sample_ms):
+    return page.evaluate(
+        """
+        async (sampleMs) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          const settings = instrument.settings || {};
+          const settingsJson = JSON.stringify(settings);
+          let settingsHash = 0;
+          for (let i = 0; i < settingsJson.length; i += 1) settingsHash = ((settingsHash << 5) - settingsHash + settingsJson.charCodeAt(i)) | 0;
+          const engineSettingsKey = {
+            fm: 'fmSettings',
+            physical: 'physicalSettings'
+          }[instrument.type || ''] || '';
+          const engineSettings = engineSettingsKey ? (settings[engineSettingsKey] || {}) : {
+            osc: settings.osc || null,
+            filter: settings.filter || null,
+            adsr: settings.adsr || null
+          };
+          const engineSettingsJson = JSON.stringify(engineSettings || {});
+          let engineSettingsHash = 0;
+          for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const useFloatWave = Boolean(analyser.getFloatTimeDomainData);
+          const wave = useFloatWave ? new Float32Array(analyser.fftSize) : new Uint8Array(analyser.fftSize);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount);
+
+          const chordSizes = [1, 2, 3, 4, 5];
+          const pitchPool = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67];
+          const sameChannelCycle = [2, 2, 2, 9, 9, 4];
+          const snapshots = [];
+          let noteOns = 0;
+          let noteOffs = 0;
+          let polyAftertouchSent = 0;
+          let channelPressureSent = 0;
+          let minHeldDuringChord = 99;
+          let minLocalDuringChord = 99;
+          let minSsliDuringChord = 99;
+          let maxHeldDuringChord = 0;
+          let maxLocalDuringChord = 0;
+          let maxSsliDuringChord = 0;
+          let voiceLosses = [];
+
+          let peak = 0;
+          let rmsSum = 0;
+          let count = 0;
+          let clipped = 0;
+          let spectrumPeak = 0;
+          let spectrumSum = 0;
+          let spectrumCount = 0;
+          let spectrumEnergySum = 0;
+          let spectrumWeightedHzSum = 0;
+          let spectrumHighEnergySum = 0;
+          let spectrumBellEnergySum = 0;
+          let waveHash = 0;
+          let spectrumHash = 0;
+          const framePeaks = [];
+          const frameMaxSteps = [];
+          const frameRmsValues = [];
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
+
+          function captureFrame() {
+            if (useFloatWave) analyser.getFloatTimeDomainData(wave);
+            else analyser.getByteTimeDomainData(wave);
+            analyser.getByteFrequencyData(spectrum);
+            let framePeak = 0;
+            let previousNormalized = null;
+            let frameMaxStep = 0;
+            let frameRmsSum = 0;
+            for (let i = 0; i < wave.length; i += 1) {
+              const normalized = useFloatWave ? wave[i] : (wave[i] - 128) / 128;
+              const abs = Math.abs(normalized);
+              peak = Math.max(peak, abs);
+              framePeak = Math.max(framePeak, abs);
+              if (previousNormalized !== null) frameMaxStep = Math.max(frameMaxStep, Math.abs(normalized - previousNormalized));
+              previousNormalized = normalized;
+              rmsSum += normalized * normalized;
+              frameRmsSum += normalized * normalized;
+              count += 1;
+              if (normalized <= -0.98 || normalized >= 0.98) clipped += 1;
+              if (i % 8 === 0) waveHash = ((waveHash << 5) - waveHash + Math.round((normalized + 1) * 32768)) | 0;
+            }
+            framePeaks.push(framePeak);
+            frameMaxSteps.push(frameMaxStep);
+            frameRmsValues.push(Math.sqrt(frameRmsSum / Math.max(1, wave.length)));
+            for (let j = 0; j < spectrum.length; j += 1) {
+              const level = spectrum[j] / 255;
+              const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+              const energy = level * level;
+              spectrumPeak = Math.max(spectrumPeak, level);
+              spectrumSum += energy;
+              spectrumEnergySum += energy;
+              spectrumWeightedHzSum += energy * hz;
+              if (hz >= 4000) spectrumHighEnergySum += energy;
+              if (hz >= 2500 && hz <= 10000) spectrumBellEnergySum += energy;
+              spectrumCount += 1;
+              if (j % 8 === 0) spectrumHash = ((spectrumHash << 5) - spectrumHash + spectrum[j]) | 0;
+            }
+          }
+
+          function snapshot(label, expectedHeld) {
+            const snap = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+            if (!snap) {
+              voiceLosses.push(label + ': missing debug snapshot');
+              return null;
+            }
+            snapshots.push({
+              label,
+              expectedHeld,
+              held: snap.heldNotes,
+              local: snap.midiVoices,
+              ssli: snap.ssliActiveOscillators
+            });
+            minHeldDuringChord = Math.min(minHeldDuringChord, snap.heldNotes);
+            minLocalDuringChord = Math.min(minLocalDuringChord, snap.midiVoices);
+            maxHeldDuringChord = Math.max(maxHeldDuringChord, snap.heldNotes);
+            maxLocalDuringChord = Math.max(maxLocalDuringChord, snap.midiVoices);
+            if (typeof snap.ssliActiveOscillators === 'number') {
+              minSsliDuringChord = Math.min(minSsliDuringChord, snap.ssliActiveOscillators);
+              maxSsliDuringChord = Math.max(maxSsliDuringChord, snap.ssliActiveOscillators);
+            }
+            if (snap.heldNotes !== expectedHeld || snap.midiVoices !== expectedHeld) {
+              voiceLosses.push(label + ': expected held/local ' + expectedHeld + ', got held=' + snap.heldNotes + ' local=' + snap.midiVoices + ' ssli=' + snap.ssliActiveOscillators);
+            }
+            return snap;
+          }
+
+          let gestureIndex = 0;
+          while (noteOns < 200) {
+            const requestedSize = gestureIndex < chordSizes.length ? chordSizes[gestureIndex] : 6;
+            const chordSize = Math.min(requestedSize, 200 - noteOns);
+            const baseIndex = (gestureIndex * 5) % pitchPool.length;
+            const notes = [];
+            for (let i = 0; i < chordSize; i += 1) {
+              const midi = pitchPool[(baseIndex + i * 2) % pitchPool.length];
+              const channel = gestureIndex % 3 === 0 ? sameChannelCycle[i] : ((gestureIndex + i * 3) % 15);
+              const velocity = 78 + ((gestureIndex * 11 + i * 7) % 45);
+              notes.push({ midi, channel, velocity });
+            }
+            for (const note of notes) {
+              send([0x90 | note.channel, note.midi, note.velocity]);
+              noteOns += 1;
+              await wait(4);
+              captureFrame();
+            }
+            await wait(95);
+            captureFrame();
+            snapshot('gesture ' + gestureIndex + ' after note-ons size=' + chordSize, chordSize);
+            for (let frameIndex = 0; frameIndex < 3; frameIndex += 1) {
+              for (let i = 0; i < notes.length; i += 1) {
+                const note = notes[i];
+                const pressure = (32 + gestureIndex * 13 + frameIndex * 29 + i * 17) % 128;
+                send([0xA0 | note.channel, note.midi, pressure]);
+                polyAftertouchSent += 1;
+              }
+              await wait(6);
+              captureFrame();
+            }
+            for (let i = notes.length - 1; i >= 0; i -= 1) {
+              const note = notes[i];
+              send([0xA0 | note.channel, note.midi, 0]);
+              polyAftertouchSent += 1;
+              send([0x80 | note.channel, note.midi, 0]);
+              noteOffs += 1;
+              await wait(3);
+              captureFrame();
+            }
+            await wait(35);
+            snapshot('gesture ' + gestureIndex + ' after note-offs', 0);
+            gestureIndex += 1;
+          }
+
+          const remainingMs = Math.max(120, sampleMs - (frameRmsValues.length * 16));
+          const sampleStarted = Date.now();
+          while (Date.now() - sampleStarted < remainingMs) {
+            captureFrame();
+            await wait(16);
+          }
+          await wait(180);
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          const noteOnLogCount = (diagnosticLog.match(/note-on /g) || []).length;
+          const ssliSustainStartCount = (diagnosticLog.match(/SSLI MIDI sustain start/g) || []).length;
+          const ssliPluckedStartCount = (diagnosticLog.match(/SSLI plucked one-shot/g) || []).length;
+          const fallbackStartCount = (diagnosticLog.match(/MIDI voice start/g) || []).length;
+          const polyAftertouchEvents = (diagnosticLog.match(/poly-aftertouch/g) || []).length;
+          const channelPressureEvents = (diagnosticLog.match(/channel-pressure/g) || []).length;
+          framePeaks.sort((a, b) => a - b);
+          frameMaxSteps.sort((a, b) => a - b);
+          const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));
+          const tailRms = Math.sqrt(tailFrames.reduce((sum, value) => sum + value * value, 0) / Math.max(1, tailFrames.length));
+          return {
+            available: true,
+            trigger: 'voice-stress-midi',
+            instrumentType: instrument.type || '',
+            settingsHash: String(settingsHash),
+            settingsKeys: Object.keys(settings).sort(),
+            engineSettingsKey,
+            engineSettingsHash: String(engineSettingsHash),
+            engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
+            physicalSettings: settings.physicalSettings || null,
+            noteOns,
+            noteOffs,
+            requestedGestures: gestureIndex,
+            requestedMaxChordSize: 6,
+            observedMaxHeld: maxHeldDuringChord,
+            observedMaxLocalVoices: maxLocalDuringChord,
+            observedMaxSsliVoices: maxSsliDuringChord === 99 ? null : maxSsliDuringChord,
+            observedMinHeld: minHeldDuringChord === 99 ? null : minHeldDuringChord,
+            observedMinLocalVoices: minLocalDuringChord === 99 ? null : minLocalDuringChord,
+            observedMinSsliVoices: minSsliDuringChord === 99 ? null : minSsliDuringChord,
+            noteOnLogCount,
+            ssliSustainStartCount,
+            ssliPluckedStartCount,
+            fallbackStartCount,
+            totalStartLogCount: ssliSustainStartCount + ssliPluckedStartCount + fallbackStartCount,
+            polyAftertouchSent,
+            polyAftertouchEvents,
+            channelPressureSent,
+            channelPressureEvents,
+            voiceLosses: voiceLosses.slice(0, 12),
+            voiceLossCount: voiceLosses.length,
+            snapshots: snapshots.slice(0, 12),
+            peak: Number(peak.toFixed(5)),
+            rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)),
+            samples: count,
+            p95Peak: Number((framePeaks[Math.floor(framePeaks.length * 0.95)] || 0).toFixed(5)),
+            maxSampleStep: Number((frameMaxSteps[frameMaxSteps.length - 1] || 0).toFixed(5)),
+            p95SampleStep: Number((frameMaxSteps[Math.floor(frameMaxSteps.length * 0.95)] || 0).toFixed(5)),
+            tailRms: Number(tailRms.toFixed(5)),
+            clipRatio: Number((clipped / Math.max(1, count)).toFixed(6)),
+            spectrumPeak: Number(spectrumPeak.toFixed(5)),
+            spectrumRms: Number(Math.sqrt(spectrumSum / Math.max(1, spectrumCount)).toFixed(5)),
+            spectrumCentroidHz: Number((spectrumWeightedHzSum / Math.max(0.000001, spectrumEnergySum)).toFixed(1)),
+            spectrumHighRatio: Number((spectrumHighEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            spectrumBellRatio: Number((spectrumBellEnergySum / Math.max(0.000001, spectrumEnergySum)).toFixed(5)),
+            peakToRms: Number((peak / Math.max(0.000001, Math.sqrt(rmsSum / Math.max(1, count)))).toFixed(3)),
+            waveformHash: String(waveHash),
+            spectrumHash: String(spectrumHash),
+            analyserPath: 'SL.audio.getAnalyser() final output path',
+            analyserArmedBeforeTrigger: true,
+            diagnosticLog,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        sample_ms,
+    )
+
+
 def expected_type_for_engine(row):
     engine = str(row.get("engine", "")).lower()
     label = str(row.get("engineLabel", "")).lower()
@@ -817,11 +1389,66 @@ def validate_audio_behavior(row, trigger):
         errors.append(f"expected engine {expected_type}, got {signature.get('instrumentType')}")
     if expected_type and expected_type != "subtractive" and not signature.get("engineSettingsKeys"):
         errors.append(f"missing {expected_type} parameter block")
+    if trigger == "pressure-sweep-midi":
+        low_rms = float(signature.get("lowRms") or 0)
+        high_rms = float(signature.get("highRms") or 0)
+        rms_ratio = float(signature.get("rmsRatio") or 0)
+        centroid_ratio = float(signature.get("centroidRatio") or 0)
+        if low_rms < 0.002:
+            errors.append(f"low-pressure audio energy too low ({low_rms})")
+        if high_rms < 0.002:
+            errors.append(f"high-pressure audio energy too low ({high_rms})")
+        log = signature.get("diagnosticLog", "")
+        if expected_type == "physical":
+            response = max(rms_ratio, 1 / max(0.001, rms_ratio), centroid_ratio, 1 / max(0.001, centroid_ratio))
+            if "SSLI physical per-note pressure updated" not in log:
+                errors.append("physical pressure did not reach SSLI per-note update path")
+            if response < 1.25:
+                errors.append(f"physical pressure audio response too small ({response})")
+        else:
+            if rms_ratio < 1.18:
+                errors.append(f"pressure RMS response too small ({rms_ratio})")
+            if centroid_ratio < 1.05:
+                errors.append(f"pressure brightness response too small ({centroid_ratio})")
+        cleanup = signature.get("voiceCleanup") or {}
+        if cleanup:
+            held = cleanup.get("heldNotes")
+            local = cleanup.get("midiVoices")
+            ssli = cleanup.get("ssliActiveOscillators")
+            if held != 0 or local != 0 or (ssli is not None and ssli != 0):
+                errors.append(f"MIDI voices not idle after run (held={held} local={local} ssli={ssli})")
+        else:
+            errors.append("missing MIDI voice cleanup snapshot")
+        if "held=0 local=0 ssli=0" not in log:
+            errors.append("current MIDI run did not report clean idle cleanup")
+        return errors
     if trigger != "single-midi" and max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 and signature.get("rms", 0) < 0.003:
         errors.append("audio energy too low")
-    if trigger in {"single-midi", "six-note-midi"}:
+    if trigger in {"single-midi", "six-note-midi", "continuous-poly-pressure-midi", "voice-stress-midi"}:
         if signature.get("clipRatio", 0) > 0.03:
             errors.append(f"clipping ratio too high ({signature.get('clipRatio')})")
+        if trigger == "continuous-poly-pressure-midi":
+            if int(signature.get("polyAftertouchEvents") or 0) < 12:
+                errors.append(f"too few poly-aftertouch events ({signature.get('polyAftertouchEvents')})")
+            if int(signature.get("channelPressureEvents") or 0) != 0:
+                errors.append(f"continuous poly-aftertouch run used channel pressure ({signature.get('channelPressureEvents')})")
+            if int(signature.get("continuousPressureFrames") or 0) < 6:
+                errors.append(f"too few continuous pressure frames ({signature.get('continuousPressureFrames')})")
+        if trigger == "voice-stress-midi":
+            if int(signature.get("noteOns") or 0) != 200:
+                errors.append(f"voice stress sent wrong note-on count ({signature.get('noteOns')})")
+            if int(signature.get("noteOffs") or 0) != 200:
+                errors.append(f"voice stress sent wrong note-off count ({signature.get('noteOffs')})")
+            if int(signature.get("observedMaxHeld") or 0) < 6:
+                errors.append(f"voice stress never held six notes ({signature.get('observedMaxHeld')})")
+            if int(signature.get("observedMaxLocalVoices") or 0) < 6:
+                errors.append(f"voice stress never reached six local voices ({signature.get('observedMaxLocalVoices')})")
+            if int(signature.get("voiceLossCount") or 0) > 0:
+                errors.append(f"voice stress detected voice loss ({signature.get('voiceLosses')})")
+            if int(signature.get("polyAftertouchSent") or 0) < 200:
+                errors.append(f"too few poly-aftertouch messages sent ({signature.get('polyAftertouchSent')})")
+            if int(signature.get("channelPressureSent") or 0) != 0:
+                errors.append(f"voice stress sent channel pressure ({signature.get('channelPressureSent')})")
         log = signature.get("diagnosticLog", "")
         cleanup = signature.get("voiceCleanup") or {}
         if cleanup:
@@ -840,12 +1467,12 @@ def validate_audio_behavior(row, trigger):
 def validate_comprehensive_audio_acceptance(row, trigger):
     signature = row.get("audioSignature") or {}
     errors = validate_audio_behavior(row, trigger)
-    if trigger != "six-note-midi":
-        errors.append("comprehensive audio acceptance requires --trigger six-note-midi")
+    if trigger != "continuous-poly-pressure-midi":
+        errors.append("comprehensive audio acceptance requires --trigger continuous-poly-pressure-midi")
         return errors
     if not signature.get("available"):
         return errors
-    if signature.get("trigger") != "six-note-midi":
+    if signature.get("trigger") != "continuous-poly-pressure-midi":
         errors.append(f"unexpected audio trigger {signature.get('trigger')!r}")
     if signature.get("analyserPath") != "SL.audio.getAnalyser() final output path":
         errors.append("audio was not captured from final SSLI output analyser")
@@ -913,6 +1540,7 @@ def apply_duplicate_signature_failures(results):
 
 def run_sweep(args):
     apply_comprehensive_audio_defaults(args)
+    apply_voice_stress_defaults(args)
     if not args.no_build:
         subprocess.run([sys.executable, "build.py"], cwd=ROOT, check=True)
 
@@ -945,7 +1573,19 @@ def run_sweep(args):
             )
             page.goto(url)
             page.wait_for_selector('[data-testid="sound-engine-select"]')
-            if args.trigger in {"single-midi", "six-note-midi"}:
+            page.wait_for_function(
+                """() => {
+                    const frame = document.getElementById('ssliEngineFrame');
+                    try {
+                      return !!(frame && frame.contentWindow && frame.contentWindow.SynthLab &&
+                        frame.contentWindow.SynthLab.audio && frame.contentWindow.SynthLab.presets);
+                    } catch (err) {
+                      return false;
+                    }
+                }""",
+                timeout=max(10_000, args.timeout_ms),
+            )
+            if args.trigger in {"single-midi", "six-note-midi", "pressure-sweep-midi", "continuous-poly-pressure-midi", "voice-stress-midi"}:
                 enable_mock_midi(page)
                 set_performance_volume(page, args.performance_volume)
             all_presets = collect_presets(page)
@@ -981,6 +1621,15 @@ def run_sweep(args):
                     elif args.trigger == "six-note-midi":
                         set_performance_volume(page, args.performance_volume)
                         audio_signature = ssli_six_note_midi_signature(page, max(args.audio_sample_ms, 900))
+                    elif args.trigger == "continuous-poly-pressure-midi":
+                        set_performance_volume(page, args.performance_volume)
+                        audio_signature = ssli_continuous_poly_pressure_midi_signature(page, max(args.audio_sample_ms, 900))
+                    elif args.trigger == "voice-stress-midi":
+                        set_performance_volume(page, args.performance_volume)
+                        audio_signature = ssli_voice_stress_midi_signature(page, max(args.audio_sample_ms, 1400))
+                    elif args.trigger == "pressure-sweep-midi":
+                        set_performance_volume(page, args.performance_volume)
+                        audio_signature = ssli_pressure_sweep_midi_signature(page, max(args.audio_sample_ms, 640), args.normalization_midi)
                     else:
                         probe = prepare_ssli_audio_probe(page)
                         page.locator('[data-testid="play-step"]').click(timeout=args.timeout_ms)
@@ -1069,7 +1718,7 @@ def run_sweep(args):
                         row["status"] = "fail"
                         row["error"] = "; ".join([row["error"]] + normalization_errors).strip("; ")
                 results.append(row)
-                print(f"[{index}/{len(presets)}] {row['status'].upper()} {preset['engine']} / {preset['categoryLabel']} / {preset['presetLabel']}")
+                print(f"[{index}/{len(presets)}] {row['status'].upper()} {preset['engine']} / {preset['categoryLabel']} / {preset['presetLabel']}", flush=True)
         finally:
             browser.close()
             server.shutdown()

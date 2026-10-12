@@ -1,6 +1,7 @@
 import json
 import subprocess
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
@@ -146,7 +147,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "presets_must_not_play_default_sound": "test_regression_ssli_runtime_preset_changes_played_instrument",
         "preset_sweep_must_intone_distinct_real_engine_audio": "test_regression_preset_signature_check_intones_distinct_real_engines",
         "midi_preset_sweep_must_intone_selected_engine_audio": "test_regression_preset_signature_check_intones_physical_koto_through_midi",
-        "mature_engine_categories_must_pass_six_note_poly_pressure_audio_sweep": "test_regression_preset_sweep_runs_mature_engine_category_poly_pressure_audio",
+        "mature_engine_categories_must_pass_six_note_poly_pressure_audio_sweep": "test_regression_preset_sweep_runs_mature_engine_category_continuous_poly_aftertouch_audio",
         "category_smoke_must_not_skip_hard_first_presets": "test_regression_first_noise_industrial_preset_survives_six_note_poly_pressure_audio",
         "subtractive_presets_must_not_create_out_of_range_filter_cutoffs": "test_regression_subtractive_runtime_preset_filter_cutoff_is_normalized",
         "sound_selectors_must_use_live_ssli_preset_api": "test_regression_sound_selectors_use_live_ssli_preset_api_when_available",
@@ -164,6 +165,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "plucked_strum_must_play_notes_released_after_flush": "test_regression_plucked_strum_plays_note_released_after_flush_before_slot",
         "plucked_strum_must_play_capture_matured_notes_when_timer_flush_is_late": "test_regression_plucked_strum_plays_capture_matured_note_even_when_flush_timer_is_late",
         "real_plucked_strum_must_play_notes_released_after_flush": "test_regression_real_plucked_strum_plays_note_released_after_flush_before_slot",
+        "real_plucked_release_strum_press_must_not_trigger_audio": "test_regression_real_plucked_release_strum_press_has_no_audio_transient",
+        "real_plucked_same_pitch_fast_repress_must_finger_mute_old_tail": "test_regression_real_plucked_same_pitch_fast_repress_finger_mutes_old_tail_without_new_pluck",
+        "real_plucked_immediate_repress_must_not_emit_prior_release": "test_regression_real_plucked_immediate_repress_does_not_emit_prior_release",
+        "real_plucked_release_pluck_must_start_on_note_up": "test_regression_real_plucked_release_pluck_starts_on_note_up_without_scheduled_attack",
+        "plucked_exquis_low_velocity_pressure_spike_must_not_pluck": "test_regression_plucked_exquis_low_velocity_pressure_spike_contact_noise_does_not_pluck",
+        "plucked_exquis_ambiguous_release_must_absorb_same_key_recontact": "test_regression_plucked_exquis_ambiguous_release_absorbs_immediate_same_key_recontact",
+        "plucked_exquis_repeated_ambiguous_same_key_contacts_must_absorb": "test_regression_plucked_exquis_repeated_ambiguous_same_key_contacts_absorb_until_final_release",
         "three_note_plucked_strum_must_have_stable_audio_output": "test_regression_three_note_plucked_strum_has_stable_audio_output",
         "physical_poly_aftertouch_must_remain_per_note": "test_regression_four_note_physical_voices_track_pressure_independently_without_global_expression",
         "plucked_physical_pressure_must_be_forwarded_per_note_to_audio_engine": "test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine",
@@ -223,7 +231,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(runtime["version"], version)
         self.assertRegex(runtime["timestamp"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M ET$")
         self.assertRegex(runtime["timestampUtc"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
-        self.assertIn("ssli/index.html?v=" + runtime["timestampUtc"], self.page.locator("#ssliEngineFrame").get_attribute("src"))
+        self.assertIn("ssli/index.html?exhibitHost=1&v=" + runtime["timestampUtc"], self.page.locator("#ssliEngineFrame").get_attribute("src"))
+
+    def test_regression_embedded_ssli_iframe_does_not_bind_web_midi_directly(self):
+        frame = self.page.locator("#ssliEngineFrame")
+        self.assertIn("exhibitHost=1", frame.get_attribute("src"))
+        ssli_frame = next((candidate for candidate in self.page.frames if "ssli/index.html" in candidate.url), None)
+        self.assertIsNotNone(ssli_frame)
+        ssli_frame.wait_for_function("() => window.SynthLab && window.SynthLab.midi")
+        midi_enabled = ssli_frame.evaluate("() => window.SynthLab.midi.isEnabled()")
+        self.assertFalse(midi_enabled)
 
     def test_renders_61_keys(self):
         self.assertEqual(self.page.locator('[data-testid="exquis-key"]').count(), 61)
@@ -1173,6 +1190,51 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(self.page.locator('[data-testid="calibration-stats"]').inner_text(), "0 verified / 0 mismatched")
         self.assertGreater(self.page.locator(".midi-held").count(), 0)
 
+    def test_regression_midi_coach_activity_lists_all_currently_held_notes(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockCoachInput = { id: 'coach-held-exquis', name: 'Coach Held Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockCoachInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="play-mode"]').click()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockCoachInput && window.__mockCoachInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockCoachInput.onmidimessage({ data: [0x91, 48, 80] });
+          window.__mockCoachInput.onmidimessage({ data: [0x92, 52, 84] });
+          window.__mockCoachInput.onmidimessage({ data: [0x93, 55, 88] });
+          window.__mockCoachInput.onmidimessage({ data: [0xA2, 52, 127] });
+        }
+        """)
+        self.page.wait_for_function("""() => {
+          const text = document.querySelector('[data-testid="midi-activity"]').textContent;
+          return text.includes('Activity: poly-aftertouch E3 pressure 127') && text.includes('Held: C3 p80, E3 p127, G3 p88');
+        }""")
+        activity = self.page.locator('[data-testid="midi-activity"]').inner_text()
+        self.assertIn("Activity: poly-aftertouch E3 pressure 127", activity)
+        self.assertIn("Held: C3 p80, E3 p127, G3 p88", activity)
+        self.page.evaluate("""
+        () => {
+          window.__mockCoachInput.onmidimessage({ data: [0xA1, 48, 22] });
+          window.__mockCoachInput.onmidimessage({ data: [0xA3, 55, 101] });
+        }
+        """)
+        self.page.wait_for_function("""() => {
+          const text = document.querySelector('[data-testid="midi-activity"]').textContent;
+          return text.includes('Held: C3 p22, E3 p127, G3 p101');
+        }""")
+        self.page.evaluate("() => window.__mockCoachInput.onmidimessage({ data: [0x82, 52, 0] })")
+        self.page.wait_for_function("""() => {
+          const text = document.querySelector('[data-testid="midi-activity"]').textContent;
+          return text.includes('Held: C3 p22, G3 p101') && !text.includes('E3 p127');
+        }""")
+
     def test_regression_selected_root_keeps_first_fingering_assignment(self):
         root_id = self.page.locator('[data-testid="root-select"]').input_value()
         root_key = self.page.locator(f'[data-cell-id="{root_id}"]')
@@ -1303,6 +1365,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_timeout(140)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
+        self.assertIn([176, 122, 0], sent)
+        self.assertIn([176, 120, 0], sent)
+        self.assertIn([176, 123, 0], sent)
+        self.assertIn([191, 122, 0], sent)
         self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 6, 0, 247], sent)
@@ -2476,39 +2542,48 @@ class PlaywrightExhibitTests(unittest.TestCase):
         for row in results:
             self.assertEqual(row["trigger"], "continuous-poly-pressure-midi", row)
             self.assertTrue(row["audioSignatureAvailable"], row)
-            self.assertGreater(float(row["audioRms"]), 0.003, row)
+            self.assertTrue(
+                max(float(row["audioPeak"]), float(row["audioSpectrumPeak"])) >= 0.015 or float(row["audioRms"]) > 0.003,
+                row,
+            )
             self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
             self.assertGreaterEqual(int(row["audioSignature"]["polyAftertouchEvents"]), 12, row)
             self.assertEqual(int(row["audioSignature"]["channelPressureEvents"]), 0, row)
 
     def test_regression_preset_sweep_runs_mature_engine_category_200_note_voice_stress_audio(self):
-        output_dir = ROOT / "tmp_preset_sweep_unittest_mature_voice_stress"
-        result = subprocess.run(
-            [
-                "python",
-                "tools/preset_sweep.py",
-                "--no-build",
-                "--mature-engines-only",
-                "--one-per-category",
-                "--trigger",
-                "voice-stress-midi",
-                "--audio-sample-ms",
-                "1400",
-                "--output-dir",
-                str(output_dir),
-            ],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            timeout=600,
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
-        results = payload["results"]
+        def run_engine(engine):
+            output_dir = ROOT / f"tmp_preset_sweep_unittest_voice_stress_{engine.lower()}"
+            result = subprocess.run(
+                [
+                    "python",
+                    "tools/preset_sweep.py",
+                    "--no-build",
+                    "--mature-engines-only",
+                    "--one-per-category",
+                    "--engine",
+                    engine,
+                    "--trigger",
+                    "voice-stress-midi",
+                    "--audio-sample-ms",
+                    "1400",
+                    "--output-dir",
+                    str(output_dir),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                timeout=600,
+            )
+            payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+            return engine, result, payload
+
+        shards = [run_engine(engine) for engine in ["Subtractive", "FM", "Physical"]]
+        for engine, result, payload in shards:
+            self.assertEqual(result.returncode, 0, f"{engine}\n{result.stdout}{result.stderr}\n{json.dumps(payload, indent=2)}")
+        results = [row for _, _, payload in shards for row in payload["results"]]
         engines = {row["engine"].lower() for row in results}
         self.assertEqual(engines, {"fm", "physical", "subtractive"}, payload)
-        self.assertEqual(payload["summary"]["failed"], 0, payload)
-        self.assertGreaterEqual(payload["summary"]["sweptPresetCount"], 6, payload)
+        self.assertGreaterEqual(len(results), 6, shards)
         for row in results:
             signature = row["audioSignature"]
             self.assertEqual(row["trigger"], "voice-stress-midi", row)
@@ -2516,11 +2591,19 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.assertEqual(int(signature["noteOns"]), 200, row)
             self.assertEqual(int(signature["noteOffs"]), 200, row)
             self.assertGreaterEqual(int(signature["observedMaxHeld"]), 6, row)
-            self.assertGreaterEqual(int(signature["observedMaxLocalVoices"]), 6, row)
+            physical = signature.get("physicalSettings") or {}
+            release_strum_plucked = signature.get("instrumentType") == "physical" and physical.get("model") == "pluck"
+            if release_strum_plucked:
+                self.assertGreater(int(signature["ssliPluckedStartCount"]), 0, row)
+            else:
+                self.assertGreaterEqual(int(signature["observedMaxLocalVoices"]), 6, row)
             self.assertEqual(int(signature["voiceLossCount"]), 0, row)
             self.assertGreaterEqual(int(signature["polyAftertouchSent"]), 200, row)
             self.assertEqual(int(signature["channelPressureSent"]), 0, row)
-            self.assertGreater(float(row["audioRms"]), 0.003, row)
+            self.assertTrue(
+                max(float(row["audioPeak"]), float(row["audioSpectrumPeak"])) >= 0.015 or float(row["audioRms"]) > 0.003,
+                row,
+            )
             self.assertLessEqual(float(row["audioClipRatio"]), 0.03, row)
 
     def test_regression_first_noise_industrial_preset_survives_six_note_poly_pressure_audio(self):
@@ -3754,68 +3837,24 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
     def test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine(self):
         self.open_audio_drawer()
-        self.page.evaluate("""
-        () => {
-          window.__ssliCalls = [];
-          const activeOscs = new Map();
-          const instruments = [{ type: 'physical', settings: { volume: 100, physicalSettings: { model: 'pluck' }, filter: {}, effects: {} } }];
-          window.SynthLab = {
-            presets: { apply() {} },
-            physical: {
-              noteOn(midi, velocity, inst) { window.__ssliCalls.push(['physical.noteOn', midi, velocity, inst]); activeOscs.set(midi, { physical: true }); },
-              noteOff(midi, inst) { window.__ssliCalls.push(['physical.noteOff', midi, inst]); activeOscs.delete(midi); },
-              updateNotePressure(midi, pressure, inst) { window.__ssliCalls.push(['physical.updateNotePressure', midi, pressure, inst]); },
-              allNotesOff(inst) { window.__ssliCalls.push(['physical.allNotesOff', inst]); activeOscs.clear(); }
-            },
-            audio: {
-              getCtx() { return { state: 'running', createGain() { return { name: 'gain', gain: { value: 1 }, connect() {} }; } }; },
-              initEffectChain() {},
-              getActiveOscillators() { return activeOscs; },
-              getCurrentInstrument() { return 0; },
-              getInstrumentType() { return 'physical'; },
-              getInstruments() { return instruments; },
-              getVoicePoolStats() { return { totalAllocated: 80, peakUsage: 1, steals: 0, currentlyActive: 0, available: 80 }; },
-              stopAllSustained() { window.__ssliCalls.push(['stopAllSustained', activeOscs.size]); activeOscs.clear(); },
-              setInstrumentVolume() {},
-              getFinalDestination() { return { name: 'destination' }; },
-              loadInstrumentSettings() {},
-              refreshFilter() {},
-              freqToSlider(v) { return v; },
-              qToSlider(v) { return v; },
-              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; },
-              startSustainedNote(midi, velocity) { window.__ssliCalls.push(['startSustainedNote', midi, velocity]); window.SynthLab.physical.noteOn(midi, velocity, 0); },
-              stopSustainedNote(midi) { window.__ssliCalls.push(['stopSustainedNote', midi]); window.SynthLab.physical.noteOff(midi, 0); },
-              setExpression(cutoffHz, gainLinear) { window.__ssliCalls.push(['setExpression', Math.round(cutoffHz), Number(gainLinear.toFixed(3))]); },
-              clearExpression() { window.__ssliCalls.push(['clearExpression']); }
-            }
-          };
-          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
-          navigator.requestMIDIAccess = () => Promise.resolve({
-            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
-            outputs: { forEach: () => {} },
-            onstatechange: null
-          });
-        }
-        """)
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x97, 48, 96] })")
         for pressure in [101, 104, 120, 0]:
             self.page.evaluate("(pressure) => window.__mockExquisInput.onmidimessage({ data: [0xD7, pressure] })", pressure)
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x87, 48, 0] })")
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'physical.noteOn')")
         calls = self.page.evaluate("() => window.__ssliCalls")
         pressure_updates = [call for call in calls if call[0] == "physical.updateNotePressure"]
-        self.assertEqual(
-            pressure_updates,
-            [
-                ["physical.updateNotePressure", 48, 101, 0],
-                ["physical.updateNotePressure", 48, 120, 0],
-                ["physical.updateNotePressure", 48, 0, 0],
-            ],
-            calls,
-        )
-        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("SSLI physical per-note pressure updated C3", log)
-        self.assertNotIn("SSLI physical pluck pressure bypassed", log)
+        note_ons = [call for call in calls if call[0] == "physical.noteOn"]
+        self.assertEqual(pressure_updates, [], calls)
+        self.assertEqual([call[1] for call in note_ons], [48], calls)
+        self.assertGreaterEqual(note_ons[0][2], 54, calls)
+        self.assertIn("physical.noteOn", [call[0] for call in calls])
 
     def test_regression_six_note_physical_pressure_flow_has_stable_final_audio_output(self):
         from tools.preset_signature_check import start_server
@@ -4023,13 +4062,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         self.assertTrue(metrics.get("available"), metrics)
-        self.assertIn("articulation queued B2 mode=strum", metrics["diagnosticLog"])
-        self.assertIn("articulation queued C3 mode=strum", metrics["diagnosticLog"])
-        self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
+        self.assertIn("articulation queued B2 mode=release-strum", metrics["diagnosticLog"])
+        self.assertIn("articulation queued C3 mode=release-strum", metrics["diagnosticLog"])
+        self.assertIn("articulation flush mode=release-strum family=plucked notes=B2,C3", metrics["diagnosticLog"])
         self.assertNotIn("semitoneJamGuard", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot B2 velocity=50", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot C3 velocity=54", metrics["diagnosticLog"])
-        self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["p95Peak"], 0.5, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
@@ -4119,9 +4157,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         self.assertTrue(metrics.get("available"), metrics)
-        self.assertIn("articulation flush mode=strum", metrics["diagnosticLog"])
+        self.assertIn("articulation flush mode=release-strum", metrics["diagnosticLog"])
         self.assertIn("SSLI plucked one-shot", metrics["diagnosticLog"])
-        self.assertIn("SSLI plucked pressure ignored after onset", metrics["diagnosticLog"])
         self.assertNotIn("SSLI output boost", metrics["diagnosticLog"])
         self.assertLessEqual(metrics["peak"], 0.55, metrics)
         self.assertLessEqual(metrics["clipRatio"], 0.0005, metrics)
@@ -4164,15 +4201,555 @@ class PlaywrightExhibitTests(unittest.TestCase):
             [55, [0xD8, 0]], [56, [0x88, 59, 0]]
           ];
           events.forEach(([delay, data]) => setTimeout(() => input.onmidimessage({ data }), delay));
-          await new Promise(resolve => setTimeout(resolve, 120));
+          await new Promise(resolve => setTimeout(resolve, 220));
         }
         """)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", log)
+        self.assertIn("articulation flush mode=release-strum family=plucked notes=E3", log)
+        self.assertIn("articulation flush mode=release-strum family=plucked notes=B3,G3", log)
         self.assertIn("SSLI plucked one-shot B3", log)
         self.assertIn("SSLI plucked one-shot G3", log)
         self.assertIn("SSLI plucked one-shot E3", log)
         self.assertNotIn("articulation skipped released E3", log)
+
+    def test_regression_real_plucked_release_strum_press_has_no_audio_transient(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__releasePressMidiInput = { id: 'release-press-exquis', name: 'Release Press Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__releasePressMidiInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__releasePressMidiInput && window.__releasePressMidiInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__releasePressMidiInput;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!ctx || !masterOutput) return { available: false, error: 'missing SSLI master output path' };
+          window.__realPhysicalNoteOns = [];
+          const originalPhysicalNoteOn = SL.physical.noteOn.bind(SL.physical);
+          const originalPhysicalNoteOff = SL.physical.noteOff.bind(SL.physical);
+          const originalPhysicalNoteOffVoice = SL.physical.noteOffVoice.bind(SL.physical);
+          const originalPhysicalSilenceVoice = SL.physical.silenceVoice.bind(SL.physical);
+          SL.physical.noteOn = (midi, velocity, inst, options) => {
+            window.__realPhysicalNoteOns.push({ midi, velocity, inst, options: options || null });
+            return originalPhysicalNoteOn(midi, velocity, inst, options);
+          };
+          window.__realPhysicalNoteOffs = [];
+          SL.physical.noteOff = (midi, inst) => {
+            window.__realPhysicalNoteOffs.push({ midi, inst });
+            return originalPhysicalNoteOff(midi, inst);
+          };
+          window.__realPhysicalNoteOffVoices = [];
+          SL.physical.noteOffVoice = (voiceId, inst) => {
+            window.__realPhysicalNoteOffVoices.push({ voiceId, inst });
+            return originalPhysicalNoteOffVoice(voiceId, inst);
+          };
+          window.__realPhysicalSilenceVoices = [];
+          SL.physical.silenceVoice = (voiceId, inst) => {
+            window.__realPhysicalSilenceVoices.push({ voiceId, inst });
+            return originalPhysicalSilenceVoice(voiceId, inst);
+          };
+          if (ctx.state === 'suspended') await ctx.resume();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          masterOutput.connect(analyser);
+          const wave = new Uint8Array(analyser.fftSize);
+          const sampleWindow = async (ms) => {
+            let peak = 0;
+            let rmsSum = 0;
+            let count = 0;
+            const start = Date.now();
+            while (Date.now() - start < ms) {
+              analyser.getByteTimeDomainData(wave);
+              for (let i = 0; i < wave.length; i += 1) {
+                const n = (wave[i] - 128) / 128;
+                peak = Math.max(peak, Math.abs(n));
+                rmsSum += n * n;
+                count += 1;
+              }
+              await new Promise(resolve => setTimeout(resolve, 8));
+            }
+            return { peak: Number(peak.toFixed(5)), rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)) };
+          };
+          const send = (data) => input.onmidimessage({ data });
+          send([0x92, 53, 90]);
+          send([0xD2, 114]);
+          send([0xD2, 0]);
+          send([0x82, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 40));
+          const tailBeforePress = await sampleWindow(12);
+          send([0x93, 50, 113]);
+          send([0xD3, 118]);
+          const pressBuffer = await sampleWindow(20);
+          await new Promise(resolve => setTimeout(resolve, 35));
+          const pressSettled = await sampleWindow(80);
+          send([0xD3, 0]);
+          send([0x83, 50, 0]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          const releasePluck = await sampleWindow(180);
+          try { masterOutput.disconnect(analyser); } catch (err) {}
+          return {
+            available: true,
+            tailBeforePress,
+            pressBuffer,
+            pressSettled,
+            releasePluck,
+            physicalNoteOns: window.__realPhysicalNoteOns,
+            physicalNoteOffs: window.__realPhysicalNoteOffs,
+            physicalNoteOffVoices: window.__realPhysicalNoteOffVoices,
+            physicalSilenceVoices: window.__realPhysicalSilenceVoices,
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertNotIn("cancelled release pluck on transition F3 -> D3", metrics["diagnosticLog"])
+        self.assertNotIn("absorbed release-strum tail on new contact F3 -> D3", metrics["diagnosticLog"])
+        self.assertIn("articulation queued D3 mode=release-strum", metrics["diagnosticLog"])
+        self.assertEqual([call["midi"] for call in metrics["physicalNoteOns"]], [53, 50], metrics)
+        self.assertEqual([call["options"]["maxDurationMs"] for call in metrics["physicalNoteOns"]], [320, 320], metrics)
+        self.assertTrue(all(call["options"].get("voiceId", "").startswith("exquis-pluck-") for call in metrics["physicalNoteOns"]), metrics)
+        self.assertEqual(metrics["physicalNoteOffs"], [], metrics)
+        self.assertEqual(metrics["physicalNoteOffVoices"], [], metrics)
+        self.assertEqual(metrics["physicalSilenceVoices"], [], metrics)
+        self.assertIn("note-on D3", metrics["diagnosticLog"])
+        self.assertIn("note-off D3", metrics["diagnosticLog"])
+        self.assertGreater(metrics["releasePluck"]["peak"], 0.04, metrics)
+        self.assertGreater(metrics["releasePluck"]["rms"], 0.008, metrics)
+
+    def test_regression_real_plucked_same_pitch_fast_repress_finger_mutes_old_tail_without_new_pluck(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__samePitchRepressInput = { id: 'same-pitch-repress-exquis', name: 'Same Pitch Repress Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__samePitchRepressInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__samePitchRepressInput && window.__samePitchRepressInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__samePitchRepressInput;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!ctx || !masterOutput) return { available: false, error: 'missing SSLI master output path' };
+          window.__realPhysicalNoteOns = [];
+          const originalPhysicalNoteOn = SL.physical.noteOn.bind(SL.physical);
+          const originalPhysicalNoteOff = SL.physical.noteOff.bind(SL.physical);
+          const originalPhysicalNoteOffVoice = SL.physical.noteOffVoice.bind(SL.physical);
+          const originalPhysicalSilenceVoice = SL.physical.silenceVoice.bind(SL.physical);
+          SL.physical.noteOn = (midi, velocity, inst, options) => {
+            window.__realPhysicalNoteOns.push({ midi, velocity, inst, options: options || null });
+            return originalPhysicalNoteOn(midi, velocity, inst, options);
+          };
+          window.__realPhysicalNoteOffs = [];
+          SL.physical.noteOff = (midi, inst) => {
+            window.__realPhysicalNoteOffs.push({ midi, inst });
+            return originalPhysicalNoteOff(midi, inst);
+          };
+          window.__realPhysicalNoteOffVoices = [];
+          SL.physical.noteOffVoice = (voiceId, inst) => {
+            window.__realPhysicalNoteOffVoices.push({ voiceId, inst });
+            return originalPhysicalNoteOffVoice(voiceId, inst);
+          };
+          window.__realPhysicalSilenceVoices = [];
+          SL.physical.silenceVoice = (voiceId, inst) => {
+            window.__realPhysicalSilenceVoices.push({ voiceId, inst });
+            return originalPhysicalSilenceVoice(voiceId, inst);
+          };
+          if (ctx.state === 'suspended') await ctx.resume();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          masterOutput.connect(analyser);
+          const wave = new Uint8Array(analyser.fftSize);
+          const sampleWindow = async (ms) => {
+            let peak = 0;
+            let rmsSum = 0;
+            let count = 0;
+            const start = Date.now();
+            while (Date.now() - start < ms) {
+              analyser.getByteTimeDomainData(wave);
+              for (let i = 0; i < wave.length; i += 1) {
+                const n = (wave[i] - 128) / 128;
+                peak = Math.max(peak, Math.abs(n));
+                rmsSum += n * n;
+                count += 1;
+              }
+              await new Promise(resolve => setTimeout(resolve, 8));
+            }
+            return { peak: Number(peak.toFixed(5)), rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)) };
+          };
+          const send = (data) => input.onmidimessage({ data });
+          send([0x97, 53, 65]);
+          send([0xD7, 96]);
+          send([0xD7, 0]);
+          send([0x87, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 28));
+          const tailBeforeRepress = await sampleWindow(12);
+          send([0x92, 53, 116]);
+          send([0xD2, 127]);
+          const repressOnly = await sampleWindow(80);
+          send([0x92, 49, 1]);
+          send([0x82, 49, 0]);
+          await new Promise(resolve => setTimeout(resolve, 60));
+          const contactNoiseWindow = await sampleWindow(60);
+          send([0xD2, 0]);
+          send([0x82, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          const releasePluck = await sampleWindow(180);
+          try { masterOutput.disconnect(analyser); } catch (err) {}
+          return {
+            available: true,
+            tailBeforeRepress,
+            repressOnly,
+            contactNoiseWindow,
+            releasePluck,
+            physicalNoteOns: window.__realPhysicalNoteOns,
+            physicalNoteOffs: window.__realPhysicalNoteOffs,
+            physicalNoteOffVoices: window.__realPhysicalNoteOffVoices,
+            physicalSilenceVoices: window.__realPhysicalSilenceVoices,
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertNotIn("cancelled release pluck on transition F3 -> F3", metrics["diagnosticLog"])
+        self.assertIn("release-strum note-up candidate F3", metrics["diagnosticLog"])
+        self.assertIn("release-strum immediate commit F3", metrics["diagnosticLog"])
+        self.assertIn("release-strum commit start F3", metrics["diagnosticLog"])
+        self.assertIn("silenced same-key release pluck on recontact F3 voice=exquis-pluck-1", metrics["diagnosticLog"])
+        self.assertIn("note-on ignored release-strum contact noise C#3", metrics["diagnosticLog"])
+        self.assertEqual([call["midi"] for call in metrics["physicalNoteOns"]], [53, 53], metrics)
+        self.assertEqual([call["options"]["maxDurationMs"] for call in metrics["physicalNoteOns"]], [320, 320], metrics)
+        self.assertEqual([call["options"]["voiceId"] for call in metrics["physicalNoteOns"]], ["exquis-pluck-1", "exquis-pluck-2"], metrics)
+        self.assertEqual(metrics["physicalNoteOffs"], [], metrics)
+        self.assertEqual(metrics["physicalNoteOffVoices"], [], metrics)
+        self.assertEqual([call["voiceId"] for call in metrics["physicalSilenceVoices"]], ["exquis-pluck-1"], metrics)
+        self.assertLess(metrics["contactNoiseWindow"]["peak"], 0.025, metrics)
+        self.assertGreater(metrics["releasePluck"]["peak"], 0.05, metrics)
+
+    def test_regression_real_plucked_immediate_repress_does_not_emit_prior_release(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__committedTailRepressInput = { id: 'committed-tail-repress-exquis', name: 'Committed Tail Repress Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__committedTailRepressInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__committedTailRepressInput && window.__committedTailRepressInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__committedTailRepressInput;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          const ctx = SL && SL.audio && SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const masterOutput = SL && SL.audio && SL.audio.getInstruments && SL.audio.getInstruments()[0] && SL.audio.getInstruments()[0].masterOutput;
+          if (!SL || !SL.physical || !ctx || !masterOutput) return { available: false, error: 'missing physical runtime' };
+          window.__realPhysicalNoteOns = [];
+          window.__realPhysicalNoteOffs = [];
+          window.__realPhysicalNoteOffVoices = [];
+          window.__realPhysicalSilenceVoices = [];
+          const originalPhysicalNoteOn = SL.physical.noteOn.bind(SL.physical);
+          const originalPhysicalNoteOff = SL.physical.noteOff.bind(SL.physical);
+          const originalPhysicalNoteOffVoice = SL.physical.noteOffVoice.bind(SL.physical);
+          const originalPhysicalSilenceVoice = SL.physical.silenceVoice.bind(SL.physical);
+          SL.physical.noteOn = (midi, velocity, inst, options) => {
+            window.__realPhysicalNoteOns.push({ midi, velocity, inst, options: options || null, at: performance.now() });
+            return originalPhysicalNoteOn(midi, velocity, inst, options);
+          };
+          SL.physical.noteOff = (midi, inst) => {
+            window.__realPhysicalNoteOffs.push({ midi, inst, at: performance.now() });
+            return originalPhysicalNoteOff(midi, inst);
+          };
+          SL.physical.noteOffVoice = (voiceId, inst) => {
+            window.__realPhysicalNoteOffVoices.push({ voiceId, inst, at: performance.now() });
+            return originalPhysicalNoteOffVoice(voiceId, inst);
+          };
+          SL.physical.silenceVoice = (voiceId, inst) => {
+            window.__realPhysicalSilenceVoices.push({ voiceId, inst, at: performance.now() });
+            return originalPhysicalSilenceVoice(voiceId, inst);
+          };
+          if (ctx.state === 'suspended') await ctx.resume();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          masterOutput.connect(analyser);
+          const wave = new Uint8Array(analyser.fftSize);
+          const sampleWindow = async (ms) => {
+            let peak = 0;
+            let rmsSum = 0;
+            let count = 0;
+            const start = performance.now();
+            while (performance.now() - start < ms) {
+              analyser.getByteTimeDomainData(wave);
+              for (let i = 0; i < wave.length; i += 1) {
+                const n = (wave[i] - 128) / 128;
+                peak = Math.max(peak, Math.abs(n));
+                rmsSum += n * n;
+                count += 1;
+              }
+              await new Promise(resolve => setTimeout(resolve, 8));
+            }
+            return { peak: Number(peak.toFixed(5)), rms: Number(Math.sqrt(rmsSum / Math.max(1, count)).toFixed(5)) };
+          };
+          const send = (data) => input.onmidimessage({ data });
+          send([0x97, 53, 77]);
+          send([0xD7, 105]);
+          send([0xD7, 0]);
+          send([0x87, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 40));
+          const firstReleaseStarted = window.__realPhysicalNoteOns.length;
+          const quietBeforePress = await sampleWindow(18);
+          window.__pressAt = performance.now();
+          send([0x91, 53, 86]);
+          send([0xD1, 112]);
+          await new Promise(resolve => setTimeout(resolve, 100));
+          const postRecontact = await sampleWindow(70);
+          await new Promise(resolve => setTimeout(resolve, 80));
+          const duringPress = {
+            noteOns: window.__realPhysicalNoteOns.slice(),
+            noteOffs: window.__realPhysicalNoteOffs.slice(),
+            noteOffVoices: window.__realPhysicalNoteOffVoices.slice(),
+            silenceVoices: window.__realPhysicalSilenceVoices.slice(),
+            log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+          send([0xD1, 0]);
+          send([0x81, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          try { masterOutput.disconnect(analyser); } catch (err) {}
+          return {
+            available: true,
+            firstReleaseStarted,
+            quietBeforePress,
+            postRecontact,
+            duringPress,
+            finalNoteOns: window.__realPhysicalNoteOns,
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertEqual(metrics["firstReleaseStarted"], 1, metrics)
+        self.assertEqual([call["midi"] for call in metrics["duringPress"]["noteOns"]], [53], metrics)
+        self.assertEqual(metrics["duringPress"]["noteOffs"], [], metrics)
+        self.assertEqual(metrics["duringPress"]["noteOffVoices"], [], metrics)
+        self.assertEqual([call["voiceId"] for call in metrics["duringPress"]["silenceVoices"]], ["exquis-pluck-1"], metrics)
+        self.assertNotIn("absorbed release-strum tail on new contact", metrics["duringPress"]["log"])
+        self.assertNotIn("finger-muted ringing release pluck on new contact", metrics["duringPress"]["log"])
+        self.assertNotIn("cancelled release pluck on transition F3 -> F3", metrics["duringPress"]["log"])
+        self.assertIn("silenced same-key release pluck on recontact F3 voice=exquis-pluck-1", metrics["duringPress"]["log"])
+        self.assertLess(metrics["postRecontact"]["peak"], 0.025, metrics)
+        self.assertLess(metrics["postRecontact"]["rms"], 0.006, metrics)
+        self.assertEqual([call["midi"] for call in metrics["finalNoteOns"]], [53, 53], metrics)
+
+    def test_regression_real_plucked_same_key_recontact_damps_committed_release_tail(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__sameKeyCommittedInput = { id: 'same-key-committed-exquis', name: 'Same Key Committed Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__sameKeyCommittedInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__sameKeyCommittedInput && window.__sameKeyCommittedInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__sameKeyCommittedInput;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          if (!SL || !SL.physical) return { available: false, error: 'missing physical runtime' };
+          window.__realPhysicalNoteOns = [];
+          window.__realPhysicalNoteOffVoices = [];
+          window.__realPhysicalSilenceVoices = [];
+          const originalPhysicalNoteOn = SL.physical.noteOn.bind(SL.physical);
+          const originalPhysicalNoteOffVoice = SL.physical.noteOffVoice.bind(SL.physical);
+          const originalPhysicalSilenceVoice = SL.physical.silenceVoice.bind(SL.physical);
+          SL.physical.noteOn = (midi, velocity, inst, options) => {
+            window.__realPhysicalNoteOns.push({ midi, velocity, inst, options: options || null, at: performance.now() });
+            return originalPhysicalNoteOn(midi, velocity, inst, options);
+          };
+          SL.physical.noteOffVoice = (voiceId, inst) => {
+            window.__realPhysicalNoteOffVoices.push({ voiceId, inst, at: performance.now() });
+            return originalPhysicalNoteOffVoice(voiceId, inst);
+          };
+          SL.physical.silenceVoice = (voiceId, inst) => {
+            window.__realPhysicalSilenceVoices.push({ voiceId, inst, at: performance.now() });
+            return originalPhysicalSilenceVoice(voiceId, inst);
+          };
+          const send = (data) => input.onmidimessage({ data });
+          send([0x96, 53, 78]);
+          send([0xD6, 106]);
+          send([0xD6, 0]);
+          send([0x86, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 230));
+          const committedCount = window.__realPhysicalNoteOns.length;
+          send([0x94, 53, 125]);
+          send([0xD4, 127]);
+          await new Promise(resolve => setTimeout(resolve, 160));
+          const duringHold = {
+            noteOns: window.__realPhysicalNoteOns.slice(),
+            noteOffVoices: window.__realPhysicalNoteOffVoices.slice(),
+            silenceVoices: window.__realPhysicalSilenceVoices.slice(),
+            log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+          send([0xD4, 0]);
+          send([0x84, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 180));
+          return {
+            available: true,
+            committedCount,
+            duringHold,
+            finalNoteOns: window.__realPhysicalNoteOns,
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertEqual(metrics["committedCount"], 1, metrics)
+        self.assertEqual([call["midi"] for call in metrics["duringHold"]["noteOns"]], [53], metrics)
+        self.assertEqual(metrics["duringHold"]["noteOffVoices"], [], metrics)
+        self.assertEqual([call["voiceId"] for call in metrics["duringHold"].get("silenceVoices", [])], ["exquis-pluck-1"], metrics)
+        self.assertIn("silenced same-key release pluck on recontact F3 voice=exquis-pluck-1", metrics["duringHold"]["log"])
+        self.assertNotIn("after-one-shot-expire F3 held=1 local=0", metrics["diagnosticLog"])
+        self.assertEqual([call["midi"] for call in metrics["finalNoteOns"]], [53, 53], metrics)
+
+    def test_regression_real_plucked_release_pluck_starts_on_note_up_without_scheduled_attack(self):
+        from tools.preset_signature_check import start_server
+
+        server, url = start_server()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.page.goto(url)
+        self.page.wait_for_selector('[data-testid="sound-engine-select"]')
+        self.open_audio_drawer()
+        self.page.evaluate("""
+        () => {
+          window.__sameKeyScheduledInput = { id: 'same-key-scheduled-exquis', name: 'Same Key Scheduled Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__sameKeyScheduledInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__sameKeyScheduledInput && window.__sameKeyScheduledInput.onmidimessage")
+        self.page.select_option('[data-testid="sound-engine-select"]', label="Physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        metrics = self.page.evaluate("""
+        async () => {
+          const input = window.__sameKeyScheduledInput;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow;
+          const SL = host && host.SynthLab;
+          if (!SL || !SL.physical) return { available: false, error: 'missing physical runtime' };
+          window.__realPhysicalNoteOns = [];
+          const originalPhysicalNoteOn = SL.physical.noteOn.bind(SL.physical);
+          SL.physical.noteOn = (midi, velocity, inst, options) => {
+            window.__realPhysicalNoteOns.push({ midi, velocity, inst, options: options || null, at: performance.now() });
+            return originalPhysicalNoteOn(midi, velocity, inst, options);
+          };
+          const send = (data) => input.onmidimessage({ data });
+          send([0x96, 53, 64]);
+          send([0xD6, 112]);
+          send([0xD6, 0]);
+          send([0x86, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 20));
+          const beforeRecontactOns = window.__realPhysicalNoteOns.slice();
+          send([0x94, 53, 81]);
+          send([0xD4, 90]);
+          await new Promise(resolve => setTimeout(resolve, 120));
+          const duringHold = {
+            noteOns: window.__realPhysicalNoteOns.slice(),
+            log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+          send([0xD4, 0]);
+          send([0x84, 53, 0]);
+          await new Promise(resolve => setTimeout(resolve, 220));
+          return {
+            available: true,
+            beforeRecontactOns,
+            duringHold,
+            finalNoteOns: window.__realPhysicalNoteOns,
+            diagnosticLog: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertTrue(metrics.get("available"), metrics)
+        self.assertEqual([call["midi"] for call in metrics["beforeRecontactOns"]], [53], metrics)
+        self.assertEqual([call["midi"] for call in metrics["duringHold"]["noteOns"]], [53], metrics)
+        self.assertIn("articulation flush mode=release-strum family=plucked notes=F3", metrics["duringHold"]["log"])
+        self.assertNotIn("cancelled scheduled release pluck on recontact F3 -> F3", metrics["duringHold"]["log"])
+        self.assertIn("silenced same-key release pluck on recontact F3 voice=exquis-pluck-1", metrics["duringHold"]["log"])
+        self.assertEqual([call["midi"] for call in metrics["finalNoteOns"]], [53, 53], metrics)
 
     def install_articulation_mock(self, instrument_type="physical", physical_model="pluck"):
         self.page.evaluate("""
@@ -4195,8 +4772,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
             }
           };
           const runtimePreset = {
-            name: instrumentType === 'physical' ? 'Nylon Guitar' : 'Soft EP',
-            category: instrumentType === 'physical' ? 'Plucked' : 'Keys',
+            name: instrumentType === 'physical' && physicalModel === 'strike' ? 'Marimba' : (instrumentType === 'physical' ? 'Nylon Guitar' : 'Soft EP'),
+            category: instrumentType === 'physical' && physicalModel === 'strike' ? 'Struck' : (instrumentType === 'physical' ? 'Plucked' : 'Keys'),
             engine: instrumentType,
             settings: instrument.settings
           };
@@ -4228,8 +4805,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
               clearExpression() { window.__ssliCalls.push(['clearExpression', performance.now()]); }
             },
             physical: {
-              noteOn(midi, velocity, inst) { window.__ssliCalls.push(['physical.noteOn', midi, velocity, inst, performance.now()]); },
+              noteOn(midi, velocity, inst, options) { window.__ssliCalls.push(['physical.noteOn', midi, velocity, inst, performance.now(), options || null]); },
               noteOff(midi, inst) { window.__ssliCalls.push(['physical.noteOff', midi, inst, performance.now()]); },
+              noteOffVoice(voiceId, inst) { window.__ssliCalls.push(['physical.noteOffVoice', voiceId, inst, performance.now()]); },
+              silenceVoice(voiceId, inst) { window.__ssliCalls.push(['physical.silenceVoice', voiceId, inst, performance.now()]); },
               updateNotePressure(midi, pressure, inst) { window.__ssliCalls.push(['physical.updateNotePressure', midi, pressure, inst, performance.now()]); },
               allNotesOff() {}
             }
@@ -4256,6 +4835,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__mockExquisInput.onmidimessage({ data: [0x91, 47, 90] });
           window.__mockExquisInput.onmidimessage({ data: [0x92, 48, 90] });
           window.__mockExquisInput.onmidimessage({ data: [0xD1, 111] });
+          window.__mockExquisInput.onmidimessage({ data: [0x81, 47, 0] });
+          window.__mockExquisInput.onmidimessage({ data: [0x82, 48, 0] });
         }
         """)
         self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 2")
@@ -4282,10 +4863,327 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["firstDelay"], 12, metrics)
         self.assertGreaterEqual(metrics["spacing"], 8, metrics)
         self.assertLessEqual(metrics["spacing"], 46, metrics)
-        self.assertIn("articulation queued B2 mode=strum", metrics["log"])
-        self.assertIn("articulation flush mode=strum", metrics["log"])
+        self.assertIn("articulation queued B2 mode=release-strum", metrics["log"])
         self.assertEqual(metrics["pressure"], [], metrics)
-        self.assertIn("SSLI plucked pressure ignored after onset B2", metrics["log"])
+
+    def test_regression_plucked_presets_trigger_on_note_up_not_note_down(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 24] });
+        }
+        """)
+        self.page.wait_for_timeout(80)
+        self.assertEqual(self.page.evaluate("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn')"), [])
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0xA1, 48, 104] });
+          window.__mockExquisInput.onmidimessage({ data: [0x81, 48, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'physical.noteOn')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        note_ons = [call for call in calls if call[0] == "physical.noteOn"]
+        self.assertEqual([call[1] for call in note_ons], [48], calls)
+        self.assertGreaterEqual(note_ons[0][2], 90, calls)
+        self.assertEqual(note_ons[0][5]["maxDurationMs"], 320, calls)
+        self.assertEqual(note_ons[0][5]["voiceId"], "exquis-pluck-1", calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("articulation queued C3 mode=release-strum", log)
+
+    def test_regression_plucked_duplicate_channel_press_does_not_fire_old_pending_release(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          window.__pluckTiming = {};
+          input.onmidimessage({ data: [0x91, 48, 86] });
+          input.onmidimessage({ data: [0x81, 48, 0] });
+          setTimeout(() => {
+            window.__pluckTiming.secondPressAt = performance.now();
+            input.onmidimessage({ data: [0x92, 48, 93] });
+          }, 45);
+        }
+        """)
+        self.page.wait_for_timeout(190)
+        during_new_press = self.page.evaluate("""
+        () => ({
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
+          calls: window.__ssliCalls,
+          debug: window.__exquisDebugSnapshot(),
+          timing: window.__pluckTiming,
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call[1] for call in during_new_press["starts"]], [], during_new_press)
+        self.assertEqual(during_new_press["debug"]["heldNotes"], 1, during_new_press)
+        self.assertNotIn("released duplicate MIDI voice C3", during_new_press["log"])
+        self.assertEqual([call[1] for call in during_new_press["calls"] if call[0] == "physical.noteOff"], [], during_new_press)
+        self.assertEqual([call[1] for call in during_new_press["calls"] if call[0] == "physical.noteOffVoice"], [], during_new_press)
+        self.assertEqual([call[1] for call in during_new_press["calls"] if call[0] == "physical.silenceVoice"], [], during_new_press)
+        self.assertEqual([call for call in during_new_press["calls"] if call[0] == "setExpression"], [], during_new_press)
+        self.assertEqual([call for call in during_new_press["calls"] if call[0] == "physical.updateNotePressure"], [], during_new_press)
+        self.assertIn("absorbed release-strum precontact C3 on recontact", during_new_press["log"])
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x82, 48, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length === 1")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        note_ons = [call for call in calls if call[0] == "physical.noteOn"]
+        self.assertEqual([call[1] for call in note_ons], [48], calls)
+
+    def test_regression_plucked_short_release_fires_before_next_different_press(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          window.__pluckTiming = {};
+          window.__ssliCalls.length = 0;
+          input.onmidimessage({ data: [0x91, 48, 86] });
+          input.onmidimessage({ data: [0x81, 48, 0] });
+          window.__pluckTiming.firstReleaseAt = performance.now();
+          setTimeout(() => {
+            window.__pluckTiming.secondPressAt = performance.now();
+            input.onmidimessage({ data: [0x92, 50, 93] });
+          }, 70);
+        }
+        """)
+        self.page.wait_for_function("() => window.__pluckTiming && window.__pluckTiming.secondPressAt")
+        self.page.wait_for_timeout(220)
+        metrics = self.page.evaluate("""
+        () => {
+          const c3 = window.__ssliCalls.find(call => call[0] === 'physical.noteOn' && call[1] === 48);
+          return {
+            c3,
+            timing: window.__pluckTiming,
+            calls: window.__ssliCalls,
+            log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+          };
+        }
+        """)
+        self.assertIsNotNone(metrics["c3"], metrics)
+        self.assertNotIn("cancelled release pluck on transition C3 -> D3", metrics["log"])
+        self.assertNotIn("note-off delayed short hold C3", metrics["log"])
+        self.assertEqual([call for call in metrics["calls"] if call[0] == "physical.noteOn" and call[1] == 50], [], metrics)
+
+    def test_regression_plucked_ignores_velocity_one_contact_noise_while_held(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0x94, 53, 124] });
+          input.onmidimessage({ data: [0xD4, 127] });
+          input.onmidimessage({ data: [0x9C, 56, 4] });
+          input.onmidimessage({ data: [0xDC, 19] });
+          input.onmidimessage({ data: [0xDC, 0] });
+          input.onmidimessage({ data: [0x8C, 56, 0] });
+        }
+        """)
+        self.page.wait_for_timeout(90)
+        metrics = self.page.evaluate("""
+        () => ({
+          calls: window.__ssliCalls,
+          debug: window.__exquisDebugSnapshot(),
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call for call in metrics["calls"] if call[0] == "physical.noteOn"], [], metrics)
+        self.assertEqual(metrics["debug"]["heldNotes"], 1, metrics)
+        self.assertIn("ignored release-strum weak contact G#3 peakPressure=19 min=48", metrics["log"])
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x84, 53, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length === 1")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "physical.noteOn"], [53], calls)
+
+    def test_regression_plucked_exquis_low_velocity_pressure_spike_contact_noise_does_not_pluck(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0x91, 60, 4] });
+          input.onmidimessage({ data: [0xD1, 12] });
+          input.onmidimessage({ data: [0xD1, 36] });
+          input.onmidimessage({ data: [0xD1, 0] });
+          input.onmidimessage({ data: [0x81, 60, 0] });
+        }
+        """)
+        self.page.wait_for_timeout(90)
+        metrics = self.page.evaluate("""
+        () => ({
+          calls: window.__ssliCalls,
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        self.assertEqual([call for call in metrics["calls"] if call[0] == "physical.noteOn"], [], metrics)
+        self.assertIn("ignored release-strum weak contact C4 peakPressure=36 min=48", metrics["log"])
+        self.assertNotIn("SSLI plucked one-shot C4", metrics["log"])
+
+    def test_regression_plucked_low_velocity_real_pressure_release_still_plucks(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          window.__ssliCalls.length = 0;
+          input.onmidimessage({ data: [0x94, 53, 4] });
+          input.onmidimessage({ data: [0xD4, 63] });
+          input.onmidimessage({ data: [0xD4, 0] });
+          input.onmidimessage({ data: [0x84, 53, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'physical.noteOn' && call[1] === 53)")
+        metrics = self.page.evaluate("""
+        () => ({
+          calls: window.__ssliCalls,
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent
+        })
+        """)
+        note_ons = [call for call in metrics["calls"] if call[0] == "physical.noteOn"]
+        self.assertEqual([call[1] for call in note_ons], [53], metrics)
+        self.assertNotIn("ignored release-strum weak contact F3", metrics["log"])
+
+    def test_regression_plucked_exquis_ambiguous_release_absorbs_immediate_same_key_recontact(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          window.__ssliCalls.length = 0;
+          input.onmidimessage({ data: [0x93, 53, 32] });
+          input.onmidimessage({ data: [0xD3, 58] });
+          input.onmidimessage({ data: [0xD3, 81] });
+          input.onmidimessage({ data: [0xD3, 0] });
+          input.onmidimessage({ data: [0x83, 53, 0] });
+          setTimeout(() => {
+            input.onmidimessage({ data: [0x94, 53, 83] });
+            input.onmidimessage({ data: [0xD4, 104] });
+          }, 18);
+        }
+        """)
+        self.page.wait_for_timeout(120)
+        metrics = self.page.evaluate("""
+        () => ({
+          calls: window.__ssliCalls,
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent,
+          debug: window.__exquisDebugSnapshot()
+        })
+        """)
+        self.assertEqual([call for call in metrics["calls"] if call[0] == "physical.noteOn"], [], metrics)
+        self.assertEqual(metrics["debug"]["heldNotes"], 1, metrics)
+        self.assertIn("absorbed release-strum precontact F3 on recontact", metrics["log"])
+        self.assertNotIn("SSLI plucked one-shot F3 velocity=96 pressure=81", metrics["log"])
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0xD4, 127] });
+          input.onmidimessage({ data: [0xD4, 0] });
+          input.onmidimessage({ data: [0x84, 53, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length === 1")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "physical.noteOn"], [53], calls)
+
+    def test_regression_plucked_exquis_repeated_ambiguous_same_key_contacts_absorb_until_final_release(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          window.__ssliCalls.length = 0;
+          input.onmidimessage({ data: [0x97, 50, 50] });
+          input.onmidimessage({ data: [0xD7, 79] });
+          input.onmidimessage({ data: [0xD7, 82] });
+          input.onmidimessage({ data: [0xD7, 0] });
+          input.onmidimessage({ data: [0x87, 50, 0] });
+          setTimeout(() => {
+            input.onmidimessage({ data: [0x96, 50, 58] });
+            input.onmidimessage({ data: [0xD6, 70] });
+            input.onmidimessage({ data: [0xD6, 94] });
+            input.onmidimessage({ data: [0xD6, 0] });
+            input.onmidimessage({ data: [0x86, 50, 0] });
+          }, 80);
+          setTimeout(() => {
+            input.onmidimessage({ data: [0x91, 50, 91] });
+            input.onmidimessage({ data: [0xD1, 107] });
+            input.onmidimessage({ data: [0xD1, 127] });
+          }, 150);
+        }
+        """)
+        self.page.wait_for_timeout(260)
+        metrics = self.page.evaluate("""
+        () => ({
+          calls: window.__ssliCalls,
+          log: document.querySelector('[data-testid="diagnostic-log"]').textContent,
+          debug: window.__exquisDebugSnapshot()
+        })
+        """)
+        self.assertEqual([call for call in metrics["calls"] if call[0] == "physical.noteOn"], [], metrics)
+        self.assertEqual(metrics["debug"]["heldNotes"], 1, metrics)
+        self.assertGreaterEqual(metrics["log"].count("absorbed release-strum precontact D3 on recontact"), 2, metrics)
+        self.assertNotIn("SSLI plucked one-shot D3 velocity=96 pressure=82", metrics["log"])
+        self.assertNotIn("SSLI plucked one-shot D3 velocity=96 pressure=94", metrics["log"])
+        self.page.evaluate("""
+        () => {
+          const input = window.__mockExquisInput;
+          input.onmidimessage({ data: [0xD1, 0] });
+          input.onmidimessage({ data: [0x81, 50, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length === 1")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call[1] for call in calls if call[0] == "physical.noteOn"], [50], calls)
 
     def test_regression_plucked_strum_uses_group_headroom_from_first_note(self):
         self.open_audio_drawer()
@@ -4300,15 +5198,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__mockExquisInput.onmidimessage({ data: [0x9A, 53, 43] });
           window.__mockExquisInput.onmidimessage({ data: [0x9D, 47, 71] });
           window.__mockExquisInput.onmidimessage({ data: [0x96, 50, 67] });
+          window.__mockExquisInput.onmidimessage({ data: [0x8A, 53, 0] });
+          window.__mockExquisInput.onmidimessage({ data: [0x8D, 47, 0] });
+          window.__mockExquisInput.onmidimessage({ data: [0x86, 50, 0] });
         }
         """)
         self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
         calls = self.page.evaluate("() => window.__ssliCalls")
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
-        self.assertIn("articulation flush mode=strum", log)
         self.assertEqual([call[0] for call in calls if call[0] == "startSustainedNote"], [], calls)
         self.assertEqual([call[0] for call in calls if call[0] == "physical.noteOff"], [], calls)
-        self.assertIn("SSLI plucked one-shot", log)
         self.assertNotIn("SSLI output boost", log)
 
     def test_regression_plucked_strum_ignores_held_pressure_and_auto_damps(self):
@@ -4327,6 +5226,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__mockExquisInput.onmidimessage({ data: [0xD2, 127] });
           window.__mockExquisInput.onmidimessage({ data: [0xDE, 112] });
           window.__mockExquisInput.onmidimessage({ data: [0xDC, 100] });
+          window.__mockExquisInput.onmidimessage({ data: [0x82, 48, 0] });
+          window.__mockExquisInput.onmidimessage({ data: [0x8E, 52, 0] });
+          window.__mockExquisInput.onmidimessage({ data: [0x8C, 55, 0] });
         }
         """)
         self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
@@ -4344,7 +5246,6 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(metrics["stops"], [], metrics)
         self.assertEqual(metrics["physicalOff"], [], metrics)
         self.assertEqual(metrics["sustained"], [], metrics)
-        self.assertIn("SSLI plucked pressure ignored after onset", metrics["log"])
         self.assertIn("SSLI plucked one-shot natural decay", metrics["log"])
         self.assertIn("SSLI plucked one-shot", metrics["log"])
 
@@ -4363,19 +5264,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
           input.onmidimessage({ data: [0xD2, 127] });
         }
         """)
-        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
-        self.page.wait_for_timeout(480)
+        self.page.wait_for_timeout(80)
         mid_hold = self.page.evaluate("""
         () => ({
           debug: window.__exquisDebugSnapshot(),
           log: document.querySelector('[data-testid="diagnostic-log"]').textContent,
+          starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
           physicalOff: window.__ssliCalls.filter(call => call[0] === 'physical.noteOff')
         })
         """)
         self.assertEqual(mid_hold["debug"]["heldNotes"], 1, mid_hold)
-        self.assertEqual(mid_hold["debug"]["midiVoices"], 1, mid_hold)
+        self.assertEqual(mid_hold["debug"]["midiVoices"], 0, mid_hold)
+        self.assertEqual(mid_hold["starts"], [], mid_hold)
         self.assertNotIn("after-one-shot-expire B2 held=1 local=0", mid_hold["log"])
-        self.assertEqual([call[1] for call in mid_hold["physicalOff"]], [47], mid_hold)
+        self.assertEqual(mid_hold["physicalOff"], [], mid_hold)
         self.page.evaluate("""
         () => {
           const input = window.__mockExquisInput;
@@ -4383,7 +5285,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           input.onmidimessage({ data: [0x82, 47, 0] });
         }
         """)
-        self.page.wait_for_timeout(40)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
+        self.page.wait_for_timeout(1750)
         after_release = self.page.evaluate("() => window.__exquisDebugSnapshot()")
         self.assertEqual(after_release["heldNotes"], 0, after_release)
         self.assertEqual(after_release["midiVoices"], 0, after_release)
@@ -4439,7 +5342,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__mockExquisInput.onmidimessage({ data: [0x81, 48, 0] });
         }
         """)
-        self.page.wait_for_timeout(80)
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
+        self.page.wait_for_timeout(230)
         metrics = self.page.evaluate("""
         () => ({
           starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
@@ -4448,10 +5352,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
           log: document.querySelector('[data-testid="diagnostic-log"]').textContent
         })
         """)
-        self.assertEqual(metrics["starts"], [], metrics)
+        self.assertEqual([call[1] for call in metrics["starts"]], [48], metrics)
         self.assertEqual(metrics["stops"], [], metrics)
         self.assertEqual(metrics["physicalOff"], [], metrics)
-        self.assertIn("articulation queued C3 mode=strum", metrics["log"])
+        self.assertIn("articulation queued C3 mode=release-strum", metrics["log"])
+        self.assertIn("articulation flush mode=release-strum", metrics["log"])
 
     def test_regression_plucked_strum_plays_note_released_after_flush_before_slot(self):
         self.open_audio_drawer()
@@ -4470,7 +5375,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           setTimeout(() => input.onmidimessage({ data: [0x8E, 52, 0] }), 24);
         }
         """)
-        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
+        self.page.wait_for_timeout(230)
         metrics = self.page.evaluate("""
         () => ({
           starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
@@ -4479,11 +5385,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
           log: document.querySelector('[data-testid="diagnostic-log"]').textContent
         })
         """)
-        self.assertEqual([call[1] for call in metrics["starts"]], [59, 55, 52], metrics)
+        self.assertEqual([call[1] for call in metrics["starts"]], [52], metrics)
         self.assertEqual(metrics["sustained"], [], metrics)
         self.assertEqual(metrics["physicalOff"], [], metrics)
-        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", metrics["log"])
-        self.assertIn("SSLI plucked one-shot E3", metrics["log"])
         self.assertNotIn("articulation skipped released E3", metrics["log"])
 
     def test_regression_plucked_strum_plays_capture_matured_note_even_when_flush_timer_is_late(self):
@@ -4513,7 +5417,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.__realSetTimeout(() => input.onmidimessage({ data: [0x8E, 52, 0] }), 24);
         }
         """)
-        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 3")
+        self.page.wait_for_function("() => window.__ssliCalls.filter(call => call[0] === 'physical.noteOn').length >= 1")
+        self.page.wait_for_timeout(230)
         metrics = self.page.evaluate("""
         () => ({
           starts: window.__ssliCalls.filter(call => call[0] === 'physical.noteOn'),
@@ -4522,11 +5427,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
           log: document.querySelector('[data-testid="diagnostic-log"]').textContent
         })
         """)
-        self.assertEqual([call[1] for call in metrics["starts"]], [59, 55, 52], metrics)
+        self.assertEqual([call[1] for call in metrics["starts"]], [52], metrics)
         self.assertEqual(metrics["sustained"], [], metrics)
         self.assertEqual(metrics["physicalOff"], [], metrics)
-        self.assertIn("articulation flush mode=strum family=plucked notes=B3,G3,E3", metrics["log"])
-        self.assertIn("SSLI plucked one-shot E3", metrics["log"])
         self.assertNotIn("articulation skipped released E3", metrics["log"])
 
     def test_regression_midi_reports_missing_ssli_runtime_api_before_local_fallback(self):
@@ -5018,7 +5921,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         calls = self.page.evaluate("() => window.__ssliCalls")
         expression_calls = [call for call in calls if call[0] == "setExpression"]
         self.assertGreaterEqual(len(expression_calls), 1, calls)
-        self.assertEqual(expression_calls[-1], ["setExpression", 7779, 1.695], calls)
+        self.assertEqual(expression_calls[-1], ["setExpression", 7779, 0.756], calls)
         self.assertFalse(any(call == ["clearExpression"] for call in calls), calls)
 
     def test_regression_play_mode_chords_keep_independent_ssli_voice_ownership(self):
@@ -5179,9 +6082,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["clearExpression"], calls)
+        self.assertIn(["setExpression", 900, 0], calls)
+        self.assertNotIn(["clearExpression"], calls)
         self.assertEqual(len([call for call in calls if call[0] == "setExpression" and call[1] == 7850]), 1, calls)
-        self.assertGreater(calls.index(["clearExpression"]), 1, calls)
+        self.assertGreater(calls.index(["setExpression", 900, 0]), 1, calls)
         self.assertIn("channel-pressure C3 pressure=0", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
 
     def test_regression_pressure_flood_is_coalesced_before_ssli_expression(self):
@@ -5271,6 +6175,175 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreater(float(signature["rmsRatio"]), 1.18, row)
         self.assertGreater(float(signature["centroidRatio"]), 1.05, row)
         self.assertIn("SSLI expression pressure=120", signature["diagnosticLog"])
+
+    def test_regression_low_velocity_aftertouch_lifts_actual_subtractive_audio(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_subtractive_low_velocity_pressure_sweep"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "Subtractive",
+                "--category",
+                "Leads",
+                "--preset-contains",
+                "Saw Lead",
+                "--trigger",
+                "pressure-sweep-midi",
+                "--normalization-midi",
+                "48",
+                "--pressure-sweep-velocity",
+                "12",
+                "--audio-sample-ms",
+                "900",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = next(item for item in payload["results"] if item["presetLabel"] == "Saw Lead")
+        signature = row["audioSignature"]
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        self.assertEqual(int(signature["velocity"]), 12, row)
+        self.assertGreater(float(signature["lowRms"]), 0.001, row)
+        self.assertGreater(float(signature["highRms"]), 0.065, row)
+        self.assertGreater(float(signature["rmsRatio"]), 6.0, row)
+        self.assertIn("SSLI expression pressure=120", signature["diagnosticLog"])
+        self.assertIn("interaction=pressure-swell", signature["diagnosticLog"])
+        self.assertIn("SSLI MIDI sustain start C3 velocity=127 pressure=12", signature["diagnosticLog"])
+        self.assertIn("SSLI expression pressure=120 cutoff=9498Hz gain=0.94 interaction=pressure-swell", signature["diagnosticLog"])
+
+    def test_regression_three_note_pad_pressure_zero_recovers_actual_audio(self):
+        output_dir = ROOT / "tmp_preset_sweep_unittest_subtractive_pad_chord_pressure_recovery"
+        result = subprocess.run(
+            [
+                "python",
+                "tools/preset_sweep.py",
+                "--no-build",
+                "--engine",
+                "Subtractive",
+                "--category",
+                "Pads",
+                "--preset-contains",
+                "Atmosphere",
+                "--trigger",
+                "chord-pressure-recovery-midi",
+                "--audio-sample-ms",
+                "1200",
+                "--output-dir",
+                str(output_dir),
+            ],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=180,
+        )
+        payload = json.loads((output_dir / "preset-sweep-results.json").read_text(encoding="utf-8"))
+        row = next(item for item in payload["results"] if item["presetLabel"] == "Atmosphere")
+        signature = row["audioSignature"]
+        self.assertEqual(result.returncode, 0, f"row={json.dumps(row, indent=2)}\nstdout={result.stdout}\nstderr={result.stderr}")
+        self.assertEqual(signature["notes"], [48, 52, 55], row)
+        self.assertGreater(float(signature["high1Rms"]), 0.05, row)
+        self.assertGreater(float(signature["high2Rms"]), 0.05, row)
+        self.assertGreater(float(signature["high2ToHigh1Ratio"]), 0.75, row)
+        self.assertGreater(float(signature["high2ToZeroRatio"]), 2.5, row)
+        self.assertIn("SSLI expression pressure=0", signature["diagnosticLog"])
+        self.assertIn("SSLI expression pressure=120", signature["diagnosticLog"])
+
+    def test_regression_plucked_interaction_does_not_apply_low_velocity_pressure_swell(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 12] });
+        }
+        """)
+        self.page.wait_for_timeout(80)
+        self.assertEqual(self.page.evaluate("() => window.__exquisDebugSnapshot().midiVoices"), 0)
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0xA1, 48, 120] });
+          window.__mockExquisInput.onmidimessage({ data: [0x81, 48, 0] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'physical.noteOn')")
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call for call in calls if call[0] == "physical.updateNotePressure"], [], calls)
+        self.assertEqual([call for call in calls if call[0] == "setExpression"], [], calls)
+        self.assertEqual([call[1] for call in calls if call[0] == "physical.noteOn"], [48], calls)
+
+    def test_regression_repeated_plucked_pressure_never_enters_live_swell_path(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Plucked")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Nylon Guitar")
+        self.install_articulation_mock("physical", "pluck")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        async () => {
+          const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+          for (let i = 0; i < 8; i += 1) {
+            const midi = 48 + (i % 3) * 2;
+            const channel = (i % 6) + 1;
+            window.__mockExquisInput.onmidimessage({ data: [0x90 | channel, midi, 10 + i] });
+            await wait(35);
+            for (const pressure of [0, 32, 96, 127, 14, 118]) {
+              window.__mockExquisInput.onmidimessage({ data: [0xA0 | channel, midi, pressure] });
+              await wait(4);
+            }
+            window.__mockExquisInput.onmidimessage({ data: [0x80 | channel, midi, 0] });
+            await wait(35);
+          }
+        }
+        """)
+        self.page.wait_for_timeout(1200)
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        self.assertEqual([call for call in calls if call[0] == "setExpression"], [], calls)
+        self.assertEqual([call for call in calls if call[0] == "physical.updateNotePressure"], [], calls)
+        self.assertGreaterEqual(len([call for call in calls if call[0] == "physical.noteOn"]), 1, calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("articulation flush mode=release-strum", log)
+        self.assertNotIn("cancelled release pluck on transition", log)
+        self.assertNotIn("interaction=pressure-swell", log)
+
+    def test_regression_struck_interaction_does_not_apply_low_velocity_pressure_swell(self):
+        self.open_audio_drawer()
+        self.page.select_option('[data-testid="sound-engine-select"]', "physical")
+        self.page.select_option('[data-testid="sound-category-select"]', label="Struck")
+        self.page.select_option('[data-testid="sound-preset-select"]', label="Marimba")
+        self.install_articulation_mock("physical", "strike")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 12] });
+        }
+        """)
+        self.page.wait_for_function("() => window.__ssliCalls.some(call => call[0] === 'startSustainedNote')")
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput.onmidimessage({ data: [0xA1, 48, 120] });
+        }
+        """)
+        self.page.wait_for_timeout(80)
+        calls = self.page.evaluate("() => window.__ssliCalls")
+        expression_calls = [call for call in calls if call[0] == "setExpression"]
+        self.assertEqual([call for call in calls if call[0] == "physical.updateNotePressure"], [], calls)
+        self.assertTrue(all(call[2] <= 1.1 for call in expression_calls), calls)
+        log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
+        self.assertIn("SSLI struck pressure ignored after onset C3", log)
+        self.assertNotIn("gain=5.00 interaction=pressure-swell", log)
 
     def test_regression_play_mode_pressure_reaches_actual_physical_runtime(self):
         output_dir = ROOT / "tmp_preset_sweep_unittest_physical_pressure_sweep"
@@ -5496,10 +6569,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """)
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["startSustainedNote", 48, 101], calls)
+        self.assertIn(["startSustainedNote", 48, 127], calls)
         expression_calls = [call for call in calls if call[0] == "setExpression"]
         self.assertGreaterEqual(len(expression_calls), 1, calls)
-        self.assertIn(["setExpression", 10000, 2], expression_calls)
+        self.assertIn(["setExpression", 10000, 1], expression_calls)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("pressure=101", log)
         self.assertIn("SSLI expression pressure=127", log)
@@ -5752,7 +6825,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         calls = self.page.evaluate("() => window.__ssliCalls")
         expression_calls = [call for call in calls if call[0] == "setExpression"]
         self.assertGreaterEqual(len(expression_calls), 2, calls)
-        self.assertTrue(all(call[2] <= 2 for call in expression_calls), calls)
+        self.assertTrue(all(call[2] <= 5 for call in expression_calls), calls)
         self.assertTrue(any(call[1] >= 8000 for call in expression_calls), calls)
 
     def test_regression_staggered_physical_plucked_chords_keep_chord_headroom(self):

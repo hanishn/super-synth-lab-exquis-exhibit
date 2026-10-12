@@ -292,6 +292,9 @@ class PluckModel {
     this.pickPosition = 0.18;
     this.pickDelay = 0; // Pick position comb filter delay in samples
     this.baseFilterCoeff = 0.5;
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
   }
 
   noteOn(freq, velocity) {
@@ -328,6 +331,9 @@ class PluckModel {
     this.dcBlocker.clear();
     this.loopFilter.clear();
     this.prevSample = 0;
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
 
     // Excitation: fill delay line with shaped excitation. Karplus-Strong uses
     // noise as the initial string displacement; use deterministic pseudo-noise
@@ -395,9 +401,12 @@ class PluckModel {
   }
 
   noteOff() {
-    // Plucked strings just decay naturally — accelerate the damping
-    var currentCoeff = this.loopFilter.a;
-    this.loopFilter.setCoeff(currentCoeff * 0.7);
+    // Finger muting damps the vibrating string with a smooth termination,
+    // rather than abruptly changing the waveguide loop coefficient. Original
+    // source: Smith, Physical Audio Signal Processing, string termination and
+    // damping in digital waveguides.
+    this.muteTotalSamples = Math.max(16, Math.floor(this.sampleRate * 0.003));
+    this.muteSamplesRemaining = this.muteTotalSamples;
   }
 
   process() {
@@ -445,6 +454,17 @@ class PluckModel {
     // source: Karplus & Strong (1983), CMJ 7(2); Smith, Physical Audio Signal
     // Processing, digital waveguide plucked-string loop filter placement.
     var out = this.dcBlocker.process(delayed);
+    if (this.muteSamplesRemaining > 0) {
+      var progress = 1 - (this.muteSamplesRemaining / Math.max(1, this.muteTotalSamples));
+      this.muteGain = 0.5 * (1 + Math.cos(Math.PI * progress));
+      out *= this.muteGain;
+      this.muteSamplesRemaining--;
+      if (this.muteSamplesRemaining <= 0) {
+        this.active = false;
+        this.muteGain = 0;
+        return 0;
+      }
+    }
 
     // Check if effectively silent
     if (this.decayCounter > this.sampleRate * 0.5 && Math.abs(out) < 0.00001) {
@@ -1272,6 +1292,10 @@ class PhysicalVoice {
     this.blow = new BlowModel(sampleRate);
     this.strike = new StrikeModel(sampleRate);
     this.currentModel = this.pluck;
+    this.durationSamples = 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
+    this.voiceId = '';
   }
 
   noteOn(midiNote, velocity, noteFreq, settings) {
@@ -1279,6 +1303,10 @@ class PhysicalVoice {
     this.midiNote = midiNote;
     this.instId = settings.instId || 0;
     this.modelType = settings.model || 'pluck';
+    this.voiceId = settings.voiceId || '';
+    this.durationSamples = settings.maxDurationMs > 0 ? Math.max(1, Math.floor(this.sampleRate * settings.maxDurationMs / 1000)) : 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
 
     // Select model and apply parameters
     switch (this.modelType) {
@@ -1329,9 +1357,27 @@ class PhysicalVoice {
     }
   }
 
+  silence() {
+    // Absorb a retired owned voice without emitting a mute envelope. This is a
+    // lifecycle retirement for a prior contact, not a new acoustic excitation.
+    // Original source: Smith, Physical Audio Signal Processing, digital
+    // waveguide terminations as absorbing boundaries.
+    this.active = false;
+    if (this.currentModel) this.currentModel.active = false;
+  }
+
   process() {
     if (!this.active) return 0;
+    if (this.durationSamples > 0 && this.durationCounter >= this.durationSamples && !this.durationOffSent) {
+      // A bounded one-shot pluck is still Karplus-Strong excitation plus loop
+      // damping; the duration only applies a smooth finger mute at the endpoint.
+      // Original source: Smith, Physical Audio Signal Processing, string
+      // termination/damping in digital waveguides.
+      this.noteOff();
+      this.durationOffSent = true;
+    }
     var sample = this.currentModel.process();
+    this.durationCounter++;
     var isPluck = (this.modelType === 'pluck');
     if (isPluck) {
       sample = sample * PLUCK_OUTPUT_SCALE;
@@ -1400,6 +1446,14 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
         this.updateParams(data.instId, data.params);
         break;
 
+      case 'noteOffVoice':
+        this.stopNoteById(data.voiceId, data.instId);
+        break;
+
+      case 'silenceVoice':
+        this.silenceNoteById(data.voiceId, data.instId);
+        break;
+
       case 'updateNotePressure':
         this.updateNotePressure(data.midiNote, data.instId, data.pressure);
         break;
@@ -1444,6 +1498,34 @@ class PhysicalModelProcessor extends AudioWorkletProcessor {
       var isWorkletMatchingVoice = v.active && v.midiNote === midiNote && v.instId === instId;
       if (isWorkletMatchingVoice) {
         v.noteOff();
+      }
+    }
+  }
+
+  stopNoteById(voiceId, instId) {
+    if (!voiceId) return;
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (v.active && v.voiceId === voiceId && v.instId === instId) {
+        // Stop one owned physical voice, not every voice sharing the MIDI
+        // pitch. Original source: MIDI Association MPE zone/channel
+        // architecture treats simultaneous contacts as independent notes.
+        v.noteOff();
+        return;
+      }
+    }
+  }
+
+  silenceNoteById(voiceId, instId) {
+    if (!voiceId) return;
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (v.active && v.voiceId === voiceId && v.instId === instId) {
+        // Retire one owned physical voice without generating a note-off
+        // envelope. Original source: Smith, Physical Audio Signal Processing,
+        // digital waveguide terminations as absorbing boundaries.
+        v.silence ? v.silence() : (v.active = false);
+        return;
       }
     }
   }

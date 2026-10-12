@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--normalization-target-rms", type=float, default=0.08, help="Target RMS for normalization recommendations.")
     parser.add_argument("--normalization-pressure", type=int, default=96, help="MIDI note-on pressure/velocity used by the single-midi normalization trigger.")
     parser.add_argument("--normalization-midi", type=int, default=48, help="MIDI note used by the single-midi normalization trigger.")
+    parser.add_argument("--pressure-sweep-velocity", type=int, default=64, help="MIDI note-on velocity used by the pressure-sweep-midi trigger.")
     parser.add_argument("--normalization-acceptance", action="store_true", help="Fail single-midi sweeps when mature-engine preset levels or normalization logs are outside the acceptance envelope.")
     parser.add_argument("--comprehensive-audio-acceptance", action="store_true", help="Fail unless every selected live preset is validated through repeatable Playwright-driven MIDI and final-output audio analysis.")
     parser.add_argument("--voice-stress-acceptance", action="store_true", help="Fail unless every selected live preset survives a repeatable 200-note MIDI voice-stress sequence with final-output audio analysis.")
@@ -57,11 +58,12 @@ def parse_args():
             "single-midi",
             "six-note-midi",
             "pressure-sweep-midi",
+            "chord-pressure-recovery-midi",
             "continuous-poly-pressure-midi",
             "voice-stress-midi",
         ],
         default="preview",
-        help="Use normal preview playback, controlled MIDI normalization, six-note channel pressure, held low/high pressure, continuous poly-aftertouch, or 200-note voice-stress audio capture.",
+        help="Use normal preview playback, controlled MIDI normalization, six-note channel pressure, held low/high pressure, chord pressure recovery, continuous poly-aftertouch, or 200-note voice-stress audio capture.",
     )
     return parser.parse_args()
 
@@ -637,10 +639,10 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
     )
 
 
-def ssli_pressure_sweep_midi_signature(page, sample_ms, midi):
+def ssli_pressure_sweep_midi_signature(page, sample_ms, midi, velocity):
     return page.evaluate(
         """
-        async ({ sampleMs, midi }) => {
+        async ({ sampleMs, midi, velocity }) => {
           const input = window.__presetSweepMidiInput;
           if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
           const send = (data) => input.onmidimessage({ data });
@@ -702,7 +704,8 @@ def ssli_pressure_sweep_midi_signature(page, sample_ms, midi):
             };
           }
           const channel = 4;
-          send([0x90 | channel, midi, 64]);
+          const noteOnVelocity = Math.max(1, Math.min(127, Number(velocity) || 1));
+          send([0x90 | channel, midi, noteOnVelocity]);
           await new Promise(resolve => setTimeout(resolve, 180));
           send([0xD0 | channel, 16]);
           await new Promise(resolve => setTimeout(resolve, 120));
@@ -724,6 +727,7 @@ def ssli_pressure_sweep_midi_signature(page, sample_ms, midi):
             engineSettingsHash: String(engineSettingsHash),
             engineSettingsKeys: Object.keys(engineSettings || {}).sort(),
             midi,
+            velocity: noteOnVelocity,
             lowPressure: 16,
             highPressure: 120,
             lowRms: Number(low.rms.toFixed(5)),
@@ -738,7 +742,110 @@ def ssli_pressure_sweep_midi_signature(page, sample_ms, midi):
           };
         }
         """,
-        {"sampleMs": sample_ms, "midi": int(midi)},
+        {"sampleMs": sample_ms, "midi": int(midi), "velocity": int(velocity)},
+    )
+
+
+def ssli_chord_pressure_recovery_midi_signature(page, sample_ms):
+    return page.evaluate(
+        """
+        async (sampleMs) => {
+          const input = window.__presetSweepMidiInput;
+          if (!input || !input.onmidimessage) return { available: false, error: 'missing mock MIDI input' };
+          const send = (data) => input.onmidimessage({ data });
+          const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+          const logEl = document.querySelector('[data-testid="diagnostic-log"]');
+          const diagnosticStartLength = logEl ? logEl.textContent.length : 0;
+          const frame = document.getElementById('ssliEngineFrame');
+          const host = frame && frame.contentWindow && frame.contentWindow.SynthLab ? frame.contentWindow : window;
+          const SL = host.SynthLab;
+          if (!SL || !SL.audio) return { available: false, error: 'missing SynthLab.audio' };
+          const inst = SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+          const instruments = SL.audio.getInstruments ? SL.audio.getInstruments() : [];
+          const instrument = instruments[inst] || {};
+          if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
+          const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
+          if (!analyser) return { available: false, error: 'missing final SSLI analyser' };
+          const ctx = SL.audio.getCtx ? SL.audio.getCtx() : null;
+          const wave = new Uint8Array(analyser.fftSize || 2048);
+          const spectrum = new Uint8Array(analyser.frequencyBinCount || 1024);
+          const nyquist = (ctx && ctx.sampleRate ? ctx.sampleRate : 44100) / 2;
+          async function capture(ms) {
+            const started = Date.now();
+            let rmsSum = 0, count = 0, weighted = 0, energySum = 0, peak = 0;
+            while (Date.now() - started < ms) {
+              analyser.getByteTimeDomainData(wave);
+              analyser.getByteFrequencyData(spectrum);
+              for (let i = 0; i < wave.length; i += 1) {
+                const n = (wave[i] - 128) / 128;
+                peak = Math.max(peak, Math.abs(n));
+                rmsSum += n * n;
+                count += 1;
+              }
+              for (let j = 0; j < spectrum.length; j += 1) {
+                const level = spectrum[j] / 255;
+                const energy = level * level;
+                const hz = ((j + 0.5) / Math.max(1, spectrum.length)) * nyquist;
+                weighted += energy * hz;
+                energySum += energy;
+              }
+              await wait(16);
+            }
+            return {
+              rms: Math.sqrt(rmsSum / Math.max(1, count)),
+              peak,
+              centroid: weighted / Math.max(0.000001, energySum)
+            };
+          }
+          const notes = [
+            { midi: 48, channel: 1, velocity: 12 },
+            { midi: 52, channel: 2, velocity: 12 },
+            { midi: 55, channel: 3, velocity: 12 }
+          ];
+          notes.forEach(note => send([0x90 | note.channel, note.midi, note.velocity]));
+          await wait(180);
+          notes.forEach(note => send([0xA0 | note.channel, note.midi, 120]));
+          await wait(140);
+          const high1 = await capture(Math.max(180, Math.round(sampleMs / 3)));
+          notes.forEach(note => send([0xA0 | note.channel, note.midi, 0]));
+          await wait(140);
+          const zero = await capture(Math.max(180, Math.round(sampleMs / 3)));
+          notes.forEach(note => send([0xA0 | note.channel, note.midi, 120]));
+          await wait(140);
+          const high2 = await capture(Math.max(180, Math.round(sampleMs / 3)));
+          notes.forEach(note => {
+            send([0xA0 | note.channel, note.midi, 0]);
+            send([0x80 | note.channel, note.midi, 0]);
+          });
+          await wait(180);
+          const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
+          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+          return {
+            available: true,
+            trigger: 'chord-pressure-recovery-midi',
+            instrumentType: instrument.type || '',
+            notes: notes.map(note => note.midi),
+            velocity: 12,
+            lowPressure: 0,
+            highPressure: 120,
+            high1Rms: Number(high1.rms.toFixed(5)),
+            zeroRms: Number(zero.rms.toFixed(5)),
+            high2Rms: Number(high2.rms.toFixed(5)),
+            high2ToHigh1Ratio: Number((high2.rms / Math.max(0.000001, high1.rms)).toFixed(3)),
+            high2ToZeroRatio: Number((high2.rms / Math.max(0.000001, zero.rms)).toFixed(3)),
+            high1Peak: Number(high1.peak.toFixed(5)),
+            zeroPeak: Number(zero.peak.toFixed(5)),
+            high2Peak: Number(high2.peak.toFixed(5)),
+            high1CentroidHz: Number(high1.centroid.toFixed(1)),
+            zeroCentroidHz: Number(zero.centroid.toFixed(1)),
+            high2CentroidHz: Number(high2.centroid.toFixed(1)),
+            diagnosticLog,
+            diagnosticStartLength,
+            voiceCleanup
+          };
+        }
+        """,
+        sample_ms,
     )
 
 
@@ -1051,7 +1158,19 @@ def ssli_continuous_poly_pressure_midi_signature(page, sample_ms):
             }
             await new Promise(resolve => setTimeout(resolve, 16));
           }
-          await new Promise(resolve => setTimeout(resolve, 120));
+          async function waitForCleanMidiSnapshot(timeoutMs) {
+            const started = Date.now();
+            let snap = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+            while (Date.now() - started < timeoutMs) {
+              snap = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
+              if (snap && snap.heldNotes === 0 && snap.midiVoices === 0 && (snap.ssliActiveOscillators == null || snap.ssliActiveOscillators === 0)) {
+                return snap;
+              }
+              await new Promise(resolve => setTimeout(resolve, 40));
+            }
+            return snap;
+          }
+          const voiceCleanup = await waitForCleanMidiSnapshot(1400);
           framePeaks.sort((a, b) => a - b);
           frameMaxSteps.sort((a, b) => a - b);
           const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));
@@ -1059,7 +1178,6 @@ def ssli_continuous_poly_pressure_midi_signature(page, sample_ms):
           const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
           const polyAftertouchEvents = (diagnosticLog.match(/poly-aftertouch/g) || []).length;
           const channelPressureEvents = (diagnosticLog.match(/channel-pressure/g) || []).length;
-          const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
           return {
             available: true,
             trigger: 'continuous-poly-pressure-midi',
@@ -1134,6 +1252,8 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
           const engineSettingsJson = JSON.stringify(engineSettings || {});
           let engineSettingsHash = 0;
           for (let i = 0; i < engineSettingsJson.length; i += 1) engineSettingsHash = ((engineSettingsHash << 5) - engineSettingsHash + engineSettingsJson.charCodeAt(i)) | 0;
+          const isReleaseStrumStress = (instrument.type || '').toLowerCase() === 'physical'
+            && String((engineSettings && engineSettings.model) || '').toLowerCase() === 'pluck';
 
           if (SL.audio.initEffectChain && !(instrument && instrument.masterOutput)) SL.audio.initEffectChain();
           const analyser = SL.audio.getAnalyser ? SL.audio.getAnalyser() : null;
@@ -1216,15 +1336,18 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
             }
           }
 
-          function snapshot(label, expectedHeld) {
+          function snapshot(label, expectedHeld, expectedLocal) {
             const snap = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
             if (!snap) {
               voiceLosses.push(label + ': missing debug snapshot');
               return null;
             }
+            const hasExpectedLocal = typeof expectedLocal === 'number';
+            const localLabel = hasExpectedLocal ? String(expectedLocal) : 'any';
             snapshots.push({
               label,
               expectedHeld,
+              expectedLocal: hasExpectedLocal ? expectedLocal : null,
               held: snap.heldNotes,
               local: snap.midiVoices,
               ssli: snap.ssliActiveOscillators
@@ -1237,8 +1360,8 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
               minSsliDuringChord = Math.min(minSsliDuringChord, snap.ssliActiveOscillators);
               maxSsliDuringChord = Math.max(maxSsliDuringChord, snap.ssliActiveOscillators);
             }
-            if (snap.heldNotes !== expectedHeld || snap.midiVoices !== expectedHeld) {
-              voiceLosses.push(label + ': expected held/local ' + expectedHeld + ', got held=' + snap.heldNotes + ' local=' + snap.midiVoices + ' ssli=' + snap.ssliActiveOscillators);
+            if (snap.heldNotes !== expectedHeld || (hasExpectedLocal && snap.midiVoices !== expectedLocal)) {
+              voiceLosses.push(label + ': expected held=' + expectedHeld + ' local=' + localLabel + ', got held=' + snap.heldNotes + ' local=' + snap.midiVoices + ' ssli=' + snap.ssliActiveOscillators);
             }
             return snap;
           }
@@ -1263,7 +1386,7 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
             }
             await wait(95);
             captureFrame();
-            snapshot('gesture ' + gestureIndex + ' after note-ons size=' + chordSize, chordSize);
+            snapshot('gesture ' + gestureIndex + ' after note-ons size=' + chordSize, chordSize, isReleaseStrumStress ? null : chordSize);
             for (let frameIndex = 0; frameIndex < 3; frameIndex += 1) {
               for (let i = 0; i < notes.length; i += 1) {
                 const note = notes[i];
@@ -1284,7 +1407,7 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
               captureFrame();
             }
             await wait(35);
-            snapshot('gesture ' + gestureIndex + ' after note-offs', 0);
+            snapshot('gesture ' + gestureIndex + ' after note-offs', 0, isReleaseStrumStress ? null : 0);
             gestureIndex += 1;
           }
 
@@ -1294,12 +1417,13 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
             captureFrame();
             await wait(16);
           }
-          await wait(180);
+          await wait(isReleaseStrumStress ? 900 : 180);
           const diagnosticLog = logEl ? logEl.textContent.slice(diagnosticStartLength) : '';
           const voiceCleanup = window.__exquisDebugSnapshot ? window.__exquisDebugSnapshot() : null;
           const noteOnLogCount = (diagnosticLog.match(/note-on /g) || []).length;
           const ssliSustainStartCount = (diagnosticLog.match(/SSLI MIDI sustain start/g) || []).length;
           const ssliPluckedStartCount = (diagnosticLog.match(/SSLI plucked one-shot/g) || []).length;
+          const ssliPluckedReleaseStartCount = (diagnosticLog.match(/SSLI plucked one-shot [A-G]/g) || []).length;
           const fallbackStartCount = (diagnosticLog.match(/MIDI voice start/g) || []).length;
           const polyAftertouchEvents = (diagnosticLog.match(/poly-aftertouch/g) || []).length;
           const channelPressureEvents = (diagnosticLog.match(/channel-pressure/g) || []).length;
@@ -1330,6 +1454,7 @@ def ssli_voice_stress_midi_signature(page, sample_ms):
             noteOnLogCount,
             ssliSustainStartCount,
             ssliPluckedStartCount,
+            ssliPluckedReleaseStartCount,
             fallbackStartCount,
             totalStartLogCount: ssliSustainStartCount + ssliPluckedStartCount + fallbackStartCount,
             polyAftertouchSent,
@@ -1411,6 +1536,38 @@ def validate_audio_behavior(row, trigger):
             if centroid_ratio < 1.05:
                 errors.append(f"pressure brightness response too small ({centroid_ratio})")
         cleanup = signature.get("voiceCleanup") or {}
+        cleanup_clean = False
+        if cleanup:
+            held = cleanup.get("heldNotes")
+            local = cleanup.get("midiVoices")
+            ssli = cleanup.get("ssliActiveOscillators")
+            if held != 0 or local != 0 or (ssli is not None and ssli != 0):
+                errors.append(f"MIDI voices not idle after run (held={held} local={local} ssli={ssli})")
+            else:
+                cleanup_clean = True
+        else:
+            errors.append("missing MIDI voice cleanup snapshot")
+        if not cleanup_clean and "held=0 local=0 ssli=0" not in log:
+            errors.append("current MIDI run did not report clean idle cleanup")
+        return errors
+    if trigger == "chord-pressure-recovery-midi":
+        high1_rms = float(signature.get("high1Rms") or 0)
+        zero_rms = float(signature.get("zeroRms") or 0)
+        high2_rms = float(signature.get("high2Rms") or 0)
+        recovery = float(signature.get("high2ToHigh1Ratio") or 0)
+        contrast = float(signature.get("high2ToZeroRatio") or 0)
+        if high1_rms < 0.05:
+            errors.append(f"initial high-pressure chord audio too low ({high1_rms})")
+        if high2_rms < 0.05:
+            errors.append(f"recovered high-pressure chord audio too low ({high2_rms})")
+        if recovery < 0.75:
+            errors.append(f"pressure recovery too weak ({recovery})")
+        if contrast < 2.5:
+            errors.append(f"zero-to-high pressure contrast too weak ({contrast})")
+        log = signature.get("diagnosticLog", "")
+        if log.count("poly-aftertouch") < 6:
+            errors.append("too few poly-aftertouch events during chord pressure recovery")
+        cleanup = signature.get("voiceCleanup") or {}
         if cleanup:
             held = cleanup.get("heldNotes")
             local = cleanup.get("midiVoices")
@@ -1419,8 +1576,6 @@ def validate_audio_behavior(row, trigger):
                 errors.append(f"MIDI voices not idle after run (held={held} local={local} ssli={ssli})")
         else:
             errors.append("missing MIDI voice cleanup snapshot")
-        if "held=0 local=0 ssli=0" not in log:
-            errors.append("current MIDI run did not report clean idle cleanup")
         return errors
     if trigger != "single-midi" and max(signature.get("peak", 0), signature.get("spectrumPeak", 0)) < 0.015 and signature.get("rms", 0) < 0.003:
         errors.append("audio energy too low")
@@ -1435,14 +1590,19 @@ def validate_audio_behavior(row, trigger):
             if int(signature.get("continuousPressureFrames") or 0) < 6:
                 errors.append(f"too few continuous pressure frames ({signature.get('continuousPressureFrames')})")
         if trigger == "voice-stress-midi":
+            physical_settings = signature.get("physicalSettings") or {}
+            physical_model = str(physical_settings.get("model") or "").lower()
+            release_strum_plucked = signature.get("instrumentType") == "physical" and physical_model == "pluck"
             if int(signature.get("noteOns") or 0) != 200:
                 errors.append(f"voice stress sent wrong note-on count ({signature.get('noteOns')})")
             if int(signature.get("noteOffs") or 0) != 200:
                 errors.append(f"voice stress sent wrong note-off count ({signature.get('noteOffs')})")
             if int(signature.get("observedMaxHeld") or 0) < 6:
                 errors.append(f"voice stress never held six notes ({signature.get('observedMaxHeld')})")
-            if int(signature.get("observedMaxLocalVoices") or 0) < 6:
+            if not release_strum_plucked and int(signature.get("observedMaxLocalVoices") or 0) < 6:
                 errors.append(f"voice stress never reached six local voices ({signature.get('observedMaxLocalVoices')})")
+            if release_strum_plucked and int(signature.get("ssliPluckedStartCount") or 0) <= 0:
+                errors.append("release-strum voice stress never produced plucked release audio")
             if int(signature.get("voiceLossCount") or 0) > 0:
                 errors.append(f"voice stress detected voice loss ({signature.get('voiceLosses')})")
             if int(signature.get("polyAftertouchSent") or 0) < 200:
@@ -1451,15 +1611,18 @@ def validate_audio_behavior(row, trigger):
                 errors.append(f"voice stress sent channel pressure ({signature.get('channelPressureSent')})")
         log = signature.get("diagnosticLog", "")
         cleanup = signature.get("voiceCleanup") or {}
+        cleanup_clean = False
         if cleanup:
             held = cleanup.get("heldNotes")
             local = cleanup.get("midiVoices")
             ssli = cleanup.get("ssliActiveOscillators")
             if held != 0 or local != 0 or (ssli is not None and ssli != 0):
                 errors.append(f"MIDI voices not idle after run (held={held} local={local} ssli={ssli})")
+            else:
+                cleanup_clean = True
         else:
             errors.append("missing MIDI voice cleanup snapshot")
-        if "held=0 local=0 ssli=0" not in log:
+        if not cleanup_clean and "held=0 local=0 ssli=0" not in log:
             errors.append("current MIDI run did not report clean idle cleanup")
     return errors
 
@@ -1585,7 +1748,7 @@ def run_sweep(args):
                 }""",
                 timeout=max(10_000, args.timeout_ms),
             )
-            if args.trigger in {"single-midi", "six-note-midi", "pressure-sweep-midi", "continuous-poly-pressure-midi", "voice-stress-midi"}:
+            if args.trigger in {"single-midi", "six-note-midi", "pressure-sweep-midi", "chord-pressure-recovery-midi", "continuous-poly-pressure-midi", "voice-stress-midi"}:
                 enable_mock_midi(page)
                 set_performance_volume(page, args.performance_volume)
             all_presets = collect_presets(page)
@@ -1624,12 +1787,15 @@ def run_sweep(args):
                     elif args.trigger == "continuous-poly-pressure-midi":
                         set_performance_volume(page, args.performance_volume)
                         audio_signature = ssli_continuous_poly_pressure_midi_signature(page, max(args.audio_sample_ms, 900))
+                    elif args.trigger == "chord-pressure-recovery-midi":
+                        set_performance_volume(page, args.performance_volume)
+                        audio_signature = ssli_chord_pressure_recovery_midi_signature(page, max(args.audio_sample_ms, 900))
                     elif args.trigger == "voice-stress-midi":
                         set_performance_volume(page, args.performance_volume)
                         audio_signature = ssli_voice_stress_midi_signature(page, max(args.audio_sample_ms, 1400))
                     elif args.trigger == "pressure-sweep-midi":
                         set_performance_volume(page, args.performance_volume)
-                        audio_signature = ssli_pressure_sweep_midi_signature(page, max(args.audio_sample_ms, 640), args.normalization_midi)
+                        audio_signature = ssli_pressure_sweep_midi_signature(page, max(args.audio_sample_ms, 640), args.normalization_midi, args.pressure_sweep_velocity)
                     else:
                         probe = prepare_ssli_audio_probe(page)
                         page.locator('[data-testid="play-step"]').click(timeout=args.timeout_ms)

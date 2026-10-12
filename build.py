@@ -39,6 +39,108 @@ SSLI_INDEX_PATCHES = [
         after="<script>console.info('[SSLI] service worker disabled for Exquis exhibit runtime');</script>",
     ),
     TextPatch(
+        name="expression-gain-range-supports-aftertouch-swells",
+        before="""      var clampedGain = Math.max(0, Math.min(2, gainLinear));
+""",
+        after="""      var clampedGain = Math.max(0, Math.min(12, gainLinear));
+""",
+    ),
+    TextPatch(
+        name="disable-embedded-ssli-web-midi-in-exhibit-host",
+        before="""  function init() {
+    if (!navigator.requestMIDIAccess) {
+      console.warn('[MIDI] Web MIDI API not available in this browser');
+    } else {
+      navigator.requestMIDIAccess({ sysex: false }).then(
+""",
+        after="""  function isExhibitHostRuntime() {
+    try {
+      return window.parent !== window && new URLSearchParams(window.location.search || '').get('exhibitHost') === '1';
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function init() {
+    if (isExhibitHostRuntime()) {
+      isMidiEnabled = false;
+      console.info('[MIDI] Web MIDI disabled: hosted by Exquis exhibit parent');
+      return;
+    }
+    if (!navigator.requestMIDIAccess) {
+      console.warn('[MIDI] Web MIDI API not available in this browser');
+    } else {
+      navigator.requestMIDIAccess({ sysex: false }).then(
+""",
+    ),
+    TextPatch(
+        name="physical-note-on-accepts-bounded-one-shot-options",
+        before="""function noteOn(midi, velocity, instId) {
+    if (instId === undefined) instId = 0;
+    velocity = velocity || 100;
+
+    // Ensure AudioContext is running (iframe policies can suspend it)
+""",
+        after="""function noteOn(midi, velocity, instId, options) {
+    if (instId === undefined) instId = 0;
+    options = options || {};
+    velocity = velocity || 100;
+
+    // Ensure AudioContext is running (iframe policies can suspend it)
+""",
+    ),
+    TextPatch(
+        name="physical-note-on-passes-pick-position-and-max-duration",
+        before="""      excitation: settings.excitation,
+      bodySize: settings.bodySize,
+      decayTime: settings.decayTime,
+""",
+        after="""      excitation: settings.excitation,
+      bodySize: settings.bodySize,
+      pickPosition: settings.pickPosition,
+      decayTime: settings.decayTime,
+      maxDurationMs: options.maxDurationMs || 0,
+      voiceId: options.voiceId || '',
+""",
+    ),
+    TextPatch(
+        name="physical-note-on-returns-owned-voice-id-fallback",
+        before="""      voice.noteOn(midi, velocity, noteFreq, voiceSettings);
+    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
+""",
+        after="""      voice.noteOn(midi, velocity, noteFreq, voiceSettings);
+      return voiceSettings.voiceId;
+    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
+""",
+    ),
+    TextPatch(
+        name="physical-note-on-returns-owned-voice-id-worklet",
+        before="""    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
+      physicalWorkletNodes[instId].port.postMessage({
+        type: 'noteOn',
+        midiNote: midi,
+        velocity: velocity,
+        noteFreq: noteFreq,
+        settings: voiceSettings
+      });
+    }
+  }
+""",
+        after="""    } else if (physicalWorkletNodes[instId] && isWorkletReady) {
+      physicalWorkletNodes[instId].port.postMessage({
+        type: 'noteOn',
+        midiNote: midi,
+        velocity: velocity,
+        noteFreq: noteFreq,
+        settings: voiceSettings
+      });
+      return voiceSettings.voiceId;
+    }
+    return '';
+  }
+""",
+    ),
+    TextPatch(
         name="physical-fallback-pluck-deterministic-excitation-noise",
         before="""    this.delayLine.clear(); this.dcBlocker.clear(); this.loopFilter.clear();
     for (var bfc = 0; bfc < this.bodyFilters.length; bfc++) { this.bodyFilters[bfc].clear(); }
@@ -75,6 +177,16 @@ SSLI_INDEX_PATCHES = [
 """,
     ),
     TextPatch(
+        name="physical-fallback-pluck-smooth-mute-state",
+        before="""    this._perSampleDecay = 1.0;
+""",
+        after="""    this._perSampleDecay = 1.0;
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
+""",
+    ),
+    TextPatch(
         name="physical-fallback-picked-string-triangular-displacement-derivative",
         before="""    } else if (this.excitation === 'pick') {
       var half = Math.floor(intPeriod / 2);
@@ -107,6 +219,121 @@ SSLI_INDEX_PATCHES = [
         before="""        this.delayLine.write((Math.random() * 2 - 1) * vel * 0.85);
 """,
         after="""        this.delayLine.write(nextExcitationNoise() * vel * 0.85);
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-pluck-reset-smooth-mute-on-note-on",
+        before="""    this.delayLine.clear(); this.dcBlocker.clear(); this.loopFilter.clear();
+    for (var bfc = 0; bfc < this.bodyFilters.length; bfc++) { this.bodyFilters[bfc].clear(); }
+""",
+        after="""    this.delayLine.clear(); this.dcBlocker.clear(); this.loopFilter.clear();
+    for (var bfc = 0; bfc < this.bodyFilters.length; bfc++) { this.bodyFilters[bfc].clear(); }
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-pluck-note-off-is-smooth-finger-mute",
+        before="""  FBPluckModel.prototype.noteOff = function() {
+    this.loopFilter.setCoeff(this.loopFilter.a * 0.7);
+  };
+""",
+        after="""  FBPluckModel.prototype.noteOff = function() {
+    // Finger muting damps the vibrating string with a smooth termination,
+    // rather than abruptly changing the waveguide loop coefficient. Original
+    // source: Smith, Physical Audio Signal Processing, string termination and
+    // damping in digital waveguides.
+    this.muteTotalSamples = Math.max(16, Math.floor(this.sampleRate * 0.003));
+    this.muteSamplesRemaining = this.muteTotalSamples;
+  };
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-pluck-apply-smooth-mute-envelope",
+        before="""    var out = dry + bodySum * BODY_RES_MIX;
+    if (this.decayCounter > this.sampleRate * 0.5 && Math.abs(out) < 0.00001) { this.active = false; return 0; }
+    return out * PLUCK_VOICE_LEVEL;
+""",
+        after="""    var out = dry + bodySum * BODY_RES_MIX;
+    if (this.muteSamplesRemaining > 0) {
+      var progress = 1 - (this.muteSamplesRemaining / Math.max(1, this.muteTotalSamples));
+      this.muteGain = 0.5 * (1 + Math.cos(Math.PI * progress));
+      out *= this.muteGain;
+      this.muteSamplesRemaining--;
+      if (this.muteSamplesRemaining <= 0) {
+        this.active = false;
+        this.muteGain = 0;
+        return 0;
+      }
+    }
+    if (this.decayCounter > this.sampleRate * 0.5 && Math.abs(out) < 0.00001) { this.active = false; return 0; }
+    return out * PLUCK_VOICE_LEVEL;
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-voice-duration-state",
+        before="""    this.strike = new FBStrikeModel(sr);
+    this.currentModel = this.pluck;
+  }
+""",
+        after="""    this.strike = new FBStrikeModel(sr);
+    this.currentModel = this.pluck;
+    this.durationSamples = 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
+    this.voiceId = '';
+  }
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-voice-reset-duration",
+        before="""    this.instId = settings.instId || 0;
+    this.modelType = settings.model || 'pluck';
+    switch (this.modelType) {
+""",
+        after="""    this.instId = settings.instId || 0;
+    this.modelType = settings.model || 'pluck';
+    this.voiceId = settings.voiceId || '';
+    this.durationSamples = settings.maxDurationMs > 0 ? Math.max(1, Math.floor(this.sampleRate * settings.maxDurationMs / 1000)) : 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
+    switch (this.modelType) {
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-voice-applies-bounded-one-shot-duration",
+        before="""    var s = this.currentModel.process();
+    if (this.currentModel.isFinished()) this.active = false;
+""",
+        after="""    if (this.durationSamples > 0 && this.durationCounter >= this.durationSamples && !this.durationOffSent) {
+      // A bounded one-shot pluck is still Karplus-Strong excitation plus loop
+      // damping; the duration only applies a smooth finger mute at the endpoint.
+      // Original source: Smith, Physical Audio Signal Processing, string
+      // termination/damping in digital waveguides.
+      this.noteOff();
+      this.durationOffSent = true;
+    }
+    var s = this.currentModel.process();
+    this.durationCounter++;
+    if (this.currentModel.isFinished()) this.active = false;
+""",
+    ),
+    TextPatch(
+        name="physical-fallback-voice-silent-retire",
+        before="""  FallbackVoice.prototype.noteOff = function() { if (this.currentModel) this.currentModel.noteOff(); };
+  FallbackVoice.prototype.process = function() {
+""",
+        after="""  FallbackVoice.prototype.noteOff = function() { if (this.currentModel) this.currentModel.noteOff(); };
+  FallbackVoice.prototype.silence = function() {
+    // Absorb a retired owned voice without emitting a mute envelope. This is a
+    // lifecycle retirement for a prior contact, not a new acoustic excitation.
+    // Original source: Smith, Physical Audio Signal Processing, digital
+    // waveguide terminations as absorbing boundaries.
+    this.active = false;
+    if (this.currentModel) this.currentModel.active = false;
+  };
+  FallbackVoice.prototype.process = function() {
 """,
     ),
     TextPatch(
@@ -156,7 +383,80 @@ SSLI_INDEX_PATCHES = [
     return JSON.parse(JSON.stringify(DEFAULT_PHYSICAL_SETTINGS));
   }
 """,
-        after="""  function updateNotePressure(midi, pressure, instId) {
+        after="""  function noteOffVoice(voiceId, instId) {
+    if (instId === undefined) instId = 0;
+    if (!voiceId) return false;
+    if (shouldUseFallback) {
+      var voices = fallbackVoicesByInst[instId] || [];
+      for (var i = 0; i < voices.length; i++) {
+        var v = voices[i];
+        if (v.active && v.voiceId === voiceId) {
+          // Stop one owned physical voice, not every voice sharing the MIDI
+          // pitch. Original source: MIDI Association MPE zone/channel
+          // architecture treats simultaneous contacts as independent notes.
+          v.noteOff();
+          return true;
+        }
+      }
+      return false;
+    }
+    if (physicalWorkletNodes[instId] && isWorkletReady) {
+      physicalWorkletNodes[instId].port.postMessage({
+        type: 'noteOffVoice',
+        voiceId: voiceId,
+        instId: instId
+      });
+      return true;
+    }
+    return false;
+  }
+
+  function silenceVoice(voiceId, instId) {
+    if (instId === undefined) instId = 0;
+    if (!voiceId) return false;
+    if (shouldUseFallback) {
+      var voices = fallbackVoicesByInst[instId] || [];
+      for (var i = 0; i < voices.length; i++) {
+        var v = voices[i];
+        if (v.active && v.voiceId === voiceId) {
+          // Retire one owned physical voice without generating a note-off
+          // envelope. Original source: Smith, Physical Audio Signal Processing,
+          // digital waveguide terminations as absorbing boundaries.
+          v.silence ? v.silence() : (v.active = false);
+          return true;
+        }
+      }
+      return false;
+    }
+    if (physicalWorkletNodes[instId] && isWorkletReady) {
+      physicalWorkletNodes[instId].port.postMessage({
+        type: 'silenceVoice',
+        voiceId: voiceId,
+        instId: instId
+      });
+      return true;
+    }
+    return false;
+  }
+
+  function isVoiceActive(voiceId, instId) {
+    if (instId === undefined) instId = 0;
+    if (!voiceId) return false;
+    if (shouldUseFallback) {
+      var voices = fallbackVoicesByInst[instId] || [];
+      for (var i = 0; i < voices.length; i++) {
+        var v = voices[i];
+        if (v.active && v.voiceId === voiceId) return true;
+      }
+      return false;
+    }
+    // AudioWorklet state is owned by the render thread; absent an async
+    // completion message, report true so the caller does not prematurely drop
+    // ownership. Original source: Web Audio API AudioWorklet thread isolation.
+    return true;
+  }
+
+  function updateNotePressure(midi, pressure, instId) {
     if (instId === undefined) instId = 0;
     // Source for controller range: MIDI Association, MIDI 1.0 Detailed
     // Specification defines poly/channel pressure as one 7-bit value. SSLI
@@ -221,6 +521,9 @@ SSLI_INDEX_PATCHES = [
 
     noteOn: noteOn,
     noteOff: noteOff,
+    noteOffVoice: noteOffVoice,
+    silenceVoice: silenceVoice,
+    isVoiceActive: isVoiceActive,
     updateNotePressure: updateNotePressure,
     allNotesOff: allNotesOff,
 """,
@@ -1334,6 +1637,100 @@ var PLUCK_OUTPUT_SCALE = 9.0;
 """,
     ),
     TextPatch(
+        name="physical-worklet-pluck-smooth-mute-state",
+        before="""    this.baseFilterCoeff = 0.5;
+""",
+        after="""    this.baseFilterCoeff = 0.5;
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-pluck-reset-smooth-mute-on-note-on",
+        before="""    this.loopFilter.clear();
+    this.prevSample = 0;
+""",
+        after="""    this.loopFilter.clear();
+    this.prevSample = 0;
+    this.muteGain = 1;
+    this.muteSamplesRemaining = 0;
+    this.muteTotalSamples = 0;
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-voice-duration-state",
+        before="""    this.strike = new StrikeModel(sampleRate);
+    this.currentModel = this.pluck;
+  }
+""",
+        after="""    this.strike = new StrikeModel(sampleRate);
+    this.currentModel = this.pluck;
+    this.durationSamples = 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
+    this.voiceId = '';
+  }
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-voice-reset-duration",
+        before="""    this.instId = settings.instId || 0;
+    this.modelType = settings.model || 'pluck';
+
+    // Select model and apply parameters
+""",
+        after="""    this.instId = settings.instId || 0;
+    this.modelType = settings.model || 'pluck';
+    this.voiceId = settings.voiceId || '';
+    this.durationSamples = settings.maxDurationMs > 0 ? Math.max(1, Math.floor(this.sampleRate * settings.maxDurationMs / 1000)) : 0;
+    this.durationCounter = 0;
+    this.durationOffSent = false;
+
+    // Select model and apply parameters
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-pluck-note-off-is-smooth-finger-mute",
+        before="""  noteOff() {
+    // Plucked strings just decay naturally — accelerate the damping
+    var currentCoeff = this.loopFilter.a;
+    this.loopFilter.setCoeff(currentCoeff * 0.7);
+  }
+""",
+        after="""  noteOff() {
+    // Finger muting damps the vibrating string with a smooth termination,
+    // rather than abruptly changing the waveguide loop coefficient. Original
+    // source: Smith, Physical Audio Signal Processing, string termination and
+    // damping in digital waveguides.
+    this.muteTotalSamples = Math.max(16, Math.floor(this.sampleRate * 0.003));
+    this.muteSamplesRemaining = this.muteTotalSamples;
+  }
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-pluck-apply-smooth-mute-envelope",
+        before="""    var out = this.dcBlocker.process(delayed);
+
+    // Check if effectively silent
+""",
+        after="""    var out = this.dcBlocker.process(delayed);
+    if (this.muteSamplesRemaining > 0) {
+      var progress = 1 - (this.muteSamplesRemaining / Math.max(1, this.muteTotalSamples));
+      this.muteGain = 0.5 * (1 + Math.cos(Math.PI * progress));
+      out *= this.muteGain;
+      this.muteSamplesRemaining--;
+      if (this.muteSamplesRemaining <= 0) {
+        this.active = false;
+        this.muteGain = 0;
+        return 0;
+      }
+    }
+
+    // Check if effectively silent
+""",
+    ),
+    TextPatch(
         name="physical-worklet-pluck-settings-include-pick-position",
         before="""        this.pluck.bodySize = settings.bodySize != null ? settings.bodySize : 50;
         this.pluck.decayTime = settings.decayTime != null ? settings.decayTime : 70;
@@ -1341,6 +1738,52 @@ var PLUCK_OUTPUT_SCALE = 9.0;
         after="""        this.pluck.bodySize = settings.bodySize != null ? settings.bodySize : 50;
         this.pluck.pickPosition = settings.pickPosition != null ? settings.pickPosition : 0.18;
         this.pluck.decayTime = settings.decayTime != null ? settings.decayTime : 70;
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-voice-applies-bounded-one-shot-duration",
+        before="""    var sample = this.currentModel.process();
+    var isPluck = (this.modelType === 'pluck');
+""",
+        after="""    if (this.durationSamples > 0 && this.durationCounter >= this.durationSamples && !this.durationOffSent) {
+      // A bounded one-shot pluck is still Karplus-Strong excitation plus loop
+      // damping; the duration only applies a smooth finger mute at the endpoint.
+      // Original source: Smith, Physical Audio Signal Processing, string
+      // termination/damping in digital waveguides.
+      this.noteOff();
+      this.durationOffSent = true;
+    }
+    var sample = this.currentModel.process();
+    this.durationCounter++;
+    var isPluck = (this.modelType === 'pluck');
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-voice-silent-retire",
+        before="""  noteOff() {
+    if (this.currentModel) {
+      this.currentModel.noteOff();
+    }
+  }
+
+  process() {
+""",
+        after="""  noteOff() {
+    if (this.currentModel) {
+      this.currentModel.noteOff();
+    }
+  }
+
+  silence() {
+    // Absorb a retired owned voice without emitting a mute envelope. This is a
+    // lifecycle retirement for a prior contact, not a new acoustic excitation.
+    // Original source: Smith, Physical Audio Signal Processing, digital
+    // waveguide terminations as absorbing boundaries.
+    this.active = false;
+    if (this.currentModel) this.currentModel.active = false;
+  }
+
+  process() {
 """,
     ),
     TextPatch(
@@ -1470,9 +1913,54 @@ var PLUCK_OUTPUT_SCALE = 9.0;
         this.updateParams(data.instId, data.params);
         break;
 
+      case 'noteOffVoice':
+        this.stopNoteById(data.voiceId, data.instId);
+        break;
+
+      case 'silenceVoice':
+        this.silenceNoteById(data.voiceId, data.instId);
+        break;
+
       case 'updateNotePressure':
         this.updateNotePressure(data.midiNote, data.instId, data.pressure);
         break;
+""",
+    ),
+    TextPatch(
+        name="physical-worklet-note-off-owned-voice-id",
+        before="""  stopAllNotes(instId) {
+    for (var i = 0; i < this.maxVoices; i++) {
+""",
+        after="""  stopNoteById(voiceId, instId) {
+    if (!voiceId) return;
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (v.active && v.voiceId === voiceId && v.instId === instId) {
+        // Stop one owned physical voice, not every voice sharing the MIDI
+        // pitch. Original source: MIDI Association MPE zone/channel
+        // architecture treats simultaneous contacts as independent notes.
+        v.noteOff();
+        return;
+      }
+    }
+  }
+
+  silenceNoteById(voiceId, instId) {
+    if (!voiceId) return;
+    for (var i = 0; i < this.maxVoices; i++) {
+      var v = this.voices[i];
+      if (v.active && v.voiceId === voiceId && v.instId === instId) {
+        // Retire one owned physical voice without generating a note-off
+        // envelope. Original source: Smith, Physical Audio Signal Processing,
+        // digital waveguide terminations as absorbing boundaries.
+        v.silence ? v.silence() : (v.active = false);
+        return;
+      }
+    }
+  }
+
+  stopAllNotes(instId) {
+    for (var i = 0; i < this.maxVoices; i++) {
 """,
     ),
     TextPatch(

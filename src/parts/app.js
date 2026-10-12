@@ -197,6 +197,7 @@
   var recentMidiChordTimer = null;
   var articulationQueue = [];
   var articulationFlushTimer = null;
+  var pendingReleaseStrumCommits = [];
   var articulationSequence = 0;
   var lastAppliedSsliPresetKey = '';
   var lastSsliExpressionPressure = null;
@@ -275,11 +276,16 @@
     mismatched: {}
   };
   var els = {};
+  var physicalPluckedOneShotSequence = 0;
 
   function logEvent(kind, message) {
     var stamp = new Date().toLocaleTimeString();
     pendingLogs.push(stamp + ' [' + kind + '] ' + message);
     scheduleLogFlush();
+  }
+
+  function diagnosticNowMs() {
+    return window.performance && window.performance.now ? window.performance.now() : Date.now();
   }
 
   function scheduleLogFlush() {
@@ -292,8 +298,8 @@
     if (!pendingLogs.length) return;
     Array.prototype.push.apply(logs, pendingLogs);
     pendingLogs = [];
-    if (logs.length > 120) logs.shift();
-    if (logs.length > 120) logs = logs.slice(logs.length - 120);
+    if (logs.length > 220) logs.shift();
+    if (logs.length > 220) logs = logs.slice(logs.length - 220);
     if (els.diagnosticLog) {
       els.diagnosticLog.textContent = logs.join('\n') || 'Ready.';
       els.diagnosticLog.scrollTop = els.diagnosticLog.scrollHeight;
@@ -343,6 +349,20 @@
   function channelHeldMidiNotes(channel) {
     var notes = state.channelNotes[String(channel)] || {};
     return Object.keys(notes).map(function(midi) { return parseInt(midi, 10); }).filter(function(midi) { return Number.isFinite(midi); });
+  }
+
+  function heldMidiActivitySummary() {
+    var held = Object.keys(state.heldNotes).map(function(key) {
+      return state.heldNotes[key];
+    }).filter(Boolean).sort(function(a, b) {
+      if (a.midi !== b.midi) return a.midi - b.midi;
+      return (a.channel || 0) - (b.channel || 0);
+    });
+    if (!held.length) return 'Held: none';
+    return 'Held: ' + held.map(function(note) {
+      var pressure = typeof note.pressure === 'number' ? note.pressure : (note.velocity || 0);
+      return noteLabelFromMidi(note.midi) + ' p' + Math.max(0, Math.min(127, Math.round(pressure || 0)));
+    }).join(', ');
   }
 
   function objectKeyCount(obj) {
@@ -431,6 +451,18 @@
       ssliActiveOscillators: getSsliActiveOscillatorCount(),
       lastAppliedSsliPresetKey: lastAppliedSsliPresetKey,
       soundPresetId: state.soundPresetId,
+      pendingReleaseStrumCommits: pendingReleaseStrumCommits.map(function(pending) {
+        var event = pending && pending.event;
+        return event ? {
+          note: noteLabelFromMidi(event.midi),
+          midi: event.midi,
+          channel: event.channel,
+          ageMs: Math.round(diagnosticNowMs() - (event.releasedAtMs || diagnosticNowMs())),
+          releaseIntent: event.releaseIntent || event.velocity || 0,
+          peakPressure: event.releasePeakPressure || 0,
+          timerActive: !!pending.timer
+        } : null;
+      }).filter(Boolean),
       mode: state.mode,
       exerciseId: state.exerciseId,
       currentPath: currentPath.map(function(cell, index) {
@@ -900,7 +932,7 @@
   function ensureFreshSsliFrame() {
     var frame = document.getElementById('ssliEngineFrame');
     if (!frame) return;
-    var freshSrc = 'ssli/index.html?v={{BUILD_TIMESTAMP_UTC}}';
+    var freshSrc = 'ssli/index.html?exhibitHost=1&v={{BUILD_TIMESTAMP_UTC}}';
     if (frame.getAttribute('src') !== freshSrc) frame.setAttribute('src', freshSrc);
     if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistrations) return;
     navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -1414,15 +1446,19 @@
     return true;
   }
 
-  function pressureToSsliExpression(pressure) {
+  function pressureToSsliExpression(pressure, onsetVelocity, interactionType) {
     var level = Math.max(0, Math.min(1, (pressure || 0) / 127));
-    // Source for pressure range: MIDI Association, MIDI 1.0 Detailed
-    // Specification, Channel Voice Messages define channel/poly pressure
-    // as one 7-bit pressure value. The curve is SSLI's bounded performance
-    // mapping to brightness/dynamics so aftertouch cannot stack unbounded gain.
+    var velocityLevel = Math.max(1 / 127, Math.min(1, (onsetVelocity || pressure || 1) / 127));
+    // Source for pressure/velocity ranges: MIDI Association, MIDI 1.0
+    // Detailed Specification, Channel Voice Messages define note-on velocity
+    // and channel/poly pressure as 7-bit performance controls. Dynamics here
+    // are interaction-specific: sustained pressure-swell instruments use
+    // current pressure as the loudness control, while onset-decay instruments
+    // keep pressure from re-amplifying the struck/plucked excitation.
+    var gain = interactionType === 'pressure-swell' ? level : (level / velocityLevel);
     return {
       cutoffHz: 900 + level * 9100,
-      gain: Math.max(0.75, Math.min(2, 0.75 + level * 1.25))
+      gain: Math.max(0, Math.min(12, gain))
     };
   }
 
@@ -1550,6 +1586,7 @@
   function immediateArticulation() {
     return {
       family: 'sustained',
+      interactionType: 'pressure-swell',
       onsetMode: 'immediate',
       captureWindowMs: 0,
       minInterOnsetMs: 0,
@@ -1568,18 +1605,33 @@
     if (engineKey === 'physical' && (category === 'plucked' || physicalModel === 'pluck')) {
       return {
         family: 'plucked',
-        onsetMode: 'strum',
+        interactionType: 'onset-decay',
+        onsetMode: 'release-strum',
         captureWindowMs: 18,
         minInterOnsetMs: 11,
         maxSpreadMs: 46,
         order: 'physical-low-to-high',
         pressurePolicy: 'onset-only',
+        // Exquis sends low-velocity brush contacts with transient pressure
+        // peaks around the lower third of MIDI's 7-bit pressure range. A
+        // release-strum pluck requires a deliberate contact crossing 48/127;
+        // low initial velocity is still valid if pressure later rises past
+        // this raw-contact threshold. Source: MIDI Association 7-bit pressure
+        // range plus measured Exquis contact-noise logs.
+        minReleaseIntentPressure: 48,
+        immediateReleaseIntentPressure: 96,
+        preContactAbsorbMs: 180,
+        // Exquis release-strum is a short gesture recognizer, not a slow
+        // note-off trigger. MIDI note-on/note-off are ordered 7-bit events
+        // (MIDI Association, MIDI 1.0 Channel Voice messages), so the app only
+        // waits long enough to catch immediate recontact/contact chatter.
         autoDampMs: SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS
       };
     }
     if (engineKey === 'physical' && physicalModel === 'strike') {
       return {
         family: 'struck',
+        interactionType: 'onset-decay',
         onsetMode: 'roll',
         captureWindowMs: 10,
         minInterOnsetMs: 5,
@@ -1596,6 +1648,21 @@
     var preset = option && option.preset;
     var articulation = preset && preset.articulation;
     return articulation || defaultArticulationForPreset(option && option.family, preset);
+  }
+
+  function selectedInteractionType() {
+    var articulation = selectedArticulation() || {};
+    if (articulation.interactionType) return articulation.interactionType;
+    if (articulation.family === 'plucked' || articulation.family === 'struck' || articulation.pressurePolicy === 'onset-only') return 'onset-decay';
+    return 'pressure-swell';
+  }
+
+  function interactionTypeFromVoice(voice) {
+    if (!voice) return selectedInteractionType();
+    if (voice.interactionType) return voice.interactionType;
+    if (voice.articulationFamily === 'plucked' || voice.articulationFamily === 'struck') return 'onset-decay';
+    if (voice.pressurePolicy === 'onset-only' || voice.pressurePolicy === 'capture-and-apply-at-onset') return 'onset-decay';
+    return selectedInteractionType();
   }
 
   function selectedArticulationMode() {
@@ -1627,14 +1694,87 @@
     return removed;
   }
 
-  function releasePendingArticulation(key) {
+  function isPendingReleaseStrumArticulation(key) {
+    for (var i = 0; i < articulationQueue.length; i++) {
+      var event = articulationQueue[i];
+      var articulation = event && event.articulation || {};
+      if (event && event.key === key && articulation.family === 'plucked' && articulation.onsetMode === 'release-strum') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function commitReleaseStrumEvents(events, articulation) {
+    if (!events.length) return;
+    flushArticulationEvents(events, articulation || events[0].articulation || immediateArticulation());
+  }
+
+  function cancelPendingReleaseStrumCommitsForContact(midi) {
+    var nowMs = diagnosticNowMs();
+    var removed = false;
+    pendingReleaseStrumCommits = pendingReleaseStrumCommits.filter(function(pending) {
+      var event = pending && pending.event;
+      if (!event || event.midi !== midi) return true;
+      if (pending.timer) window.clearTimeout(pending.timer);
+      removed = true;
+      logEvent('audio', 'absorbed release-strum precontact ' + noteLabelFromMidi(event.midi) + ' on recontact age=' + Math.round(nowMs - (event.releasedAtMs || nowMs)) + 'ms releaseIntent=' + Math.round(event.releaseIntent || event.velocity || 0) + ' peakPressure=' + Math.round(event.releasePeakPressure || 0) + ' channel=' + ((event.channel || 0) + 1));
+      return false;
+    });
+    return removed;
+  }
+
+  function releasePendingArticulation(key, releasedHeld) {
     var removed = false;
     var nowMs = Date.now();
+    var releaseEvents = [];
     articulationQueue = articulationQueue.filter(function(event) {
       if (event.key !== key) return true;
       var articulation = event.articulation || {};
       var captureWindow = Math.max(0, Number(articulation.captureWindowMs || 0));
       var elapsed = nowMs - (event.enqueuedAt || nowMs);
+      if (articulation.family === 'plucked' && articulation.onsetMode === 'release-strum') {
+        var releaseClockMs = diagnosticNowMs();
+        var heldPressure = releasedHeld && typeof releasedHeld.pressure === 'number' ? releasedHeld.pressure : 0;
+        var heldPeakPressure = releasedHeld && typeof releasedHeld.peakPressure === 'number' ? releasedHeld.peakPressure : 0;
+        var releaseIntent = Math.max(
+          event.velocity || 0,
+          heldPressure,
+          heldPeakPressure
+        );
+        var minReleaseIntent = Math.max(1, Number(articulation.minReleaseIntentPressure || 1));
+        event.releaseIntent = releaseIntent;
+        event.releaseCurrentPressure = heldPressure;
+        event.releasePeakPressure = heldPeakPressure;
+        event.releaseHeldAgeMs = releasedHeld && releasedHeld.startedAt ? Math.max(0, Date.now() - releasedHeld.startedAt) : 0;
+        logEvent('audio', 'release-strum note-up candidate ' + noteLabelFromMidi(event.midi) + ' age=' + Math.round(event.releaseHeldAgeMs || 0) + 'ms initial=' + Math.round(event.velocity || 0) + ' current=' + Math.round(heldPressure) + ' peak=' + Math.round(heldPeakPressure) + ' intent=' + Math.round(releaseIntent) + ' min=' + Math.round(minReleaseIntent) + ' channel=' + ((event.channel || 0) + 1));
+        if (releaseIntent < minReleaseIntent) {
+          if (event.timer) window.clearTimeout(event.timer);
+          removed = true;
+          logEvent('audio', 'ignored release-strum weak contact ' + noteLabelFromMidi(event.midi) + ' releaseIntent=' + Math.round(releaseIntent) + ' peakPressure=' + Math.round(heldPeakPressure) + ' min=' + Math.round(minReleaseIntent));
+          return false;
+        }
+        event.playAfterFlushRelease = true;
+        event.releasedAt = nowMs;
+        event.releasedAtMs = releaseClockMs;
+        event.velocity = releaseIntent;
+        var immediateReleaseIntent = Math.max(minReleaseIntent, Number(articulation.immediateReleaseIntentPressure || minReleaseIntent));
+        var absorbMs = Math.max(0, Number(articulation.preContactAbsorbMs || 0));
+        if (absorbMs > 0 && releaseIntent < immediateReleaseIntent) {
+          event.timer = window.setTimeout(function() {
+            pendingReleaseStrumCommits = pendingReleaseStrumCommits.filter(function(pending) { return pending && pending.event !== event; });
+            logEvent('audio', 'release-strum provisional timer fired ' + noteLabelFromMidi(event.midi) + ' age=' + Math.round(diagnosticNowMs() - (event.releasedAtMs || diagnosticNowMs())) + 'ms releaseIntent=' + Math.round(event.releaseIntent || event.velocity || 0) + ' absorb=' + Math.round(absorbMs) + 'ms channel=' + ((event.channel || 0) + 1));
+            commitReleaseStrumEvents([event], event.articulation || immediateArticulation());
+          }, absorbMs);
+          pendingReleaseStrumCommits.push({ event: event, timer: event.timer });
+          logEvent('audio', 'release-strum provisional queued ' + noteLabelFromMidi(event.midi) + ' absorb=' + Math.round(absorbMs) + 'ms releaseIntent=' + Math.round(releaseIntent) + ' immediate=' + Math.round(immediateReleaseIntent) + ' channel=' + ((event.channel || 0) + 1));
+        } else {
+          logEvent('audio', 'release-strum immediate commit ' + noteLabelFromMidi(event.midi) + ' releaseIntent=' + Math.round(releaseIntent) + ' immediate=' + Math.round(immediateReleaseIntent) + ' channel=' + ((event.channel || 0) + 1));
+          releaseEvents.push(event);
+        }
+        removed = true;
+        return false;
+      }
       var isPluckedChordIntent = articulation.family === 'plucked' && articulationQueue.length > 1;
       if (articulation.family === 'plucked' && (isPluckedChordIntent || elapsed >= captureWindow)) {
         event.playAfterFlushRelease = true;
@@ -1647,6 +1787,9 @@
     if (!articulationQueue.length && articulationFlushTimer) {
       window.clearTimeout(articulationFlushTimer);
       articulationFlushTimer = null;
+    }
+    if (releaseEvents.length) {
+      commitReleaseStrumEvents(releaseEvents, releaseEvents[0].articulation || immediateArticulation());
     }
     return removed;
   }
@@ -1672,6 +1815,9 @@
       logEvent('audio', 'articulation skipped released ' + noteLabelFromMidi(event.midi) + ' mode=' + event.articulation.onsetMode);
       return;
     }
+    if (canPlayReleasedCommittedPluck) {
+      logEvent('audio', 'release-strum commit start ' + noteLabelFromMidi(event.midi) + ' age=' + Math.round(diagnosticNowMs() - (event.releasedAtMs || diagnosticNowMs())) + 'ms releaseIntent=' + Math.round(event.releaseIntent || event.velocity || 0) + ' heldAge=' + Math.round(event.releaseHeldAgeMs || 0) + 'ms channel=' + ((event.channel || 0) + 1));
+    }
     startMidiVoice(event.key, event.midi, event.velocity, {
       expectedVoiceCount: event.expectedVoiceCount || 0,
       velocityLoadVoices: event.velocityLoadVoices || 0,
@@ -1680,7 +1826,11 @@
       pressurePolicy: event.articulation.pressurePolicy || '',
       autoDampMs: event.articulation.autoDampMs || 0,
       channel: event.channel,
-      releasedBeforeStart: !state.heldNotes[event.key]
+      interactionType: event.articulation.interactionType || '',
+      releasedBeforeStart: !state.heldNotes[event.key],
+      releaseIntent: event.releaseIntent || event.velocity || 0,
+      releaseHeldAgeMs: event.releaseHeldAgeMs || 0,
+      releasedAtMs: event.releasedAtMs || 0
     });
     var held = state.heldNotes[event.key];
     if (held && held.pressure !== event.velocity) {
@@ -1697,15 +1847,9 @@
     return true;
   }
 
-  function flushArticulationQueue() {
-    if (articulationFlushTimer) {
-      window.clearTimeout(articulationFlushTimer);
-      articulationFlushTimer = null;
-    }
-    if (!articulationQueue.length) return;
-    var events = articulationQueue.slice();
-    articulationQueue = [];
-    var articulation = events[0].articulation || immediateArticulation();
+  function flushArticulationEvents(events, articulation) {
+    if (!events.length) return;
+    articulation = articulation || immediateArticulation();
     sortArticulationEvents(events, articulation);
     var spacing = Math.max(0, Number(articulation.minInterOnsetMs || 0));
     var maxSpread = Math.max(0, Number(articulation.maxSpreadMs || 0));
@@ -1718,18 +1862,41 @@
       var delay = Math.round(index * spacing);
       event.expectedVoiceCount = expectedVoiceCount;
       event.velocityLoadVoices = Math.max(0, expectedVoiceCount);
-      event.playAfterFlushRelease = event.playAfterFlushRelease || articulation.family === 'plucked';
+      event.playAfterFlushRelease = event.playAfterFlushRelease || (articulation.family === 'plucked' && articulation.onsetMode !== 'release-strum');
       event.timer = window.setTimeout(function() {
         startArticulatedVoice(event);
       }, delay);
     });
   }
 
+  function flushArticulationQueue() {
+    if (articulationFlushTimer) {
+      window.clearTimeout(articulationFlushTimer);
+      articulationFlushTimer = null;
+    }
+    if (!articulationQueue.length) return;
+    var articulation = articulationQueue[0].articulation || immediateArticulation();
+    var events = articulationQueue.slice();
+    if (articulation.family === 'plucked' && articulation.onsetMode === 'release-strum') {
+      events = articulationQueue.filter(function(event) { return !!event.playAfterFlushRelease; });
+      articulationQueue = articulationQueue.filter(function(event) { return !event.playAfterFlushRelease; });
+      if (!events.length) return;
+    } else {
+      articulationQueue = [];
+    }
+    flushArticulationEvents(events, articulation);
+  }
+
   function scheduleMidiVoiceStart(key, midi, velocity, cellId, channel) {
     var articulation = selectedArticulation();
     var mode = articulation.onsetMode || 'immediate';
     if (mode === 'immediate' || mode === 'none') {
-      startMidiVoice(key, midi, velocity, { channel: channel });
+      startMidiVoice(key, midi, velocity, {
+        channel: channel,
+        articulationFamily: articulation.family || '',
+        pressurePolicy: articulation.pressurePolicy || '',
+        interactionType: articulation.interactionType || ''
+      });
       return;
     }
     removePendingArticulation(key);
@@ -1743,8 +1910,10 @@
       sequence: articulationSequence++,
       enqueuedAt: Date.now()
     });
-    if (articulationFlushTimer) window.clearTimeout(articulationFlushTimer);
-    articulationFlushTimer = window.setTimeout(flushArticulationQueue, Math.max(0, Number(articulation.captureWindowMs || 0)));
+    if (mode !== 'release-strum') {
+      if (articulationFlushTimer) window.clearTimeout(articulationFlushTimer);
+      articulationFlushTimer = window.setTimeout(flushArticulationQueue, Math.max(0, Number(articulation.captureWindowMs || 0)));
+    }
     logEvent('audio', 'articulation queued ' + noteLabelFromMidi(midi) + ' mode=' + mode + ' family=' + (articulation.family || 'unknown') + ' capture=' + (articulation.captureWindowMs || 0) + 'ms');
   }
 
@@ -1785,11 +1954,16 @@
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.setExpression) return false;
     var SL = host.SynthLab;
     ensureSsliAudioReady(SL);
-    var expression = pressureToSsliExpression(pressure);
+    var interactionType = selectedInteractionType();
+    var expression = pressureToSsliExpression(
+      pressure,
+      interactionType === 'pressure-swell' ? strongestHeldMidiVelocityForPressure(pressure) : pressure,
+      interactionType
+    );
     SL.audio.setExpression(expression.cutoffHz, expression.gain);
     lastSsliExpressionPressure = pressure;
     skippedSsliExpressionUpdates = 0;
-    logEvent('audio', 'SSLI expression pressure=' + pressure + ' cutoff=' + Math.round(expression.cutoffHz) + 'Hz gain=' + expression.gain.toFixed(2));
+    logEvent('audio', 'SSLI expression pressure=' + pressure + ' cutoff=' + Math.round(expression.cutoffHz) + 'Hz gain=' + expression.gain.toFixed(2) + ' interaction=' + interactionType);
     return true;
   }
 
@@ -1846,6 +2020,10 @@
       if (instrumentType === 'fm') return false;
     }
     var strongest = strongestHeldMidiPressure();
+    if (objectKeyCount(state.heldNotes) > 0 && selectedInteractionType() === 'pressure-swell') {
+      setSsliMidiExpression(strongest, strongest === 0);
+      return true;
+    }
     if (strongest > 0) {
       setSsliMidiExpression(strongest);
       return true;
@@ -1904,6 +2082,19 @@
     return cleanupSsliEngineVoices(SL, 'after MIDI idle');
   }
 
+  function strongestHeldMidiVelocityForPressure(pressure) {
+    var strongestVelocity = 0;
+    Object.keys(state.heldNotes).forEach(function(key) {
+      var held = state.heldNotes[key];
+      if (!held) return;
+      var heldPressure = typeof held.pressure === 'number' ? held.pressure : (held.velocity || 0);
+      if (heldPressure === pressure) {
+        strongestVelocity = Math.max(strongestVelocity, playableSsliMidiVelocity(held.velocity || heldPressure || 1));
+      }
+    });
+    return strongestVelocity || pressure || 1;
+  }
+
   function reconcileSsliSustainedVoices(reason) {
     var host = getSsliHost();
     if (!host || !host.SynthLab || !host.SynthLab.audio || !host.SynthLab.audio.stopSustainedNote) return;
@@ -1919,12 +2110,74 @@
   }
 
   function releaseDuplicateMidiVoices(midi, nextKey) {
+    Object.keys(state.heldNotes).forEach(function(key) {
+      var held = state.heldNotes[key];
+      if (!held || held.midi !== midi || key === nextKey) return;
+      if (pendingShortNoteReleases[key]) {
+        window.clearTimeout(pendingShortNoteReleases[key]);
+        delete pendingShortNoteReleases[key];
+      }
+      if (held.rawMidi !== undefined) delete pendingShortRawReleases[held.rawMidi];
+      removePendingArticulation(key);
+      forgetChannelHeldNote(held.channel, held.midi);
+      delete state.heldNotes[key];
+      logEvent('audio', 'cancelled duplicate pending MIDI note ' + noteLabelFromMidi(midi) + ' from ' + key);
+    });
     Object.keys(midiVoices).forEach(function(key) {
       var voice = midiVoices[key];
       if (!voice || voice.midi !== midi || key === nextKey) return;
+      if (voice.oneShot && voice.articulationFamily === 'plucked' && voice.interactionType === 'onset-decay' && !state.heldNotes[key]) {
+        return;
+      }
       forgetHeldVoiceKey(key);
       releaseMidiVoice(key, true);
       logEvent('audio', 'released duplicate MIDI voice ' + noteLabelFromMidi(midi) + ' from ' + key);
+    });
+  }
+
+  function dampReleasedPluckedOneShotsForSamePitchContact(midi) {
+    var articulation = selectedArticulation();
+    if (!articulation || articulation.family !== 'plucked' || articulation.onsetMode !== 'release-strum') return;
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (!voice || voice.midi !== midi || !voice.oneShot || voice.articulationFamily !== 'plucked' || voice.interactionType !== 'onset-decay') return;
+      if (state.heldNotes[key]) return;
+      var host = getSsliHost();
+      var SL = host && host.SynthLab;
+      var voiceInst = SL && SL.audio && SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+      if (typeof voice.physicalInstId === 'number') voiceInst = voice.physicalInstId;
+      if (SL && SL.physical && SL.physical.silenceVoice && voice.physicalVoiceId) {
+        // Same pitch on a new MPE channel is still the same physical key/string.
+        // This is ownership retirement for the old contact, not a second
+        // acoustic event. Source: Smith, Physical Audio Signal Processing,
+        // digital waveguide terminations as absorbing boundaries.
+        SL.physical.silenceVoice(voice.physicalVoiceId, voiceInst);
+        if (voice.oneShotCleanupTimer) window.clearTimeout(voice.oneShotCleanupTimer);
+        delete midiVoices[key];
+        logEvent('audio', 'silenced same-key release pluck on recontact ' + noteLabelFromMidi(voice.midi) + ' voice=' + voice.physicalVoiceId);
+        logMidiVoiceStats('after-one-shot-release ' + noteLabelFromMidi(voice.midi));
+      }
+    });
+  }
+
+  function forgetInactiveReleasedPluckedOneShotsForNewContact() {
+    var articulation = selectedArticulation();
+    if (!articulation || articulation.family !== 'plucked' || articulation.onsetMode !== 'release-strum') return;
+    Object.keys(midiVoices).forEach(function(key) {
+      var voice = midiVoices[key];
+      if (!voice || !voice.oneShot || voice.articulationFamily !== 'plucked' || voice.interactionType !== 'onset-decay') return;
+      if (state.heldNotes[key]) return;
+      var host = getSsliHost();
+      var SL = host && host.SynthLab;
+      var voiceInst = SL && SL.audio && SL.audio.getCurrentInstrument ? SL.audio.getCurrentInstrument() : 0;
+      if (typeof voice.physicalInstId === 'number') voiceInst = voice.physicalInstId;
+      var hasOwnedVoice = SL && SL.physical && voice.physicalVoiceId;
+      var isActive = hasOwnedVoice && SL.physical.isVoiceActive ? SL.physical.isVoiceActive(voice.physicalVoiceId, voiceInst) : false;
+      if (hasOwnedVoice && SL.physical.isVoiceActive && !isActive) {
+        if (voice.oneShotCleanupTimer) window.clearTimeout(voice.oneShotCleanupTimer);
+        delete midiVoices[key];
+        logMidiVoiceStats('after-one-shot-expire ' + noteLabelFromMidi(voice.midi));
+      }
     });
   }
 
@@ -1964,6 +2217,10 @@
     var physicalModel = instrumentType === 'physical' ? getCurrentPhysicalModel(SL) : '';
     var effectiveHeldPhysicalVoices = instrumentType === 'physical' ? (options.velocityLoadVoices || effectiveHeldPhysicalVoicesForVelocity(heldPhysicalVoices)) : 0;
     var playableVelocity = instrumentType === 'physical' ? playablePhysicalMidiVelocity(velocity, effectiveHeldPhysicalVoices) : playableSsliMidiVelocity(velocity);
+    var interactionType = selectedInteractionType();
+    if (instrumentType === 'subtractive' && interactionType === 'pressure-swell') {
+      playableVelocity = 127;
+    }
     var fmVelocity = playableFmMidiVelocity(velocity);
     if (physicalModel === 'strike') {
       playableVelocity = Math.max(8, Math.round(playableVelocity * 0.25));
@@ -1971,7 +2228,7 @@
     if (instrumentType === 'physical') {
       logEvent('audio', 'SSLI physical velocity shaped raw=' + Math.max(1, velocity || 1) + ' playable=' + playableVelocity + ' heldPhysical=' + heldPhysicalVoices + ' effectiveHeld=' + effectiveHeldPhysicalVoices + ' model=' + physicalModel + (options.expectedVoiceCount ? ' expectedVoices=' + options.expectedVoiceCount : ''));
     }
-    logEvent('audio', 'SSLI call startSustainedNote midi=' + midi + ' note=' + noteLabelFromMidi(midi) + ' inst=' + inst + ' engine=' + instrumentType + ' activeBefore=' + heldSsliVoiceCount());
+    logEvent('audio', 'SSLI call startSustainedNote midi=' + midi + ' note=' + noteLabelFromMidi(midi) + ' inst=' + inst + ' engine=' + instrumentType + ' interaction=' + interactionType + ' activeBefore=' + heldSsliVoiceCount());
     if (instrumentType === 'fm' && SL.fm && SL.fm.noteOn) {
       SL.fm.noteOn(midi, fmVelocity, inst);
       if (SL.audio.getActiveOscillators) {
@@ -2030,10 +2287,12 @@
     var requestedVoiceLoad = Math.max(0, Math.round(options.velocityLoadVoices || 0));
     var effectiveVoices = requestedVoiceLoad < PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES ? 0 : requestedVoiceLoad;
     var playableVelocity = playablePhysicalMidiVelocity(velocity, effectiveVoices);
-    var duration = Math.max(0.12, Math.min(0.6, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) / 1000));
-    SL.physical.noteOn(midi, playableVelocity, inst);
+    var durationMs = Math.max(120, Math.min(600, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS)));
+    var physicalVoiceId = options.physicalVoiceId || ('exquis-pluck-' + (++physicalPluckedOneShotSequence));
+    options.physicalVoiceId = physicalVoiceId;
+    SL.physical.noteOn(midi, playableVelocity, inst, { maxDurationMs: durationMs, voiceId: physicalVoiceId });
     state.audioStatus = 'Audio: SSLI plucked ' + noteLabelFromMidi(midi) + '.';
-    logEvent('audio', 'SSLI plucked one-shot ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' decay=natural preset=' + state.soundPresetId);
+    logEvent('audio', 'SSLI plucked one-shot ' + noteLabelFromMidi(midi) + ' velocity=' + playableVelocity + ' pressure=' + Math.max(1, velocity || 1) + ' voice=' + physicalVoiceId + (options.releasedBeforeStart ? ' releaseAge=' + Math.round(diagnosticNowMs() - (options.releasedAtMs || diagnosticNowMs())) + 'ms releaseIntent=' + Math.round(options.releaseIntent || velocity || 0) + ' heldAge=' + Math.round(options.releaseHeldAgeMs || 0) + 'ms' : '') + ' decay=natural preset=' + state.soundPresetId);
     startAudioScope();
     render();
     return true;
@@ -2458,20 +2717,33 @@
         startedAt: Date.now(),
         channel: options.channel,
         pressurePolicy: options.pressurePolicy || 'onset-only',
-        articulationFamily: options.articulationFamily || 'plucked'
+        articulationFamily: options.articulationFamily || 'plucked',
+        interactionType: options.interactionType || 'onset-decay',
+        physicalVoiceId: options.physicalVoiceId || '',
+        physicalInstId: oneShotSL && oneShotSL.audio && oneShotSL.audio.getCurrentInstrument ? oneShotSL.audio.getCurrentInstrument() : 0
       };
-      // Karplus-Strong plucks decay through the loop damping after excitation;
-      // sending noteOff at a fixed timer artificially damps the string.
-      // Original source: Karplus & Strong (1983), CMJ 7(2).
+      // Karplus-Strong plucks decay through loop damping after excitation.
+      // Original source: Karplus & Strong (1983), CMJ 7(2). A later same-string
+      // press is a physical finger mute handled by the model's noteOff.
       midiVoices[key].oneShotNoteOffSent = true;
       logEvent('audio', 'SSLI plucked one-shot natural decay ' + noteLabelFromMidi(midi));
-      midiVoices[key].oneShotCleanupTimer = window.setTimeout(function() {
+      var scheduleOneShotCleanupCheck = function() {
         var voice = midiVoices[key];
         if (!voice || !voice.oneShot) return;
-        if (state.heldNotes[key]) return;
+        if (state.heldNotes[key]) {
+          voice.oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, 120);
+          return;
+        }
+        var cleanupHost = getSsliHost();
+        var cleanupSL = cleanupHost && cleanupHost.SynthLab;
+        if (cleanupSL && cleanupSL.physical && cleanupSL.physical.isVoiceActive && voice.physicalVoiceId && cleanupSL.physical.isVoiceActive(voice.physicalVoiceId, voice.physicalInstId || 0)) {
+          voice.oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, 120);
+          return;
+        }
         delete midiVoices[key];
         logMidiVoiceStats('after-one-shot-expire ' + noteLabelFromMidi(midi));
-      }, Math.max(160, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS) + 120));
+      };
+      midiVoices[key].oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, 120);
       logMidiVoiceStats('after-one-shot ' + noteLabelFromMidi(midi));
       return;
     }
@@ -2485,7 +2757,8 @@
         startedAt: Date.now(),
         channel: options.channel,
         pressurePolicy: options.pressurePolicy || '',
-        articulationFamily: options.articulationFamily || ''
+        articulationFamily: options.articulationFamily || '',
+        interactionType: options.interactionType || selectedInteractionType()
       };
       if (options.articulationFamily === 'plucked' && options.autoDampMs > 0) {
         midiVoices[key].autoDampTimer = window.setTimeout(function() {
@@ -2532,6 +2805,9 @@
       oscillators: oscNodes,
       releaseMs: adsr.r || 180,
       channel: options.channel,
+      pressurePolicy: options.pressurePolicy || '',
+      articulationFamily: options.articulationFamily || '',
+      interactionType: options.interactionType || selectedInteractionType(),
       startedAt: Date.now()
     };
     state.audioStatus = 'Audio: MIDI voice ' + noteLabelFromMidi(midi) + '.';
@@ -2542,14 +2818,14 @@
   function updateMidiVoicePressure(key, pressure) {
     var voice = midiVoices[key];
     if (!voice) return;
-    if (voice.ssli) {
-      if (voice.pressurePolicy === 'onset-only') {
-        if (!voice.skippedOnsetOnlyPressure) {
-          voice.skippedOnsetOnlyPressure = true;
-          logEvent('audio', 'SSLI plucked pressure ignored after onset ' + noteLabelFromMidi(voice.midi));
-        }
-        return;
+    if (interactionTypeFromVoice(voice) === 'onset-decay') {
+      if (!voice.skippedOnsetOnlyPressure) {
+        voice.skippedOnsetOnlyPressure = true;
+        logEvent('audio', (voice.ssli ? 'SSLI ' : 'local ') + (voice.articulationFamily || 'onset-decay') + ' pressure ignored after onset ' + noteLabelFromMidi(voice.midi));
       }
+      return;
+    }
+    if (voice.ssli) {
       var host = getSsliHost();
       if (host && host.SynthLab && getCurrentSsliInstrumentType(host.SynthLab) === 'physical') {
         updatePhysicalPerNotePressure(key, pressure);
@@ -2568,8 +2844,8 @@
     }
   }
 
-  function releaseMidiVoice(key, immediate) {
-    releasePendingArticulation(key);
+  function releaseMidiVoice(key, immediate, releasedHeld) {
+    releasePendingArticulation(key, releasedHeld);
     var voice = midiVoices[key];
     if (voice && voice.ssli) {
       if (voice.oneShot) {
@@ -3380,7 +3656,7 @@
       return;
     }
     var ageMs = held && held.startedAt ? Date.now() - held.startedAt : 999;
-    if (held && ageMs >= 0 && ageMs < EXQUIS_MIN_MIDI_HOLD_MS && !pendingShortNoteReleases[key]) {
+    if (held && ageMs >= 0 && ageMs < EXQUIS_MIN_MIDI_HOLD_MS && !pendingShortNoteReleases[key] && !isPendingReleaseStrumArticulation(key)) {
       pendingShortRawReleases[rawMidi] = Date.now();
       pendingShortNoteReleases[key] = window.setTimeout(function() {
         delete pendingShortNoteReleases[key];
@@ -3393,7 +3669,10 @@
     delete state.heldNotes[key];
     forgetChannelHeldNote(channel, midi);
     recentMidiNoteOffs[rawMidi] = Date.now();
-    releaseMidiVoice(key, false);
+    if (held) {
+      logEvent('midi', 'note-off release input ' + noteLabelFromMidi(midi) + ' age=' + Math.round(ageMs) + 'ms velocity=' + Math.round(held.velocity || 0) + ' currentPressure=' + Math.round(held.pressure || 0) + ' peakPressure=' + Math.round(held.peakPressure || 0) + ' channel=' + (channel + 1));
+    }
+    releaseMidiVoice(key, false, held);
     updateSsliExpressionFromHeldNotes();
     if (state.activeMidiCellId && (!held || state.activeMidiCellId === held.cellId)) {
       state.activeMidiCellId = '';
@@ -3411,6 +3690,7 @@
     var held = state.heldNotes[key];
     if (!held) return;
     held.pressure = Math.max(0, Math.min(127, pressure));
+    held.peakPressure = Math.max(held.peakPressure || 0, held.pressure);
     updateMidiVoicePressure(key, held.pressure);
     state.midiActivity = 'Activity: ' + source + ' ' + noteLabelFromMidi(midi) + ' pressure ' + pressure;
     var now = Date.now();
@@ -3431,12 +3711,25 @@
     return typeof lastOffAt === 'number' && Date.now() - lastOffAt <= 45;
   }
 
+  function isReleaseStrumContactNoise(velocity) {
+    if (velocity > 2) return false;
+    var articulation = selectedArticulation();
+    return articulation && articulation.family === 'plucked' && articulation.onsetMode === 'release-strum';
+  }
+
   function handleMidiNote(rawMidi, velocity, channel) {
     var midi = displayMidiFromRaw(rawMidi);
     if (isReleaseBounceNoteOn(rawMidi, velocity)) {
       logEvent('midi', 'note-on ignored release bounce ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1));
       return;
     }
+    if (isReleaseStrumContactNoise(velocity)) {
+      logEvent('midi', 'note-on ignored release-strum contact noise ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1));
+      return;
+    }
+    cancelPendingReleaseStrumCommitsForContact(midi);
+    dampReleasedPluckedOneShotsForSamePitchContact(midi);
+    forgetInactiveReleasedPluckedOneShotsForNewContact();
     if (window.__exquisLatencyProbe && Array.isArray(window.__exquisLatencyProbe.inputs)) {
       window.__exquisLatencyProbe.inputs.push({ midi: midi, at: Date.now() });
     }
@@ -3465,6 +3758,7 @@
       pc: mod(midi, 12),
       velocity: velocity,
       pressure: velocity,
+      peakPressure: velocity,
       cellId: hitCell ? hitCell.id : '',
       channel: channel,
       startedAt: Date.now()
@@ -3681,11 +3975,31 @@
     midiInput = null;
   }
 
+  function sendMidiLocalSoundOff(reason) {
+    if (!midiOutput || !midiOutput.send) return false;
+    try {
+      for (var channel = 0; channel < 16; channel++) {
+        var status = 0xB0 | channel;
+        // Prevent the hardware/output device from also sounding its own patch
+        // while the exhibit renders the selected SSLI instrument.
+        midiOutput.send([status, 122, 0]); // Local Control Off
+        midiOutput.send([status, 120, 0]); // All Sound Off
+        midiOutput.send([status, 123, 0]); // All Notes Off
+      }
+      logEvent('midi', 'sent MIDI local-control/all-sound-off sweep' + (reason ? ' after ' + reason : ''));
+      return true;
+    } catch (err) {
+      logEvent('midi', 'MIDI local sound-off failed: ' + (err && err.message ? err.message : err));
+      return false;
+    }
+  }
+
   function connectMidiOutput(output) {
     midiOutput = output || null;
     if (midiOutput) {
       state.selectedMidiOutputId = midiOutput.id || '';
       logEvent('midi', 'output ready ' + midiDeviceLabel(midiOutput) + ' id=' + (midiOutput.id || 'unknown'));
+      sendMidiLocalSoundOff('output connect');
     }
   }
 
@@ -4453,7 +4767,7 @@
     }
     els.lastMidi.textContent = state.lastMidi ? 'Last input: ' + noteLabelFromMidi(state.lastMidi.midi) + ' velocity ' + state.lastMidi.velocity : 'Last input: --';
     els.midiActivity.className = state.lastMidi ? 'feedback-live' : 'feedback-neutral';
-    els.midiActivity.textContent = state.midiActivity;
+    els.midiActivity.textContent = state.midiActivity + '\n' + heldMidiActivitySummary();
     els.coachFeedback.className = 'feedback-' + state.feedbackKind;
     els.coachFeedback.textContent = state.feedback;
     els.drillScore.textContent = isPracticeMode ? 'Score: ' + state.correctCount + ' correct / ' + state.missCount + ' missed / streak ' + state.streak : 'Play mode: score paused / all keys available';

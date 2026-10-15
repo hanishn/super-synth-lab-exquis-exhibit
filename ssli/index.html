@@ -135395,12 +135395,29 @@ SL.screens = (function () {
   // so it costs zero CPU when no notes are releasing.
   // ============================================================
 
-  /** Time-sorted release queue: { voice, releaseTime, fadeTime } */
+  /** Time-sorted release queue: { voice, releaseTime, releaseToken } */
   var _releaseQueue = [];
-  /** Whether the RAF loop is currently running */
+  /** Whether the release deadline timer is currently running */
   var isReleaseRAFRunning = false;
-  /** RAF handle for cancellation */
+  /** Timeout handle for the next release deadline */
   var _releaseRAFHandle = 0;
+
+  function _scheduleReleaseQueue() {
+    if (_releaseRAFHandle) {
+      clearTimeout(_releaseRAFHandle);
+      _releaseRAFHandle = 0;
+    }
+    if (_releaseQueue.length === 0) {
+      isReleaseRAFRunning = false;
+      return;
+    }
+    var delayMs = Math.max(0, _releaseQueue[0].releaseTime - performance.now());
+    isReleaseRAFRunning = true;
+    _releaseRAFHandle = setTimeout(function() {
+      _releaseRAFHandle = 0;
+      _processReleaseQueue();
+    }, delayMs);
+  }
 
   /**
    * Process release queue via requestAnimationFrame.
@@ -135417,10 +135434,16 @@ SL.screens = (function () {
     for (var i = 0; i < _releaseQueue.length; i++) {
       var entry = _releaseQueue[i];
       if (now >= entry.releaseTime) {
-        // Clean up and return voice to pool
+        // A stolen/retriggered voice can be immediately reused before its old
+        // release fade cleanup expires. Skip stale cleanup so the live note is
+        // not disconnected or returned to the free stack underneath playback.
         var voice = entry.voice;
+        if (entry.releaseToken !== voice.releaseToken) {
+          continue;
+        }
+        // Clean up and return voice to pool
         voice.inUse = false;
-        if (voice._poolIdx >= 0 && voice._poolIdx < VOICE_POOL_SIZE) {
+        if (voice._poolIdx >= 0 && voice._poolIdx < voicePool.length && freeVoiceStack.indexOf(voice._poolIdx) === -1) {
           freeVoiceStack.push(voice._poolIdx);
         }
         if (voice.oscillators) {
@@ -135450,7 +135473,7 @@ SL.screens = (function () {
     _releaseQueue = remaining;
 
     if (_releaseQueue.length > 0) {
-      _releaseRAFHandle = requestAnimationFrame(_processReleaseQueue);
+      _scheduleReleaseQueue();
     } else {
       isReleaseRAFRunning = false;
     }
@@ -135465,23 +135488,22 @@ SL.screens = (function () {
    */
   function _enqueueRelease(voice, fadeMs) {
     var releaseTime = performance.now() + fadeMs;
+    var releaseToken = voice.releaseToken;
+    _releaseQueue = _releaseQueue.filter(function(entry) { return entry.voice !== voice; });
     // Insert sorted by releaseTime for efficient processing
     var isInserted = false;
     for (var i = 0; i < _releaseQueue.length; i++) {
       if (releaseTime < _releaseQueue[i].releaseTime) {
-        _releaseQueue.splice(i, 0, { voice: voice, releaseTime: releaseTime });
+        _releaseQueue.splice(i, 0, { voice: voice, releaseTime: releaseTime, releaseToken: releaseToken });
         isInserted = true;
         break;
       }
     }
     if (!isInserted) {
-      _releaseQueue.push({ voice: voice, releaseTime: releaseTime });
+      _releaseQueue.push({ voice: voice, releaseTime: releaseTime, releaseToken: releaseToken });
     }
 
-    if (!isReleaseRAFRunning) {
-      isReleaseRAFRunning = true;
-      _releaseRAFHandle = requestAnimationFrame(_processReleaseQueue);
-    }
+    _scheduleReleaseQueue();
   }
 
   // ── Voice Structure ─────────────────────────────────────────
@@ -135504,6 +135526,7 @@ SL.screens = (function () {
       instrumentId: -1,
       midiNote: -1,
       startTime: 0,
+      releaseToken: 0,
 
       // Pre-allocated audio nodes
       masterGain: ctx.createGain(),
@@ -135581,8 +135604,20 @@ SL.screens = (function () {
 
     // Find a free voice from the stack
     var voice = null;
-    if (freeVoiceStack.length > 0) {
-      voice = voicePool[freeVoiceStack.pop()];
+    while (freeVoiceStack.length > 0 && !voice) {
+      var freeIdx = freeVoiceStack.pop();
+      var candidateVoice = voicePool[freeIdx];
+      if (candidateVoice && !candidateVoice.inUse) {
+        voice = candidateVoice;
+      }
+    }
+    if (!voice) {
+      for (var reclaimIdx = 0; reclaimIdx < voicePool.length; reclaimIdx++) {
+        if (voicePool[reclaimIdx] && !voicePool[reclaimIdx].inUse) {
+          voice = voicePool[reclaimIdx];
+          break;
+        }
+      }
     }
 
     // If no free voice, steal the oldest one
@@ -135595,6 +135630,7 @@ SL.screens = (function () {
     }
 
     // Mark voice as in use
+    voice.releaseToken = (voice.releaseToken || 0) + 1;
     voice.inUse = true;
     voice.instrumentId = instrumentId;
     voice.midiNote = midiNote;
@@ -135751,7 +135787,8 @@ SL.screens = (function () {
   function getVoicePoolStats() {
     return Object.assign({}, voicePoolStats, {
       currentlyActive: activeVoices.size,
-      available: voicePool.filter(function(v) { return !v.inUse; }).length
+      available: voicePool.filter(function(v) { return !v.inUse; }).length,
+      freeStack: freeVoiceStack.length
     });
   }
 

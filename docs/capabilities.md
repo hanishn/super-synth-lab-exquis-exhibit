@@ -1,6 +1,6 @@
 # Exquis Fingering Lab Capabilities
 
-Version: `0.1.26`
+Version: `0.1.27`
 
 This exhibit is a visual practice tool for the Intuitive Instruments Exquis. It is intentionally separated into versioned parts and built into standalone `index.html` and `dist/index.html` outputs by `build.py`.
 
@@ -117,6 +117,8 @@ Filter and FX controls now update the current SSLI instrument rather than only c
 For non-physical SSLI engines, Exquis touch pressure maps to SSLI expression through `SynthLab.audio.setExpression`, using pressure to drive output gain and expression cutoff while the note is held.
 
 The hidden SSLI host is now built with its app support files and audio worklet assets. SSLI engines are initialized before selected preset playback, and Exquis note-on velocity is floored to a stronger playable SSLI voice-start level so pressure-first MIDI messages do not create effectively silent notes.
+
+SSLI sustained-note voice pooling must remain allocator-consistent during long Exquis sequences. A released or stolen voice may be waiting for fade cleanup, but stale cleanup must never disconnect a reused live voice, and every voice that reports as available must be discoverable by the allocator. Voice release cleanup must not depend on `requestAnimationFrame`, because the SSLI audio runtime is hosted in a visually hidden iframe where browsers may suspend rendering callbacks while audio continues. Dense PWM Lead-style short-note sequences must not reach a state where diagnostics show available voices while new sustained notes silently fail to start. After any SSLI sustained start, the requested MIDI note must be present in `SynthLab.audio.getActiveOscillators()`; otherwise the exhibit treats the SSLI start as failed, logs pool diagnostics, and falls back to the local MIDI voice instead of recording a false SSLI success.
 
 When the Exquis reuses an MPE channel for a new note before a matching note-off arrives, the previous voice on that channel is explicitly stopped before the next note starts.
 

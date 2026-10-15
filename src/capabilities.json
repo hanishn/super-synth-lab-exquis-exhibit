@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "partVersion": "0.1.26",
+  "partVersion": "0.1.27",
   "capabilities": [
     {
       "id": "exquis_layout_model",
@@ -266,6 +266,9 @@
         "low-velocity Exquis note-on messages are promoted to an audible SSLI voice-start velocity",
         "diagnostic console is visible during practice with reset, copy, and exit controls",
         "diagnostic console can capture SSLI audio health snapshots including active oscillators, voice pool stats, active node count, context state, latency, and scope peak",
+        "SSLI sustained-note voice pooling keeps its available voice count and allocator free list consistent during long short-note Exquis sequences so notes cannot silently drop while diagnostics report available voices",
+        "SSLI voice release cleanup remains live when rendering callbacks are suspended in the hidden audio iframe and does not depend on requestAnimationFrame",
+        "SSLI sustained-note starts are accepted only when the requested MIDI note appears in SynthLab.audio.getActiveOscillators; missing runtime ownership is logged with pool diagnostics and falls back to local MIDI audio",
         "MIDI enablement is the first prominent side-rail action because connecting the Exquis is the first required user step",
         "Exquis MIDI note-on and note-off use SSLI sustained note APIs when SSLI is available",
         "MPE channel reuse releases the prior voice before starting the next note on that channel",
@@ -297,6 +300,10 @@
         "test_regression_plucked_physical_pressure_is_forwarded_per_note_to_audio_engine",
         "test_regression_six_note_physical_pressure_flow_has_stable_final_audio_output",
         "test_regression_adjacent_pluck_has_stable_audio_output",
+        "test_regression_ssli_voice_pool_reclaims_available_emergency_voices_after_short_note_churn",
+        "test_regression_ssli_start_sustained_tracks_every_pwm_lead_short_note",
+        "test_regression_hidden_ssli_iframe_reclaims_released_voices_without_animation_frames",
+        "test_regression_parent_rejects_ssli_sustain_start_without_tracked_voice",
         "test_regression_plucked_presets_buffer_simultaneous_note_ons_into_strum",
         "test_regression_non_plucked_presets_keep_immediate_note_ons",
         "test_regression_released_buffered_strum_note_does_not_start_synth_voice",

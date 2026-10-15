@@ -74,6 +74,194 @@ SSLI_INDEX_PATCHES = [
 """,
     ),
     TextPatch(
+        name="voice-pool-release-queue-skips-stale-reused-voices",
+        before="""  /** Time-sorted release queue: { voice, releaseTime, fadeTime } */
+  var _releaseQueue = [];
+""",
+        after="""  /** Time-sorted release queue: { voice, releaseTime, releaseToken } */
+  var _releaseQueue = [];
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-cleanup-token-guard",
+        before="""      if (now >= entry.releaseTime) {
+        // Clean up and return voice to pool
+        var voice = entry.voice;
+        voice.inUse = false;
+""",
+        after="""      if (now >= entry.releaseTime) {
+        // A stolen/retriggered voice can be immediately reused before its old
+        // release fade cleanup expires. Skip stale cleanup so the live note is
+        // not disconnected or returned to the free stack underneath playback.
+        var voice = entry.voice;
+        if (entry.releaseToken !== voice.releaseToken) {
+          continue;
+        }
+        // Clean up and return voice to pool
+        voice.inUse = false;
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-queue-stores-token",
+        before="""  function _enqueueRelease(voice, fadeMs) {
+    var releaseTime = performance.now() + fadeMs;
+    // Insert sorted by releaseTime for efficient processing
+    var isInserted = false;
+    for (var i = 0; i < _releaseQueue.length; i++) {
+      if (releaseTime < _releaseQueue[i].releaseTime) {
+        _releaseQueue.splice(i, 0, { voice: voice, releaseTime: releaseTime });
+        isInserted = true;
+        break;
+      }
+    }
+    if (!isInserted) {
+      _releaseQueue.push({ voice: voice, releaseTime: releaseTime });
+    }
+""",
+        after="""  function _enqueueRelease(voice, fadeMs) {
+    var releaseTime = performance.now() + fadeMs;
+    var releaseToken = voice.releaseToken;
+    _releaseQueue = _releaseQueue.filter(function(entry) { return entry.voice !== voice; });
+    // Insert sorted by releaseTime for efficient processing
+    var isInserted = false;
+    for (var i = 0; i < _releaseQueue.length; i++) {
+      if (releaseTime < _releaseQueue[i].releaseTime) {
+        _releaseQueue.splice(i, 0, { voice: voice, releaseTime: releaseTime, releaseToken: releaseToken });
+        isInserted = true;
+        break;
+      }
+    }
+    if (!isInserted) {
+      _releaseQueue.push({ voice: voice, releaseTime: releaseTime, releaseToken: releaseToken });
+    }
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-cleanup-uses-hidden-frame-safe-timer",
+        before="""  /** Whether the RAF loop is currently running */
+  var isReleaseRAFRunning = false;
+  /** RAF handle for cancellation */
+  var _releaseRAFHandle = 0;
+""",
+        after="""  /** Whether the release deadline timer is currently running */
+  var isReleaseRAFRunning = false;
+  /** Timeout handle for the next release deadline */
+  var _releaseRAFHandle = 0;
+
+  function _scheduleReleaseQueue() {
+    if (_releaseRAFHandle) {
+      clearTimeout(_releaseRAFHandle);
+      _releaseRAFHandle = 0;
+    }
+    if (_releaseQueue.length === 0) {
+      isReleaseRAFRunning = false;
+      return;
+    }
+    var delayMs = Math.max(0, _releaseQueue[0].releaseTime - performance.now());
+    isReleaseRAFRunning = true;
+    _releaseRAFHandle = setTimeout(function() {
+      _releaseRAFHandle = 0;
+      _processReleaseQueue();
+    }, delayMs);
+  }
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-cleanup-reschedules-deadline-timer",
+        before="""    if (_releaseQueue.length > 0) {
+      _releaseRAFHandle = requestAnimationFrame(_processReleaseQueue);
+    } else {
+      isReleaseRAFRunning = false;
+    }
+""",
+        after="""    if (_releaseQueue.length > 0) {
+      _scheduleReleaseQueue();
+    } else {
+      isReleaseRAFRunning = false;
+    }
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-enqueue-schedules-deadline-timer",
+        before="""    if (!isReleaseRAFRunning) {
+      isReleaseRAFRunning = true;
+      _releaseRAFHandle = requestAnimationFrame(_processReleaseQueue);
+    }
+""",
+        after="""    _scheduleReleaseQueue();
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-token-on-voice",
+        before="""      midiNote: -1,
+      startTime: 0,
+
+      // Pre-allocated audio nodes
+""",
+        after="""      midiNote: -1,
+      startTime: 0,
+      releaseToken: 0,
+
+      // Pre-allocated audio nodes
+""",
+    ),
+    TextPatch(
+        name="voice-pool-acquire-invalidates-stale-release-cleanup",
+        before="""    // Mark voice as in use
+    voice.inUse = true;
+""",
+        after="""    // Mark voice as in use
+    voice.releaseToken = (voice.releaseToken || 0) + 1;
+    voice.inUse = true;
+""",
+    ),
+    TextPatch(
+        name="voice-pool-release-cleanup-requeues-all-allocated-voices-once",
+        before="""        if (voice._poolIdx >= 0 && voice._poolIdx < VOICE_POOL_SIZE) {
+          freeVoiceStack.push(voice._poolIdx);
+        }
+""",
+        after="""        if (voice._poolIdx >= 0 && voice._poolIdx < voicePool.length && freeVoiceStack.indexOf(voice._poolIdx) === -1) {
+          freeVoiceStack.push(voice._poolIdx);
+        }
+""",
+    ),
+    TextPatch(
+        name="voice-pool-acquire-skips-stale-free-stack-entries-and-reclaims-available-voices",
+        before="""    var voice = null;
+    if (freeVoiceStack.length > 0) {
+      voice = voicePool[freeVoiceStack.pop()];
+    }
+""",
+        after="""    var voice = null;
+    while (freeVoiceStack.length > 0 && !voice) {
+      var freeIdx = freeVoiceStack.pop();
+      var candidateVoice = voicePool[freeIdx];
+      if (candidateVoice && !candidateVoice.inUse) {
+        voice = candidateVoice;
+      }
+    }
+    if (!voice) {
+      for (var reclaimIdx = 0; reclaimIdx < voicePool.length; reclaimIdx++) {
+        if (voicePool[reclaimIdx] && !voicePool[reclaimIdx].inUse) {
+          voice = voicePool[reclaimIdx];
+          break;
+        }
+      }
+    }
+""",
+    ),
+    TextPatch(
+        name="voice-pool-stats-report-free-stack-depth",
+        before="""      currentlyActive: activeVoices.size,
+      available: voicePool.filter(function(v) { return !v.inUse; }).length
+""",
+        after="""      currentlyActive: activeVoices.size,
+      available: voicePool.filter(function(v) { return !v.inUse; }).length,
+      freeStack: freeVoiceStack.length
+""",
+    ),
+    TextPatch(
         name="physical-note-on-accepts-bounded-one-shot-options",
         before="""function noteOn(midi, velocity, instId) {
     if (instId === undefined) instId = 0;

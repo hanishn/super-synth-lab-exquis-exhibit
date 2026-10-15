@@ -417,12 +417,13 @@
       parts.push(
         'poolActive=' + (typeof pool.currentlyActive === 'number' ? pool.currentlyActive : 'n/a'),
         'poolAvail=' + (typeof pool.available === 'number' ? pool.available : 'n/a'),
+        'poolStack=' + (typeof pool.freeStack === 'number' ? pool.freeStack : 'n/a'),
         'poolPeak=' + (typeof pool.peakUsage === 'number' ? pool.peakUsage : 'n/a'),
         'steals=' + (typeof pool.steals === 'number' ? pool.steals : 'n/a'),
         'poolTotal=' + (typeof pool.totalAllocated === 'number' ? pool.totalAllocated : 'n/a')
       );
     } else {
-      parts.push('poolActive=n/a', 'poolAvail=n/a', 'poolPeak=n/a', 'steals=n/a', 'poolTotal=n/a');
+      parts.push('poolActive=n/a', 'poolAvail=n/a', 'poolStack=n/a', 'poolPeak=n/a', 'steals=n/a', 'poolTotal=n/a');
     }
     logEvent('audio', parts.join(' '));
     if (type !== 'physical' && pool && activeOscs && typeof activeOscs.size === 'number' && typeof pool.currentlyActive === 'number' && activeOscs.size !== pool.currentlyActive) {
@@ -2238,6 +2239,12 @@
       logEvent('audio', 'SSLI FM direct sustain start ' + noteLabelFromMidi(midi) + ' velocity=' + fmVelocity);
     } else {
       SL.audio.startSustainedNote(midi, playableVelocity);
+    }
+    var postStartOscs = SL.audio.getActiveOscillators ? SL.audio.getActiveOscillators() : null;
+    if (postStartOscs && postStartOscs.has && !postStartOscs.has(midi)) {
+      var postStartPool = SL.audio.getVoicePoolStats ? SL.audio.getVoicePoolStats() : null;
+      logEvent('audio', 'SSLI MIDI sustain failed ' + noteLabelFromMidi(midi) + ' missing active oscillator after start' + (postStartPool ? ' poolActive=' + postStartPool.currentlyActive + ' poolAvail=' + postStartPool.available + ' poolStack=' + (typeof postStartPool.freeStack === 'number' ? postStartPool.freeStack : 'n/a') + ' poolTotal=' + postStartPool.totalAllocated + ' steals=' + postStartPool.steals : ''));
+      return false;
     }
     if (window.__exquisLatencyProbe && Array.isArray(window.__exquisLatencyProbe.starts)) {
       window.__exquisLatencyProbe.starts.push({ midi: midi, at: Date.now() });

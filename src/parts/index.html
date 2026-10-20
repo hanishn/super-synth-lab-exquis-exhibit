@@ -58,12 +58,20 @@
       <fieldset class="practice-control choice-switch exercise-switch" data-testid="exercise-control">
         <legend>Exercise</legend>
         <div class="exercise-buttons" id="exerciseButtons" data-testid="exercise-buttons"></div>
-        <select id="exerciseSelect" class="sr-only" data-testid="exercise-select" aria-hidden="true" tabindex="-1"></select>
+        <select id="exerciseSelect" data-testid="exercise-select"></select>
       </fieldset>
       <label class="practice-control" data-testid="fingering-control">
         <span>Finger Pattern</span>
         <select id="strategySelect" data-testid="strategy-select"></select>
       </label>
+      <label class="practice-control" id="gripFingeringControl" data-testid="grip-fingering-control" hidden>
+        <span>Grip Fingering</span>
+        <select id="gripFingeringSelect" data-testid="grip-fingering-select"></select>
+      </label>
+      <div class="practice-control" id="harmonyTriadControl" data-testid="harmony-triad-controls" hidden>
+        <label><span>Triad quality</span><select id="harmonyQualitySelect" data-testid="harmony-quality-select"><option value="major">Major</option><option value="minor">Minor</option><option value="diminished">Diminished</option><option value="augmented">Augmented</option></select></label>
+        <label><span>Inversion</span><select id="harmonyInversionSelect" data-testid="harmony-inversion-select"><option value="0">Root</option><option value="1">First</option><option value="2">Second</option></select></label>
+      </div>
       <label class="practice-control control-break" data-testid="view-control">
         <span>Overlay</span>
         <select id="viewSelect" data-testid="view-select">
@@ -117,11 +125,26 @@
   </section>
 
   <aside class="side-panel" aria-label="Practice guidance">
-    <section class="midi-coach-section" data-testid="midi-coach-section">
-      <h2>MIDI Coach</h2>
+    <section class="practice-coach" data-testid="practice-coach" aria-label="Practice Coach">
+      <h2>Practice Coach</h2>
       <p id="midiStatus" role="status" aria-live="polite" data-testid="midi-status">Connect your Exquis to start live coaching.</p>
+      <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
+      <p class="coach-field-label">Now play</p>
+      <p id="coachNowPlaying" class="coach-now-playing" data-testid="coach-now-playing">C4</p>
+      <p id="coachActionCue" class="coach-action-cue" data-testid="coach-action-cue">Follow the highlighted target.</p>
+      <div class="coach-result" role="status" aria-live="polite" data-testid="coach-result">
+        <p id="coachFeedback" class="feedback-neutral" data-testid="coach-feedback">Enable MIDI to compare the physical Exquis against the current target.</p>
+      </div>
+      <button id="coachNextAction" type="button" data-testid="coach-next-action">Hear target</button>
+      <div class="coach-progress" data-testid="coach-progress">
+        <p id="drillScore" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
+      </div>
+    </section>
+    <details class="practice-tools" data-testid="hardware-tools">
+      <summary>Hardware tools</summary>
+      <section class="midi-coach-section" data-testid="midi-coach-section">
+      <h2>Connection and diagnostics</h2>
       <div class="midi-action-row">
-        <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
         <button id="syncExquis" type="button" data-testid="sync-exquis" disabled>Sync Key/Mode</button>
         <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Probe</button>
         <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" title="Probe native Exquis root/scale write masks" disabled>Native</button>
@@ -156,13 +179,14 @@
       <p id="exquisSyncStatus" data-testid="exquis-sync-status">Exquis sync: off</p>
       <p id="midiActivity" class="feedback-neutral" role="status" aria-live="polite" data-testid="midi-activity">Activity: none</p>
       <p id="lastMidi" data-testid="last-midi">Last input: --</p>
-      <p id="coachFeedback" role="status" aria-live="polite" data-testid="coach-feedback">Enable MIDI to compare the physical Exquis against the current target.</p>
-      <p id="drillScore" role="status" aria-live="polite" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
-    </section>
+      </section>
+    </details>
+    <details class="practice-reference" data-testid="practice-reference">
+      <summary>Target reference</summary>
     <section class="practice-target-section practice-control" data-testid="practice-target-panel">
       <h2>Target</h2>
       <p class="current-note" id="currentNote" data-testid="current-note">C4</p>
-      <p id="currentDegree">Scale degree 1</p>
+      <p id="currentDegree" data-testid="current-degree">Scale degree 1</p>
       <p id="targetFinger" class="target-finger" data-testid="target-finger">Pinky (5)</p>
       <p id="targetStep" class="target-step" data-testid="target-step">Step 1</p>
       <div class="target-rationale" data-testid="target-rationale">
@@ -183,17 +207,9 @@
       <button id="testAudio" type="button" data-testid="test-audio">Test Tone</button>
       <button id="playScale" type="button" data-testid="play-scale">Play Path</button>
     </section>
-    <section class="guide-section">
-      <h2>Guide</h2>
-      <label>
-        <span>Guide Tone</span>
-        <select id="toneSelect" data-testid="tone-select">
-          <option value="soft_wurli">Soft Wurli</option>
-          <option value="round_sine">Round Sine</option>
-          <option value="muted_pluck">Muted Pluck</option>
-        </select>
-      </label>
-    </section>
+    </details>
+    <details class="practice-tools" data-testid="practice-tools">
+      <summary>Session settings</summary>
     <section class="audio-section">
       <h2>Sound</h2>
       <div class="sound-row preset-row">
@@ -298,5 +314,6 @@
       <h2>Assumption</h2>
       <p id="assumptionText">This first build uses a documented Exquis-style model: horizontal semitones and vertical thirds. It is meant for fingering exploration, then calibration against the physical keyboard.</p>
     </section>
+    </details>
   </aside>
 </main>

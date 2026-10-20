@@ -141,8 +141,64 @@
       id: 'root_returns',
       name: 'Root returns',
       prompt: 'Return to the centered root between every scale tone so the hand keeps its home reference.'
+    },
+    {
+      id: 'major_third',
+      name: 'Major third',
+      prompt: 'Press the root and third together as one compact interval grip.'
+    },
+    {
+      id: 'major_triad',
+      name: 'Major triad',
+      prompt: 'Press the root, third, and fifth together as one compact grip.'
+    },
+    {
+      id: 'harmony_triad',
+      name: 'Harmony triad',
+      prompt: 'Choose a quality and inversion, then press the highlighted chord shape together.'
+    },
+    {
+      id: 'voice_leading',
+      name: 'Voice leading',
+      prompt: 'Play the source triad, then move only the voices needed for the closest common-tone destination.'
+    },
+    {
+      id: 'c_major_progression',
+      name: 'C major I-IV-V-I',
+      prompt: 'Play each chord in order. Keep the pulse steady and repair the current chord before moving on.'
+    },
+    {
+      id: 'c_major_ii_v_i',
+      name: 'C major ii-V-I',
+      prompt: 'Play each chord in order. Keep the pulse steady and repair the current chord before moving on.'
+    },
+    {
+      id: 'ear_minor_third',
+      name: 'Hear a minor third',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_major_third',
+      name: 'Hear a major third',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_perfect_fourth',
+      name: 'Hear a perfect fourth',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_perfect_fifth',
+      name: 'Hear a perfect fifth',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     }
   ];
+  var HEARD_INTERVAL_FIXTURES = {
+    ear_minor_third: { quality: 'minor-third', semitones: 3 },
+    ear_major_third: { quality: 'major-third', semitones: 4 },
+    ear_perfect_fourth: { quality: 'perfect-fourth', semitones: 5 },
+    ear_perfect_fifth: { quality: 'perfect-fifth', semitones: 7 }
+  };
   var ROW_COUNTS = [6, 5, 6, 5, 6, 5, 6, 5, 6, 5, 6];
   var CELL_W = 48.49742261192856;
   var CELL_H = 56;
@@ -157,6 +213,630 @@
   var SSLI_NORMALIZATION_MAX_OUTPUT_GAIN = 1;
   var SSLI_MATURE_ENGINE_NORMALIZATION = null;
   var SSLI_PRESET_NORMALIZATION = {
+  'FM::Ambient::Breathing Space': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Deep Space Hum': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Fog Horn': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Forest Canopy': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Frozen Lake': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Glass Rain': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Memory Wash': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Northern Lights': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Quantum Field': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Starfield': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Submerged': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Ambient::Tape Echo Pad': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bass::808 Sub FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bass::ACID BASS FM': { instrumentVolume: 46, outputGain: 1 },
+  'FM::Bass::BASS 1': { instrumentVolume: 64, outputGain: 1 },
+  'FM::Bass::Distortion Bass': { instrumentVolume: 61, outputGain: 1 },
+  'FM::Bass::FRETLESS BASS FM': { instrumentVolume: 63, outputGain: 1 },
+  'FM::Bass::FRETLESS BASS FM II': { instrumentVolume: 87, outputGain: 1 },
+  'FM::Bass::Muted Bass': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bass::PICK BASS FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bass::Reese Bass': { instrumentVolume: 59, outputGain: 1 },
+  'FM::Bass::SLAP BASS FM': { instrumentVolume: 50, outputGain: 1 },
+  'FM::Bass::SLAP BASS FM II': { instrumentVolume: 90, outputGain: 1 },
+  'FM::Bass::SUB BASS FM': { instrumentVolume: 70, outputGain: 1 },
+  'FM::Bass::SYNTH BASS FM': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Bass::SYNTH BASS FM II': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bass::Wobble Bass': { instrumentVolume: 54, outputGain: 1 },
+  'FM::Bells::CHURCH BELL': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::CHURCH BELL II': { instrumentVolume: 49, outputGain: 1 },
+  'FM::Bells::COWBELL': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::GAMELAN FM': { instrumentVolume: 84, outputGain: 1 },
+  'FM::Bells::KALIMBA': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::STEEL DRUM FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::STEEL DRUMS': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::TUBULAR BELLS': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::WIND CHIME': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Bells::WIND CHIMES': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Brass::BRASS 1': { instrumentVolume: 40, outputGain: 1 },
+  'FM::Brass::BRASS ENSEMBLE FM': { instrumentVolume: 70, outputGain: 1 },
+  'FM::Brass::SYNTH BRASS FM': { instrumentVolume: 49, outputGain: 1 },
+  'FM::Brass::Synth BRASS SECTION FM': { instrumentVolume: 94, outputGain: 1 },
+  'FM::Brass::Synth FRENCH HORN FM': { instrumentVolume: 46, outputGain: 1 },
+  'FM::Brass::Synth FRENCH HORN FM II': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Brass::Synth TROMBONE FM': { instrumentVolume: 62, outputGain: 1 },
+  'FM::Brass::Synth TROMBONE FM II': { instrumentVolume: 84, outputGain: 1 },
+  'FM::Brass::Synth TRUMPET FM': { instrumentVolume: 52, outputGain: 1 },
+  'FM::Brass::Synth TRUMPET FM II': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Angel Choir': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Dark Chant': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Ethereal Voices': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Robot Voice': { instrumentVolume: 66, outputGain: 1 },
+  'FM::Choir/Vocal::Soprano Solo': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Vocal Formant Ah': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Vocal Formant Ooh': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Choir/Vocal::Vox Humana': { instrumentVolume: 72, outputGain: 1 },
+  'FM::Cinematic::Choir of Ghosts': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Cinematic::Cosmic Dawn': { instrumentVolume: 90, outputGain: 1 },
+  'FM::Cinematic::Danger Zone': { instrumentVolume: 50, outputGain: 1 },
+  'FM::Cinematic::Distant Horizon': { instrumentVolume: 87, outputGain: 1 },
+  'FM::Cinematic::Epic Brass Stab': { instrumentVolume: 84, outputGain: 1 },
+  'FM::Cinematic::Heartbeat Sub': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Cinematic::Impact Boom': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Cinematic::Neon City': { instrumentVolume: 61, outputGain: 1 },
+  'FM::Cinematic::Sci-Fi Scanner': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Cinematic::Tension Pulse': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Cinematic::Underscore Drone': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Cinematic::War Drums FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::FX::EXPLOSION FM': { instrumentVolume: 59, outputGain: 1 },
+  'FM::FX::INIT FM': { instrumentVolume: 57, outputGain: 1 },
+  'FM::FX::LASER': { instrumentVolume: 46, outputGain: 1 },
+  'FM::FX::LASER FM': { instrumentVolume: 56, outputGain: 1 },
+  'FM::FX::METALLIC HIT': { instrumentVolume: 76, outputGain: 1 },
+  'FM::FX::SIREN FM': { instrumentVolume: 57, outputGain: 1 },
+  'FM::FX::SITAR FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::FX::SPACE EFFECT': { instrumentVolume: 74, outputGain: 1 },
+  'FM::FX::SPACE FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::FX::WOBBLE FM': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Guitar::12-STRING GUITAR': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Guitar::CLEAN ELECTRIC': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Guitar::DISTORTED GUITAR': { instrumentVolume: 80, outputGain: 1 },
+  'FM::Guitar::MUTED GUITAR': { instrumentVolume: 98, outputGain: 1 },
+  'FM::Guitar::STEEL GUITAR': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Guitar::Synth ACOUSTIC GUITAR': { instrumentVolume: 96, outputGain: 1 },
+  'FM::Industrial::Circuit Bent': { instrumentVolume: 71, outputGain: 1 },
+  'FM::Industrial::Drill Press': { instrumentVolume: 63, outputGain: 1 },
+  'FM::Industrial::Factory Floor': { instrumentVolume: 93, outputGain: 1 },
+  'FM::Industrial::Metal Grind': { instrumentVolume: 59, outputGain: 1 },
+  'FM::Industrial::Pneumatic Hit': { instrumentVolume: 97, outputGain: 1 },
+  'FM::Industrial::Power Surge': { instrumentVolume: 59, outputGain: 1 },
+  'FM::Industrial::Rust': { instrumentVolume: 88, outputGain: 1 },
+  'FM::Industrial::Voltage Drop': { instrumentVolume: 74, outputGain: 1 },
+  'FM::Keys::CELESTA': { instrumentVolume: 87, outputGain: 1 },
+  'FM::Keys::CELESTA FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::CLAVINET': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::CLAVINET FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::DX RHODES': { instrumentVolume: 69, outputGain: 1 },
+  'FM::Keys::E.PIANO 1': { instrumentVolume: 50, outputGain: 1 },
+  'FM::Keys::E.PIANO 2': { instrumentVolume: 71, outputGain: 1 },
+  'FM::Keys::GLOCKENSPIEL': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::HARPSICHORD': { instrumentVolume: 86, outputGain: 1 },
+  'FM::Keys::HARPSICHORD FM': { instrumentVolume: 85, outputGain: 1 },
+  'FM::Keys::MARIMBA': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::MUSIC BOX': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::MUSIC BOX FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::TINE PIANO': { instrumentVolume: 53, outputGain: 1 },
+  'FM::Keys::TOY PIANO FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Keys::VIBRAPHONE': { instrumentVolume: 71, outputGain: 1 },
+  'FM::Keys::WURLITZER FM': { instrumentVolume: 44, outputGain: 1 },
+  'FM::Keys::XYLOPHONE': { instrumentVolume: 83, outputGain: 1 },
+  'FM::Leads::DIGITAL LEAD': { instrumentVolume: 40, outputGain: 1 },
+  'FM::Leads::Laser Lead': { instrumentVolume: 64, outputGain: 1 },
+  'FM::Leads::PORTAMENTO FM': { instrumentVolume: 54, outputGain: 1 },
+  'FM::Leads::PORTAMENTO LEAD FM': { instrumentVolume: 55, outputGain: 1 },
+  'FM::Leads::Portamento Lead': { instrumentVolume: 63, outputGain: 1 },
+  'FM::Leads::SAW LEAD FM': { instrumentVolume: 64, outputGain: 1 },
+  'FM::Leads::SCREAMER FM': { instrumentVolume: 63, outputGain: 1 },
+  'FM::Leads::SQUARE LEAD FM': { instrumentVolume: 58, outputGain: 1 },
+  'FM::Leads::SYN-LEAD': { instrumentVolume: 39, outputGain: 1 },
+  'FM::Leads::Screaming Lead': { instrumentVolume: 55, outputGain: 1 },
+  'FM::Leads::Singing Lead': { instrumentVolume: 63, outputGain: 1 },
+  'FM::Leads::Sync Lead FM': { instrumentVolume: 65, outputGain: 1 },
+  'FM::Leads::TRANCE FM': { instrumentVolume: 99, outputGain: 1 },
+  'FM::Leads::WHISTLE FM': { instrumentVolume: 64, outputGain: 1 },
+  'FM::Leads::WHISTLE LEAD': { instrumentVolume: 71, outputGain: 1 },
+  'FM::Modern::FM CHIPTUNE': { instrumentVolume: 44, outputGain: 1 },
+  'FM::Modern::FM DIGITAL PAD': { instrumentVolume: 76, outputGain: 1 },
+  'FM::Modern::FM DROP': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Modern::FM GLITCH': { instrumentVolume: 76, outputGain: 1 },
+  'FM::Modern::FM PLUCK': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Modern::FM RISER': { instrumentVolume: 66, outputGain: 1 },
+  'FM::Modern::FM STAB': { instrumentVolume: 58, outputGain: 1 },
+  'FM::Modern::FM WOBBLE': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Organ::FARFISA FM': { instrumentVolume: 55, outputGain: 1 },
+  'FM::Organ::GOSPEL ORGAN FM': { instrumentVolume: 73, outputGain: 1 },
+  'FM::Organ::JAZZ ORGAN FM': { instrumentVolume: 60, outputGain: 1 },
+  'FM::Organ::JAZZ ORGAN FM II': { instrumentVolume: 75, outputGain: 1 },
+  'FM::Organ::ORGAN 1': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Organ::PIPE ORGAN FM': { instrumentVolume: 55, outputGain: 1 },
+  'FM::Organ::PIPE ORGAN FM II': { instrumentVolume: 55, outputGain: 1 },
+  'FM::Organ::ROCK ORGAN FM': { instrumentVolume: 51, outputGain: 1 },
+  'FM::Organ::ROCK ORGAN FM II': { instrumentVolume: 56, outputGain: 1 },
+  'FM::Organ::Synth HARMONICA FM': { instrumentVolume: 68, outputGain: 1 },
+  'FM::Pads::ATMOSPHERE FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::Analog Warmth': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::CHOIR FM': { instrumentVolume: 81, outputGain: 1 },
+  'FM::Pads::CHOIR FM PAD': { instrumentVolume: 59, outputGain: 1 },
+  'FM::Pads::Choir Pad FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::DARK FM PAD': { instrumentVolume: 88, outputGain: 1 },
+  'FM::Pads::Dark Matter': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::EVOLVING PAD FM': { instrumentVolume: 75, outputGain: 1 },
+  'FM::Pads::GLASS FM PAD': { instrumentVolume: 75, outputGain: 1 },
+  'FM::Pads::GLASS PAD FM': { instrumentVolume: 91, outputGain: 1 },
+  'FM::Pads::Glass Pad': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::Metallic Shimmer': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Pads::SHIMMER PAD FM': { instrumentVolume: 95, outputGain: 1 },
+  'FM::Pads::WARM FM PAD': { instrumentVolume: 70, outputGain: 1 },
+  'FM::Pads::WARM PAD FM': { instrumentVolume: 76, outputGain: 1 },
+  'FM::Percussion::FM CLAP': { instrumentVolume: 47, outputGain: 1 },
+  'FM::Percussion::FM CONGA': { instrumentVolume: 71, outputGain: 1 },
+  'FM::Percussion::FM COWBELL': { instrumentVolume: 62, outputGain: 1 },
+  'FM::Percussion::FM SNARE': { instrumentVolume: 48, outputGain: 1 },
+  'FM::Percussion::FM TOM': { instrumentVolume: 76, outputGain: 1 },
+  'FM::Percussion::FM TYMPANI': { instrumentVolume: 95, outputGain: 1 },
+  'FM::Strings::CONTRABASS FM': { instrumentVolume: 62, outputGain: 1 },
+  'FM::Strings::ENSEMBLE FM': { instrumentVolume: 70, outputGain: 1 },
+  'FM::Strings::STRINGS FM': { instrumentVolume: 65, outputGain: 1 },
+  'FM::Strings::Synth CELLO FM': { instrumentVolume: 45, outputGain: 1 },
+  'FM::Strings::Synth HARP FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Strings::Synth PIZZICATO FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Strings::Synth PIZZICATO FM II': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Strings::Synth SOLO CELLO FM': { instrumentVolume: 68, outputGain: 1 },
+  'FM::Strings::Synth SOLO VIOLIN FM': { instrumentVolume: 59, outputGain: 1 },
+  'FM::Strings::Synth VIOLIN FM': { instrumentVolume: 65, outputGain: 1 },
+  'FM::Synth Pop::Depeche Bass': { instrumentVolume: 98, outputGain: 1 },
+  'FM::Synth Pop::Electro Funk Bass': { instrumentVolume: 74, outputGain: 1 },
+  'FM::Synth Pop::FM Choir Pad': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Synth Pop::Glassy Keys': { instrumentVolume: 96, outputGain: 1 },
+  'FM::Synth Pop::Neon Arp': { instrumentVolume: 88, outputGain: 1 },
+  'FM::Synth Pop::Pluck Synth': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Synth Pop::Pop Pad': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Synth Pop::Retro Stab': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Synth Pop::Synthwave Lead': { instrumentVolume: 57, outputGain: 1 },
+  'FM::Synth Pop::Talk Box FM': { instrumentVolume: 73, outputGain: 1 },
+  'FM::Vintage::70s FM Brass': { instrumentVolume: 72, outputGain: 1 },
+  'FM::Vintage::80s Slap Bass': { instrumentVolume: 68, outputGain: 1 },
+  'FM::Vintage::Crystal EP': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Vintage::DX Rhodes': { instrumentVolume: 66, outputGain: 1 },
+  'FM::Vintage::FM Wurlitzer': { instrumentVolume: 58, outputGain: 1 },
+  'FM::Vintage::Poly-5 FM': { instrumentVolume: 68, outputGain: 1 },
+  'FM::Vintage::Retro Tine Piano': { instrumentVolume: 66, outputGain: 1 },
+  'FM::Vintage::Synth Analog Strings FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Vintage::Vintage Clav': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Vintage::Vinyl Organ': { instrumentVolume: 62, outputGain: 1 },
+  'FM::Woodwinds::Synth FM BASSOON': { instrumentVolume: 69, outputGain: 1 },
+  'FM::Woodwinds::Synth FM CLARINET': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Woodwinds::Synth FM FLUTE': { instrumentVolume: 56, outputGain: 1 },
+  'FM::Woodwinds::Synth FM OBOE': { instrumentVolume: 100, outputGain: 1 },
+  'FM::Woodwinds::Synth FM PICCOLO': { instrumentVolume: 95, outputGain: 1 },
+  'FM::Woodwinds::Synth FM SAXOPHONE': { instrumentVolume: 62, outputGain: 1 },
+  'FM::World::Balafon FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Erhu FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Gamelan Bell': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Kalimba FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Oud FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Sitar FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Steel Drum FM': { instrumentVolume: 90, outputGain: 1 },
+  'FM::World::Synth Didgeridoo FM': { instrumentVolume: 100, outputGain: 1 },
+  'FM::World::Synth Shakuhachi FM': { instrumentVolume: 88, outputGain: 1 },
+  'FM::World::Tabla FM': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ambient/Texture::Aeolian Harp': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ambient/Texture::Breath Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ambient/Texture::Crystal Shimmer': { instrumentVolume: 77, outputGain: 1 },
+  'Physical::Ambient/Texture::Deep Ocean Hum': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ambient/Texture::Frozen Strings': { instrumentVolume: 83, outputGain: 1 },
+  'Physical::Ambient/Texture::Glass Forest': { instrumentVolume: 85, outputGain: 1 },
+  'Physical::Ambient/Texture::Rain on Metal': { instrumentVolume: 76, outputGain: 1 },
+  'Physical::Ambient/Texture::Wind Through Reeds': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Accordion': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Bagpipe Drone': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Bansuri': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Bassoon': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Blown Jug': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Bottle Blow': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Clarinet': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Concert Flute': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Didgeridoo': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Harmonica': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Oboe': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Ocarina': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Pan Pipe': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Piccolo': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Quena': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Recorder': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Shakuhachi': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Blown::Tin Whistle': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Bowed::Bowed Glass': { instrumentVolume: 75, outputGain: 1 },
+  'Physical::Bowed::Cello': { instrumentVolume: 65, outputGain: 1 },
+  'Physical::Bowed::Cello Sul Tasto': { instrumentVolume: 72, outputGain: 1 },
+  'Physical::Bowed::Contrabass': { instrumentVolume: 64, outputGain: 1 },
+  'Physical::Bowed::Erhu': { instrumentVolume: 60, outputGain: 1 },
+  'Physical::Bowed::Fiddle': { instrumentVolume: 64, outputGain: 1 },
+  'Physical::Bowed::Hurdy Gurdy': { instrumentVolume: 61, outputGain: 1 },
+  'Physical::Bowed::Morin Khuur': { instrumentVolume: 63, outputGain: 1 },
+  'Physical::Bowed::Nyckelharpa': { instrumentVolume: 69, outputGain: 1 },
+  'Physical::Bowed::Rebab': { instrumentVolume: 63, outputGain: 1 },
+  'Physical::Bowed::Sarangi': { instrumentVolume: 59, outputGain: 1 },
+  'Physical::Bowed::String Ensemble': { instrumentVolume: 71, outputGain: 1 },
+  'Physical::Bowed::Viola': { instrumentVolume: 72, outputGain: 1 },
+  'Physical::Bowed::Violin': { instrumentVolume: 69, outputGain: 1 },
+  'Physical::Cinematic::Distant Thunder Drum': { instrumentVolume: 85, outputGain: 1 },
+  'Physical::Cinematic::Horror Strings': { instrumentVolume: 53, outputGain: 1 },
+  'Physical::Cinematic::Impact Metal': { instrumentVolume: 96, outputGain: 1 },
+  'Physical::Cinematic::Spectral Choir': { instrumentVolume: 74, outputGain: 1 },
+  'Physical::Cinematic::Tension Riser': { instrumentVolume: 52, outputGain: 1 },
+  'Physical::Cinematic::Whale Song': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Berimbau': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Dizi': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Duduk': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Gamelan Metallophone': { instrumentVolume: 86, outputGain: 1 },
+  'Physical::Ethnic::Kamancheh': { instrumentVolume: 65, outputGain: 1 },
+  'Physical::Ethnic::Kora': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Mbira': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Ethnic::Santur': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Bowed Metal': { instrumentVolume: 56, outputGain: 1 },
+  'Physical::Experimental::Bowed Plate': { instrumentVolume: 53, outputGain: 1 },
+  'Physical::Experimental::Bowed Saw': { instrumentVolume: 73, outputGain: 1 },
+  'Physical::Experimental::Feedback Resonator': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Metallic Drone': { instrumentVolume: 55, outputGain: 1 },
+  'Physical::Experimental::Prepared Piano': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Resonant Body': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Struck Ice': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Struck Springs': { instrumentVolume: 76, outputGain: 1 },
+  'Physical::Experimental::Struck String': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Experimental::Wind Chime': { instrumentVolume: 76, outputGain: 1 },
+  'Physical::Experimental::Wire Zither': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Hybrid::Blown Metal': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Hybrid::Bowed Bass Pluck': { instrumentVolume: 61, outputGain: 1 },
+  'Physical::Hybrid::Glass Marimba': { instrumentVolume: 82, outputGain: 1 },
+  'Physical::Hybrid::Plucked Membrane': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Hybrid::Struck Breath': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Banjo': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Bass Guitar': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Concert Harp': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Dulcimer': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Electric Guitar Clean': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Guzheng': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Harpsichord': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Kalimba': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Koto': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Lute': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Mandolin': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Music Box': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Nylon Guitar': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Oud': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Pizzicato': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Sitar': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Steel Guitar': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Ukulele': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Plucked::Zither': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Struck::Agogo Bells': { instrumentVolume: 89, outputGain: 1 },
+  'Physical::Struck::Balafon': { instrumentVolume: 81, outputGain: 1 },
+  'Physical::Struck::Church Bell': { instrumentVolume: 100, outputGain: 1 },
+  'Physical::Struck::Cowbell': { instrumentVolume: 90, outputGain: 1 },
+  'Physical::Struck::Crotales': { instrumentVolume: 81, outputGain: 1 },
+  'Physical::Struck::Djembe': { instrumentVolume: 88, outputGain: 1 },
+  'Physical::Struck::Frame Drum': { instrumentVolume: 81, outputGain: 1 },
+  'Physical::Struck::Glass Chime': { instrumentVolume: 85, outputGain: 1 },
+  'Physical::Struck::Glockenspiel': { instrumentVolume: 83, outputGain: 1 },
+  'Physical::Struck::Gong': { instrumentVolume: 82, outputGain: 1 },
+  'Physical::Struck::Hang Drum': { instrumentVolume: 83, outputGain: 1 },
+  'Physical::Struck::Marimba': { instrumentVolume: 80, outputGain: 1 },
+  'Physical::Struck::Singing Bowl': { instrumentVolume: 86, outputGain: 1 },
+  'Physical::Struck::Steel Drum': { instrumentVolume: 84, outputGain: 1 },
+  'Physical::Struck::Tabla': { instrumentVolume: 88, outputGain: 1 },
+  'Physical::Struck::Temple Block': { instrumentVolume: 84, outputGain: 1 },
+  'Physical::Struck::Timpani': { instrumentVolume: 87, outputGain: 1 },
+  'Physical::Struck::Tubular Bells': { instrumentVolume: 96, outputGain: 1 },
+  'Physical::Struck::Vibraphone': { instrumentVolume: 81, outputGain: 1 },
+  'Physical::Struck::Wood Block': { instrumentVolume: 92, outputGain: 1 },
+  'Physical::Struck::Xylophone': { instrumentVolume: 87, outputGain: 1 },
+  'Subtractive::Ambient::Coral Reef': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::Ambient::Crystal Cave': { instrumentVolume: 82, outputGain: 1 },
+  'Subtractive::Ambient::Deep Space': { instrumentVolume: 94, outputGain: 1 },
+  'Subtractive::Ambient::First Light': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Ambient::Forest Whisper': { instrumentVolume: 98, outputGain: 1 },
+  'Subtractive::Ambient::Ghost Choir': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Ambient::Midnight Rain': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::Ambient::Monastery': { instrumentVolume: 75, outputGain: 1 },
+  'Subtractive::Ambient::Nebula Cloud': { instrumentVolume: 96, outputGain: 1 },
+  'Subtractive::Ambient::Northern Lights': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Ambient::Rainfall': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Ambient::Solar Wind': { instrumentVolume: 81, outputGain: 1 },
+  'Subtractive::Ambient::Tidal Drone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Ambient::Tidal Drone II': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::Ambient::Twilight Zone': { instrumentVolume: 66, outputGain: 1 },
+  'Subtractive::Analog Classics::ARP Odyssey Sweep': { instrumentVolume: 64, outputGain: 1 },
+  'Subtractive::Analog Classics::Acid Squelch': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Analog Classics::Chorus Poly Pad': { instrumentVolume: 96, outputGain: 1 },
+  'Subtractive::Analog Classics::Korg Mono Lead': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Analog Classics::MS-20 Growl': { instrumentVolume: 80, outputGain: 1 },
+  'Subtractive::Analog Classics::Minimoog Bass': { instrumentVolume: 91, outputGain: 1 },
+  'Subtractive::Analog Classics::Model D Funk': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Analog Classics::OB-Xa Strings': { instrumentVolume: 73, outputGain: 1 },
+  'Subtractive::Analog Classics::Poly Analog Ensemble': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::Analog Classics::Poly-5 Synth': { instrumentVolume: 85, outputGain: 1 },
+  'Subtractive::Analog Classics::SH-101 Lead': { instrumentVolume: 92, outputGain: 1 },
+  'Subtractive::Analog Classics::Steiner Filter Stab': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Analog Classics::Vintage Brass': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Analog Classics::Warm Poly Pad': { instrumentVolume: 81, outputGain: 1 },
+  'Subtractive::Analog Classics::Wasp Synth': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::808 Sine Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Acid Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Analog Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Analog Growl': { instrumentVolume: 69, outputGain: 1 },
+  'Subtractive::Bass::Distorted Bass': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Bass::FM Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::FM Pluck Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Finger Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Fingered Bass': { instrumentVolume: 95, outputGain: 1 },
+  'Subtractive::Bass::Hoover Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Neuro Bass': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Bass::Pluck Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Reese Bass': { instrumentVolume: 90, outputGain: 1 },
+  'Subtractive::Bass::Reese Bass II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Rubber Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Slap Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Sub Bass': { instrumentVolume: 61, outputGain: 1 },
+  'Subtractive::Bass::Sub Wobble': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Bass::Tape Bass': { instrumentVolume: 92, outputGain: 1 },
+  'Subtractive::Bass::Wobble Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Brass::Flugelhorn': { instrumentVolume: 76, outputGain: 1 },
+  'Subtractive::Brass::Oberheim Brass': { instrumentVolume: 76, outputGain: 1 },
+  'Subtractive::Brass::Synth Brass (OB-Xa Style)': { instrumentVolume: 86, outputGain: 1 },
+  'Subtractive::Brass::Synth Brass Section': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::Brass::Synth Brass Section II': { instrumentVolume: 82, outputGain: 1 },
+  'Subtractive::Brass::Synth Brass Stab': { instrumentVolume: 93, outputGain: 1 },
+  'Subtractive::Brass::Synth French Horn': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Brass::Synth French Horn II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Brass::Synth Muted Trumpet': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Brass::Synth Muted Trumpet II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Brass::Synth Trombone': { instrumentVolume: 82, outputGain: 1 },
+  'Subtractive::Brass::Synth Trumpet': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::Brass::Synth Tuba': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::8-Bit Square Lead': { instrumentVolume: 63, outputGain: 1 },
+  'Subtractive::Chip/Retro::Bit Crush Lead': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Chip/Retro::Chip Arp': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::Chip Noise': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::Coin Collect': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::Game Over': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::NES Triangle Bass': { instrumentVolume: 84, outputGain: 1 },
+  'Subtractive::Chip/Retro::Power Up': { instrumentVolume: 87, outputGain: 1 },
+  'Subtractive::Chip/Retro::Retro Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Chip/Retro::SID Bass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Alien Texture': { instrumentVolume: 35, outputGain: 1 },
+  'Subtractive::Cinematic::Cinematic Stab': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Dark Drone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Epic Brass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Foghorn': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Horror Pad': { instrumentVolume: 30, outputGain: 1 },
+  'Subtractive::Cinematic::Impact Hit': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Metallic Riser': { instrumentVolume: 34, outputGain: 1 },
+  'Subtractive::Cinematic::Riser': { instrumentVolume: 77, outputGain: 1 },
+  'Subtractive::Cinematic::Suspense Pulse': { instrumentVolume: 75, outputGain: 1 },
+  'Subtractive::Cinematic::Tension Builder': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Cinematic::Vast Space': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::Drums::Analog Kick': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Clap': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Clap II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Cowbell': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Hi-Hat Closed': { instrumentVolume: 65, outputGain: 1 },
+  'Subtractive::Drums::Hi-Hat Closed II': { instrumentVolume: 51, outputGain: 1 },
+  'Subtractive::Drums::Hi-Hat Open': { instrumentVolume: 64, outputGain: 1 },
+  'Subtractive::Drums::Kick Drum': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Snare Crack': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Snare Drum': { instrumentVolume: 88, outputGain: 1 },
+  'Subtractive::Drums::Tom': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Drums::Tom II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Big Room Synth': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Complextro Lead': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::EDM::Dubstep Wobble': { instrumentVolume: 29, outputGain: 1 },
+  'Subtractive::EDM::Electro Stab': { instrumentVolume: 98, outputGain: 1 },
+  'Subtractive::EDM::Festival Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Future Bass Chord': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Hardstyle Lead': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::EDM::Progressive Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Riddim Bass': { instrumentVolume: 29, outputGain: 1 },
+  'Subtractive::EDM::Sidechain Pad': { instrumentVolume: 87, outputGain: 1 },
+  'Subtractive::EDM::Supersaw Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::EDM::Trance Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Filter Sweep': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Impact': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Laser Zap': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Metallic Hit': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Noise Burst': { instrumentVolume: 74, outputGain: 1 },
+  'Subtractive::FX::Riser': { instrumentVolume: 24, outputGain: 1 },
+  'Subtractive::FX::Robot Voice': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Sci-Fi Blip': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Sci-Fi Zap': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Siren': { instrumentVolume: 69, outputGain: 1 },
+  'Subtractive::FX::Thunder': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Underwater': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::White Noise Sweep': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Wind': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::FX::Wind II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Celesta': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Celesta II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Clavinet': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Clavinet II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Electric Piano (Rhodes)': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Harpsichord': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Harpsichord II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Honky Tonk': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Marimba Keys': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Soft EP': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Toy Piano': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Toy Piano II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Keys::Wurli Keys': { instrumentVolume: 99, outputGain: 1 },
+  'Subtractive::Keys::Wurlitzer EP': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::Buzz Lead': { instrumentVolume: 56, outputGain: 1 },
+  'Subtractive::Leads::Detuned Lead': { instrumentVolume: 81, outputGain: 1 },
+  'Subtractive::Leads::Detuned Stack': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Leads::Distorted Lead': { instrumentVolume: 29, outputGain: 1 },
+  'Subtractive::Leads::Funky Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::Nasal Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::Octave Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::PWM Lead': { instrumentVolume: 90, outputGain: 1 },
+  'Subtractive::Leads::Portamento Lead': { instrumentVolume: 91, outputGain: 1 },
+  'Subtractive::Leads::Portamento Lead II': { instrumentVolume: 97, outputGain: 1 },
+  'Subtractive::Leads::Saw Lead': { instrumentVolume: 82, outputGain: 1 },
+  'Subtractive::Leads::Screamer Lead': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Leads::Screamer Lead II': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Leads::Square Lead': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Leads::Sync Lead': { instrumentVolume: 45, outputGain: 1 },
+  'Subtractive::Leads::Sync Lead II': { instrumentVolume: 71, outputGain: 1 },
+  'Subtractive::Leads::Talk Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::Trance Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Leads::Whistle Lead': { instrumentVolume: 71, outputGain: 1 },
+  'Subtractive::Leads::Whistle Lead II': { instrumentVolume: 69, outputGain: 1 },
+  'Subtractive::Lofi::Bedroom Guitar': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Cassette Lead': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Dusty Keys': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Dusty Rhodes': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Lofi Sub': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Rain Piano': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Tape EP': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::VHS Strings': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Vinyl Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Lofi::Worn Organ': { instrumentVolume: 74, outputGain: 1 },
+  'Subtractive::Misc::Acid Square': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Arp 2600 Lead': { instrumentVolume: 74, outputGain: 1 },
+  'Subtractive::Misc::Banjo': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Glockenspiel': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Korg Poly Lead': { instrumentVolume: 86, outputGain: 1 },
+  'Subtractive::Misc::MS-20 Growl': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Misc::Music Box': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Poly-5 Pad': { instrumentVolume: 90, outputGain: 1 },
+  'Subtractive::Misc::Recorder': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Misc::Sitar': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Steiner Filter Sweep': { instrumentVolume: 67, outputGain: 1 },
+  'Subtractive::Misc::Synth Bagpipes': { instrumentVolume: 58, outputGain: 1 },
+  'Subtractive::Misc::Synth Didgeridoo': { instrumentVolume: 72, outputGain: 1 },
+  'Subtractive::Misc::Synth Harmonica': { instrumentVolume: 64, outputGain: 1 },
+  'Subtractive::Misc::Synth Tuba': { instrumentVolume: 75, outputGain: 1 },
+  'Subtractive::Misc::Telephone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Telephone Ring': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Vibraphone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Misc::Xylophone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Concrete': { instrumentVolume: 29, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Crusher': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Distorted Drone': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Grinder': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Machine Rhythm': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Metallic Clang': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Pneumatic Hiss': { instrumentVolume: 32, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Siren Industrial': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Noise/Industrial::Voltage Crack': { instrumentVolume: 30, outputGain: 1 },
+  'Subtractive::Noise/Industrial::White Noise Sweep': { instrumentVolume: 28, outputGain: 1 },
+  'Subtractive::Organ::Church Organ': { instrumentVolume: 57, outputGain: 1 },
+  'Subtractive::Organ::Combo Organ (Farfisa)': { instrumentVolume: 59, outputGain: 1 },
+  'Subtractive::Organ::Drawbar Organ (B3)': { instrumentVolume: 58, outputGain: 1 },
+  'Subtractive::Organ::Farfisa': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Organ::Gospel Organ': { instrumentVolume: 63, outputGain: 1 },
+  'Subtractive::Organ::Jazz Organ': { instrumentVolume: 65, outputGain: 1 },
+  'Subtractive::Organ::Pipe Organ': { instrumentVolume: 69, outputGain: 1 },
+  'Subtractive::Organ::Rock Organ': { instrumentVolume: 59, outputGain: 1 },
+  'Subtractive::Organ::Rock Organ II': { instrumentVolume: 36, outputGain: 1 },
+  'Subtractive::Organ::Synth Accordion': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Pads::Analog Choir': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Atmosphere': { instrumentVolume: 95, outputGain: 1 },
+  'Subtractive::Pads::Cathedral': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Pads::Choir Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Dark Matter': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Dark Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Frozen Pad': { instrumentVolume: 88, outputGain: 1 },
+  'Subtractive::Pads::Glass Pad': { instrumentVolume: 81, outputGain: 1 },
+  'Subtractive::Pads::Glass Pad II': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Pads::PWM Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::PWM Pad II': { instrumentVolume: 99, outputGain: 1 },
+  'Subtractive::Pads::Pulse Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Shimmer Pad': { instrumentVolume: 94, outputGain: 1 },
+  'Subtractive::Pads::Shimmer Pad II': { instrumentVolume: 90, outputGain: 1 },
+  'Subtractive::Pads::Super Saw Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Tape Pad': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Warm Blanket': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Pads::Warm Pad': { instrumentVolume: 89, outputGain: 1 },
+  'Subtractive::Plucks::Banjo Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Dulcimer': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Electric Guitar (Clean)': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Kalimba': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Kalimba II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Marimba': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Music Box': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Nylon Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Steel Drum': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Steel Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Acoustic Guitar': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Harp': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Harp Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Pizzicato': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Synth Pluck II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Plucks::Vibraphone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Alien Hive': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Cryogenic': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Cyber Glitch': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Gravity Well': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::Sci-Fi::Ion Storm': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Sci-Fi::Mothership': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Sci-Fi::Phaser Beam': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Plasma Bolt': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Reactor Core': { instrumentVolume: 77, outputGain: 1 },
+  'Subtractive::Sci-Fi::Stasis Field': { instrumentVolume: 57, outputGain: 1 },
+  'Subtractive::Sci-Fi::Teleport': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Sci-Fi::Warp Drive': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Strings::Contrabass': { instrumentVolume: 63, outputGain: 1 },
+  'Subtractive::Strings::Dark Strings': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Strings::Ethereal Strings': { instrumentVolume: 94, outputGain: 1 },
+  'Subtractive::Strings::Pizz Strings': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Strings::Synth Analog Strings (Solina)': { instrumentVolume: 77, outputGain: 1 },
+  'Subtractive::Strings::Synth Cello': { instrumentVolume: 68, outputGain: 1 },
+  'Subtractive::Strings::Synth Cello II': { instrumentVolume: 71, outputGain: 1 },
+  'Subtractive::Strings::Synth Pizzicato Strings': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Strings::Synth Solo Violin': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::Strings::Synth String Ensemble': { instrumentVolume: 74, outputGain: 1 },
+  'Subtractive::Strings::Synth Violin Solo': { instrumentVolume: 80, outputGain: 1 },
+  'Subtractive::Strings::Tremolo Strings': { instrumentVolume: 88, outputGain: 1 },
+  'Subtractive::Textural::Deep Water': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::Textural::Ember Glow': { instrumentVolume: 80, outputGain: 1 },
+  'Subtractive::Textural::Frost': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Textural::Liquid Metal': { instrumentVolume: 67, outputGain: 1 },
+  'Subtractive::Textural::Moss': { instrumentVolume: 62, outputGain: 1 },
+  'Subtractive::Textural::Paper Rustling': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Textural::Sandstorm': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Textural::Silk Thread': { instrumentVolume: 67, outputGain: 1 },
+  'Subtractive::Textural::Stone Echo': { instrumentVolume: 80, outputGain: 1 },
+  'Subtractive::Textural::Tinfoil': { instrumentVolume: 37, outputGain: 1 },
+  'Subtractive::Textural::Velvet': { instrumentVolume: 76, outputGain: 1 },
+  'Subtractive::Textural::Volcanic Glass': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Woodwinds::Recorder': { instrumentVolume: 76, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Bassoon': { instrumentVolume: 64, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Clarinet': { instrumentVolume: 63, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Clarinet II': { instrumentVolume: 70, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Flute': { instrumentVolume: 74, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Oboe': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Oboe II': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Pan Flute': { instrumentVolume: 70, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Pan Flute II': { instrumentVolume: 86, outputGain: 1 },
+  'Subtractive::Woodwinds::Synth Soft Flute': { instrumentVolume: 78, outputGain: 1 },
+  'Subtractive::World::Erhu': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Gamelan Bell': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Gamelan Gong': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Guzheng Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Koto Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Ngoni': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Oud Pluck': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Saz': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Shamisen': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Sitar Drone': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Steel Drum': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Synth Didgeridoo': { instrumentVolume: 100, outputGain: 1 },
+  'Subtractive::World::Synth Didgeridoo Drone': { instrumentVolume: 73, outputGain: 1 },
+  'Subtractive::World::Synth Shakuhachi': { instrumentVolume: 76, outputGain: 1 },
+  'Subtractive::World::Tanpura Drone': { instrumentVolume: 83, outputGain: 1 },
+  'Subtractive::World::Zurna': { instrumentVolume: 100, outputGain: 1 },
   };
   var SSLI_PHYSICAL_PLUCK_AUTO_DAMP_MS = 360;
   var SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS = 320;
@@ -173,6 +853,10 @@
   var heldScopePeak = 0;
   var heldScopeUntil = 0;
   var currentPath = [];
+  var currentExerciseEvents = [];
+  var pendingGripAttempts = null;
+  var pendingGripTimer = null;
+  var GRIP_COLLECTION_GRACE_MS = 80;
   var midiAccess = null;
   var midiInput = null;
   var midiOutput = null;
@@ -222,7 +906,6 @@
     scaleId: 'ionian',
     strategyId: 'natural_clusters',
     view: 'practice',
-    tone: 'soft_wurli',
     soundPresetId: 'subtractive::Wurlitzer EP',
     soundEngine: 'subtractive',
     soundCategory: 'Keys',
@@ -267,6 +950,9 @@
     feedback: 'Enable MIDI to compare the physical Exquis against the current target.',
     feedbackKind: 'neutral',
     autoAdvance: true,
+    gripFingeringOption: 'primary',
+    harmonyQuality: 'major',
+    harmonyInversion: 0,
     heldNotes: {},
     channelNotes: {},
     correctCount: 0,
@@ -475,11 +1161,33 @@
           label: noteLabelFromMidi(cell.midi),
           virtual: !!cell.virtual
         };
+      }),
+      exerciseEvents: currentExerciseEvents.map(function(event) {
+        return {
+          id: event.id,
+          type: event.type,
+          valid: event.valid,
+          musicalIntent: event.musicalIntent,
+          cellId: event.cellId,
+          midi: event.midi,
+          targets: event.targets.map(function(target) { return { cellId: target.cellId, midi: target.midi, pc: target.pc }; }),
+          fingering: { primary: event.fingering.primary, alternatives: event.fingering.alternatives.slice() },
+          timing: { mode: event.timing.mode }
+        };
       })
     };
   }
 
   window.__exquisDebugSnapshot = getExquisDebugSnapshot;
+  window.__exquisDebugBuildGripExerciseEvent = createGripExerciseEvent;
+  window.__exquisDebugBuildHarmonyGripFixture = buildHarmonyGripFixture;
+  window.__exquisDebugBuildProgressionFixture = buildProgressionFixture;
+  window.__exquisDebugPromptMidis = function() { return getPromptMidis(expectedExerciseEvent()); };
+  window.__exquisDebugShouldUseSsliPlayback = shouldUseSsliPlayback;
+  window.__exquisDebugStartAfterAudioResume = startAfterAudioResume;
+  window.__exquisDebugBuildVoiceLeadingTransition = buildVoiceLeadingTransition;
+  window.__exquisDebugBuildExerciseLifecycleEvents = buildDebugExerciseLifecycleEvents;
+  window.__exquisDebugEvaluateGrip = evaluateGripAttempt;
 
   function mod(n, m) {
     return ((n % m) + m) % m;
@@ -1427,7 +2135,11 @@
     var SL = host.SynthLab;
     if (!SL || !SL.audio || !SL.audio.playNoteOnInstrument) return false;
     ensureSsliAudioReady(SL);
-    applySelectedSsliPreset();
+    var presetApplied = applySelectedSsliPreset();
+    if (!shouldUseSsliPlayback(presetApplied, hasSsliInstrumentOutput(SL))) {
+      logEvent('audio', 'SSLI playback deferred to local fallback ' + noteLabelFromMidi(midi) + ' presetApplied=' + Boolean(presetApplied));
+      return false;
+    }
     if (state.filterDirty) applySelectedSsliFilter();
     if (state.fxDirty) applySelectedSsliFxChain();
     var instrumentType = getCurrentSsliInstrumentType(SL);
@@ -1445,6 +2157,10 @@
     window.setTimeout(clearSsliMidiExpressionIfIdle, Math.max(220, (duration || 0.55) * 1000));
     render();
     return true;
+  }
+
+  function shouldUseSsliPlayback(presetApplied, hasOutput) {
+    return Boolean(presetApplied && hasOutput);
   }
 
   function pressureToSsliExpression(pressure, onsetVelocity, interactionType) {
@@ -1489,7 +2205,11 @@
   }
 
   function currentSsliNormalization() {
-    if (SSLI_PRESET_NORMALIZATION[state.soundPresetId]) return SSLI_PRESET_NORMALIZATION[state.soundPresetId];
+    var presetName = state.soundPresetId && state.soundPresetId.indexOf('::') >= 0
+      ? state.soundPresetId.split('::').slice(1).join('::')
+      : state.soundPresetId;
+    var normalizationKey = [getSsliEngineDisplayName(state.soundEngine), state.soundCategory || '', presetName || ''].join('::');
+    if (SSLI_PRESET_NORMALIZATION[normalizationKey]) return SSLI_PRESET_NORMALIZATION[normalizationKey];
     if (MATURE_SOUND_ENGINES[soundEngineKey(state.soundEngine)]) return SSLI_MATURE_ENGINE_NORMALIZATION;
     return null;
   }
@@ -2498,8 +3218,8 @@
     if (!settings.osc) {
       return {
         osc: [
-          { wave: state.tone === 'round_sine' ? 'sine' : 'triangle', oct: 0, detune: 0, level: 80 },
-          { wave: state.tone === 'muted_pluck' ? 'square' : 'sine', oct: 1, detune: 0, level: 22 }
+          { wave: 'triangle', oct: 0, detune: 0, level: 80 },
+          { wave: 'sine', oct: 1, detune: 0, level: 22 }
         ],
         adsr: { a: 8, d: 180, s: 45, r: 180 },
         filter: { enabled: true, type: state.filterType, freq: state.filterCutoff, q: state.filterResonance, keyTrack: 30 }
@@ -2670,6 +3390,34 @@
       render();
       return;
     }
+    startAfterAudioResume(ctx, function() {
+      startFallbackNote(ctx, midi, duration, localOnly);
+    }).catch(function(err) {
+      logEvent('audio', 'playNote aborted: audio context resume failed ' + (err && err.message ? err.message : err));
+      render();
+    });
+  }
+
+  function startAfterAudioResume(ctx, start) {
+    if (!ctx || ctx.state === 'closed') return Promise.resolve(false);
+    if (ctx.state === 'suspended' && ctx.resume) {
+      var resumeResult;
+      try {
+        resumeResult = ctx.resume();
+      } catch (err) {
+        return Promise.reject(err);
+      }
+      return Promise.resolve(resumeResult).then(function() {
+        if (ctx.state === 'closed') return false;
+        start();
+        return true;
+      });
+    }
+    start();
+    return Promise.resolve(true);
+  }
+
+  function startFallbackNote(ctx, midi, duration, localOnly) {
     var now = ctx.currentTime;
     var dur = duration || 0.55;
     var out = ctx.createGain();
@@ -2727,7 +3475,8 @@
         articulationFamily: options.articulationFamily || 'plucked',
         interactionType: options.interactionType || 'onset-decay',
         physicalVoiceId: options.physicalVoiceId || '',
-        physicalInstId: oneShotSL && oneShotSL.audio && oneShotSL.audio.getCurrentInstrument ? oneShotSL.audio.getCurrentInstrument() : 0
+        physicalInstId: oneShotSL && oneShotSL.audio && oneShotSL.audio.getCurrentInstrument ? oneShotSL.audio.getCurrentInstrument() : 0,
+        oneShotCleanupAt: Date.now() + Math.max(120, Math.min(600, Number(options.oneShotMs || SSLI_PHYSICAL_PLUCK_ONE_SHOT_MS))) + 40
       };
       // Karplus-Strong plucks decay through loop damping after excitation.
       // Original source: Karplus & Strong (1983), CMJ 7(2). A later same-string
@@ -2741,10 +3490,13 @@
           voice.oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, 120);
           return;
         }
-        var cleanupHost = getSsliHost();
-        var cleanupSL = cleanupHost && cleanupHost.SynthLab;
-        if (cleanupSL && cleanupSL.physical && cleanupSL.physical.isVoiceActive && voice.physicalVoiceId && cleanupSL.physical.isVoiceActive(voice.physicalVoiceId, voice.physicalInstId || 0)) {
-          voice.oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, 120);
+        // AudioWorklet state is asynchronous: its synchronous isVoiceActive()
+        // conservatively reports true. The bounded maxDurationMs passed to
+        // physical.noteOn is the ownership contract, so retire bookkeeping at
+        // that deadline rather than retaining a local voice forever.
+        var remainingCleanupMs = Math.max(0, (voice.oneShotCleanupAt || Date.now()) - Date.now());
+        if (remainingCleanupMs > 0) {
+          voice.oneShotCleanupTimer = window.setTimeout(scheduleOneShotCleanupCheck, Math.min(120, remainingCleanupMs));
           return;
         }
         delete midiVoices[key];
@@ -2956,9 +3708,19 @@
   }
 
   function playCurrent() {
-    if (!currentPath.length) return;
-    var current = currentPath[mod(state.step, currentPath.length)];
-    playNote(current.midi, 0.62);
+    var event = expectedExerciseEvent();
+    if (!event || !event.targets.length) return;
+    if (event.musicalIntent && Array.isArray(event.musicalIntent.promptMidis)) {
+      var promptMidis = event.musicalIntent.promptMidis.slice();
+      setFeedback('Listen for the interval, then answer with the matching shape.', 'neutral');
+      playNote(promptMidis[0], 0.42);
+      window.setTimeout(function() { playNote(promptMidis[1], 0.52); }, 470);
+      render();
+      return;
+    }
+    getPromptMidis(event).forEach(function(midi, index) {
+      window.setTimeout(function() { playNote(midi, 0.62); }, index * 14);
+    });
   }
 
   function playTestTone() {
@@ -3012,13 +3774,14 @@
 
   function playPath() {
     var ctx = ensureAudio();
-    if (!ctx || !currentPath.length) return;
-    for (var i = 0; i < currentPath.length; i++) {
+    if (!ctx || !currentExerciseEvents.length) return;
+    for (var i = 0; i < currentExerciseEvents.length; i++) {
       (function(idx) {
         window.setTimeout(function() {
           state.step = idx;
           render();
-          playNote(currentPath[idx].midi, 0.38);
+          var event = currentExerciseEvents[idx];
+          if (event && event.targets.length) playNote(event.targets[0].midi, 0.38);
         }, idx * 420);
       })(i);
     }
@@ -3467,6 +4230,386 @@
     return basePath;
   }
 
+  function validateExerciseEvent(event) {
+    var errors = [];
+    var targetRequired = { note: true, grip: true, hold: true, release: true };
+    if (!event || !event.id || !event.type) errors.push('missing event identity');
+    if (event && !targetRequired[event.type] && event.type !== 'shift') errors.push('unsupported event type');
+    if (!event || !event.musicalIntent || !event.musicalIntent.type) errors.push('missing musical intent');
+    if (!event || !Array.isArray(event.targets) || (targetRequired[event.type] && !event.targets.length)) errors.push('missing targets');
+    var seenTargetIds = {};
+    (event && event.targets || []).forEach(function(target) {
+      if (!target || !target.cellId || typeof target.midi !== 'number') errors.push('invalid target');
+      else if (seenTargetIds[target.cellId]) errors.push('duplicate target');
+      else seenTargetIds[target.cellId] = true;
+    });
+    if (!event || !event.fingering || typeof event.fingering.primary !== 'number') errors.push('missing fingering');
+    if (!event || !event.timing || !event.timing.mode) errors.push('missing timing');
+    if (event && event.type === 'shift' && (!event.movement || event.movement.type !== 'position-shift')) errors.push('shift requires movement');
+    if (event && event.type === 'grip') {
+      if (event.targets.length < 2) errors.push('grip requires multiple targets');
+      if (!event.timing || event.timing.mode !== 'simultaneous') errors.push('grip must be simultaneous');
+      var assignments = event.fingering && event.fingering.assignments;
+      if (!Array.isArray(assignments) || assignments.length !== event.targets.length) {
+        errors.push('grip requires one finger assignment per target');
+      } else {
+        var targetIds = {};
+        var assignmentIds = {};
+        event.targets.forEach(function(target) { targetIds[target.cellId] = true; });
+        assignments.forEach(function(assignment) {
+          if (!assignment || !targetIds[assignment.cellId] || typeof assignment.finger !== 'number' || assignmentIds[assignment.cellId]) {
+            errors.push('invalid grip finger assignment');
+          } else {
+            assignmentIds[assignment.cellId] = true;
+          }
+        });
+        event.targets.forEach(function(target) {
+          if (!assignmentIds[target.cellId]) errors.push('grip target has no finger assignment');
+        });
+      }
+    }
+    return errors;
+  }
+
+  function finalizeExerciseEvent(event) {
+    event.validationErrors = validateExerciseEvent(event);
+    event.valid = event.validationErrors.length === 0;
+    return event;
+  }
+
+  function copyExerciseTargets(targets) {
+    return (targets || []).map(function(target) {
+      return { cellId: target.cellId, midi: target.midi, pc: target.pc };
+    });
+  }
+
+  function createNoteExerciseEvent(spec) {
+    spec = spec || {};
+    return finalizeExerciseEvent({
+      id: spec.id || 'note',
+      type: 'note',
+      musicalIntent: spec.musicalIntent || { type: 'note' },
+      cellId: spec.cellId,
+      midi: spec.midi,
+      sourceCell: spec.sourceCell || null,
+      targets: copyExerciseTargets(spec.targets),
+      fingering: spec.fingering || { primary: 0, alternatives: [] },
+      timing: spec.timing || { mode: 'sequential' },
+      remediation: spec.remediation || { type: 'repeat-event' }
+    });
+  }
+
+  function createTimedTargetExerciseEvent(type, spec) {
+    spec = spec || {};
+    return finalizeExerciseEvent({
+      id: spec.id || type,
+      type: type,
+      musicalIntent: spec.musicalIntent || { type: type },
+      targets: copyExerciseTargets(spec.targets),
+      fingering: spec.fingering || { primary: 0, alternatives: [] },
+      timing: spec.timing || { mode: type, durationMs: spec.durationMs || 0 },
+      remediation: spec.remediation || { type: 'repeat-event' }
+    });
+  }
+
+  function createShiftExerciseEvent(spec) {
+    spec = spec || {};
+    return finalizeExerciseEvent({
+      id: spec.id || 'shift',
+      type: 'shift',
+      musicalIntent: spec.musicalIntent || { type: 'position-shift' },
+      targets: [],
+      fingering: spec.fingering || { primary: 0, alternatives: [] },
+      timing: spec.timing || { mode: 'before-next' },
+      movement: spec.movement || { type: 'position-shift' },
+      remediation: spec.remediation || { type: 'repeat-event' }
+    });
+  }
+
+  function buildDebugExerciseLifecycleEvents() {
+    var target = { cellId: 'r5c3', midi: 48, pc: 0 };
+    return [
+      createNoteExerciseEvent({ id: 'debug-note', cellId: target.cellId, midi: target.midi, targets: [target], fingering: { primary: 5, alternatives: [] } }),
+      createTimedTargetExerciseEvent('hold', { id: 'debug-hold', targets: [target], fingering: { primary: 5, alternatives: [] }, durationMs: 400 }),
+      createTimedTargetExerciseEvent('release', { id: 'debug-release', targets: [target], fingering: { primary: 5, alternatives: [] } }),
+      createShiftExerciseEvent({ id: 'debug-shift', fingering: { primary: 3, alternatives: [] } })
+    ];
+  }
+
+  function createGripExerciseEvent(spec) {
+    spec = spec || {};
+    var targets = copyExerciseTargets(spec.targets);
+    var assignments = (spec.fingerAssignments || []).map(function(assignment) {
+      return { cellId: assignment.cellId, finger: assignment.finger };
+    });
+    var event = {
+      id: spec.id || 'grip',
+      type: 'grip',
+      musicalIntent: spec.musicalIntent || { type: 'chord' },
+      sourceCell: spec.sourceCell || null,
+      sourceCells: spec.sourceCells || [],
+      targets: targets,
+      fingering: {
+        primary: assignments.length ? assignments[0].finger : 0,
+        alternatives: spec.fingeringAlternatives || [],
+        assignments: assignments
+      },
+      timing: { mode: 'simultaneous', toleranceMs: 80 },
+      remediation: { type: 'repeat-event' }
+    };
+    return finalizeExerciseEvent(event);
+  }
+
+  var HARMONY_TRIAD_INTERVALS = {
+    major: [0, 4, 7],
+    minor: [0, 3, 7],
+    diminished: [0, 3, 6],
+    augmented: [0, 4, 8]
+  };
+  var PROGRESSION_FIXTURES = {
+    'c-major-i-iv-v-i': {
+      title: 'C major I-IV-V-I',
+      tempo: 72,
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }
+      ]
+    },
+    'c-major-ii-v-i': {
+      title: 'C major ii-V-I',
+      tempo: 72,
+      chords: [
+        { degree: 'ii', quality: 'minor', rootMidi: 50, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }
+      ]
+    }
+  };
+  var PROGRESSION_EXERCISE_FIXTURE_IDS = {
+    c_major_progression: 'c-major-i-iv-v-i',
+    c_major_ii_v_i: 'c-major-ii-v-i'
+  };
+
+  function buildHarmonyGripFixture(spec) {
+    spec = spec || {};
+    var intervals = HARMONY_TRIAD_INTERVALS[spec.quality];
+    var inversion = Math.max(0, Math.min(2, parseInt(spec.inversion, 10) || 0));
+    if (!intervals || typeof spec.rootMidi !== 'number') return null;
+    var offsets = intervals.map(function(interval, index) {
+      return interval + (index < inversion ? 12 : 0);
+    }).sort(function(a, b) { return a - b; });
+    var cells = makeGrid();
+    var root = bestCellForTarget(cells, mod(spec.rootMidi, 12), spec.rootMidi, null, null);
+    if (!root || root.midi !== spec.rootMidi) return null;
+    var gripCells = offsets.map(function(offset) {
+      var targetMidi = spec.rootMidi + offset;
+      var cell = bestCellForTarget(cells, mod(targetMidi, 12), targetMidi, root, null);
+      return cell && cell.midi === targetMidi ? cell : null;
+    });
+    if (gripCells.some(function(cell) { return !cell; })) return null;
+    var inversionName = ['root', 'first', 'second'][inversion];
+    var fingers = state.hand === 'right' ? [1, 3, 5] : [5, 3, 1];
+    return createGripExerciseEvent({
+      id: spec.id || spec.quality + ':' + inversionName,
+      musicalIntent: { type: 'triad', quality: spec.quality, inversion: inversionName },
+      targets: gripCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
+      fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: fingers[index] }; }),
+      sourceCell: clonePathCell(root),
+      sourceCells: gripCells.map(clonePathCell)
+    });
+  }
+
+  function buildProgressionFixture(id) {
+    var fixture = PROGRESSION_FIXTURES[id];
+    if (!fixture) return null;
+    var events = fixture.chords.map(function(chord, index) {
+      var event = buildHarmonyGripFixture({
+        id: id + ':' + index + ':' + chord.degree,
+        quality: chord.quality,
+        rootMidi: chord.rootMidi,
+        inversion: chord.inversion
+      });
+      if (event) {
+        event.musicalIntent.progressionId = id;
+        event.musicalIntent.degree = chord.degree;
+        event.musicalIntent.step = index + 1;
+      }
+      return event;
+    });
+    if (events.some(function(event) { return !event || !event.valid; })) return null;
+    return { id: id, title: fixture.title, tempo: fixture.tempo, events: events };
+  }
+
+  function fixtureTargetMidis(fixture) {
+    return (fixture && fixture.targets || []).map(function(target) { return target.midi; }).sort(function(a, b) { return a - b; });
+  }
+
+  function buildVoiceLeadingTransition(spec) {
+    spec = spec || {};
+    var fromSpec = spec.from || {};
+    var toSpec = spec.to || {};
+    var source = buildHarmonyGripFixture({
+      id: 'voice-leading-source',
+      quality: fromSpec.quality,
+      rootMidi: fromSpec.rootMidi,
+      inversion: fromSpec.inversion
+    });
+    if (!source || !source.valid || !HARMONY_TRIAD_INTERVALS[toSpec.quality] || typeof toSpec.rootMidi !== 'number') return null;
+    var sourceMidis = fixtureTargetMidis(source);
+    var best = null;
+    for (var inversion = 0; inversion < 3; inversion++) {
+      var destination = buildHarmonyGripFixture({
+        id: 'voice-leading-destination:' + inversion,
+        quality: toSpec.quality,
+        rootMidi: toSpec.rootMidi,
+        inversion: inversion
+      });
+      if (!destination || !destination.valid) continue;
+      var destinationMidis = fixtureTargetMidis(destination);
+      var anchorMidis = sourceMidis.filter(function(midi) { return destinationMidis.indexOf(midi) !== -1; });
+      var movementSemitones = sourceMidis.reduce(function(total, midi, index) {
+        return total + Math.abs(destinationMidis[index] - midi);
+      }, 0);
+      var candidate = {
+        from: source,
+        to: destination,
+        anchorMidis: anchorMidis,
+        movementSemitones: movementSemitones,
+        inversion: inversion
+      };
+      if (!best ||
+          candidate.anchorMidis.length > best.anchorMidis.length ||
+          (candidate.anchorMidis.length === best.anchorMidis.length && candidate.movementSemitones < best.movementSemitones) ||
+          (candidate.anchorMidis.length === best.anchorMidis.length && candidate.movementSemitones === best.movementSemitones && candidate.inversion < best.inversion)) {
+        best = candidate;
+      }
+    }
+    if (!best) return null;
+    delete best.inversion;
+    return best;
+  }
+
+  function evaluateGripAttempt(event, attempts) {
+    var targets = (event && event.targets || []).slice();
+    var matched = [];
+    var wrong = [];
+    var usedTargets = {};
+    (attempts || []).forEach(function(attempt) {
+      var targetIndex = -1;
+      for (var i = 0; i < targets.length; i++) {
+        var target = targets[i];
+        if (usedTargets[i]) continue;
+        if (target.midi === attempt.midi && (!attempt.cellId || target.cellId === attempt.cellId)) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) wrong.push(attempt);
+      else {
+        usedTargets[targetIndex] = true;
+        matched.push(attempt);
+      }
+    });
+    var missing = targets.filter(function(_target, index) { return !usedTargets[index]; });
+    var toleranceMs = event && event.timing && typeof event.timing.toleranceMs === 'number' ? event.timing.toleranceMs : 80;
+    var timingSpreadMs = 0;
+    if (matched.length > 1) {
+      var times = matched.map(function(attempt) { return attempt.at; });
+      timingSpreadMs = Math.max.apply(Math, times) - Math.min.apply(Math, times);
+    }
+    var complete = !wrong.length && !missing.length;
+    var late = complete && timingSpreadMs > toleranceMs;
+    return {
+      accepted: complete && !late,
+      outcome: wrong.length ? 'wrong' : (missing.length ? 'partial' : (late ? 'late' : 'complete')),
+      missing: missing,
+      wrong: wrong,
+      timingSpreadMs: timingSpreadMs,
+      toleranceMs: toleranceMs
+    };
+  }
+
+  function buildPracticeExerciseEvents(path, fingers) {
+    var progressionFixtureId = PROGRESSION_EXERCISE_FIXTURE_IDS[state.exerciseId];
+    if (progressionFixtureId) {
+      var progression = buildProgressionFixture(progressionFixtureId);
+      return progression ? progression.events : [];
+    }
+    var heardInterval = HEARD_INTERVAL_FIXTURES[state.exerciseId];
+    if (heardInterval && path.length) {
+      var heardRoot = path[0];
+      var heardTarget = bestCellForTarget(makeGrid(), mod(heardRoot.midi + heardInterval.semitones, 12), heardRoot.midi + heardInterval.semitones, heardRoot, null);
+      var heardCells = heardTarget && heardTarget.midi === heardRoot.midi + heardInterval.semitones ? [heardRoot, heardTarget] : [];
+      if (!heardCells.length) return [];
+      return [createGripExerciseEvent({
+        id: state.exerciseId,
+        musicalIntent: { type: 'heard-interval', quality: heardInterval.quality, promptMidis: heardCells.map(function(cell) { return cell.midi; }), concealTargets: true },
+        targets: heardCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
+        fingerAssignments: heardCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: state.hand === 'right' ? [1, 3][index] : [5, 3][index] }; }),
+        sourceCell: clonePathCell(heardCells[0]),
+        sourceCells: heardCells.map(clonePathCell)
+      })];
+    }
+    if (state.exerciseId === 'voice_leading' && path.length) {
+      var transition = buildVoiceLeadingTransition({
+        from: {
+          quality: state.harmonyQuality,
+          rootMidi: path[0].midi,
+          inversion: state.harmonyInversion
+        },
+        to: {
+          quality: state.harmonyQuality,
+          rootMidi: path[0].midi - 7
+        }
+      });
+      if (!transition) return [];
+      transition.from.id = 'voice-leading:source';
+      transition.to.id = 'voice-leading:destination';
+      transition.from.musicalIntent.role = 'source';
+      transition.to.musicalIntent.role = 'destination';
+      transition.to.musicalIntent.anchorMidis = transition.anchorMidis.slice();
+      transition.to.musicalIntent.movementSemitones = transition.movementSemitones;
+      return [transition.from, transition.to];
+    }
+    if (state.exerciseId === 'harmony_triad' && path.length) {
+      var harmonyFixture = buildHarmonyGripFixture({
+        id: 'harmony-triad:' + state.harmonyQuality + ':' + state.harmonyInversion,
+        quality: state.harmonyQuality,
+        inversion: state.harmonyInversion,
+        rootMidi: path[0].midi
+      });
+      return harmonyFixture ? [harmonyFixture] : [];
+    }
+    if ((state.exerciseId === 'major_third' || state.exerciseId === 'major_triad') && path.length >= 5) {
+      var gripCells = state.exerciseId === 'major_third' ? [path[0], path[2]] : [path[0], path[2], path[4]];
+      return [createGripExerciseEvent({
+        id: state.exerciseId + ':root-position',
+        musicalIntent: state.exerciseId === 'major_third' ? { type: 'interval', quality: 'major-third' } : { type: 'triad', quality: 'major', inversion: 'root' },
+        targets: gripCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
+        fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: fingers[index % fingers.length] }; }),
+        fingeringAlternatives: [{ id: 'compact', label: 'Compact 5-3-1', assignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: state.hand === 'right' ? [1, 3, 5][index] : [5, 3, 1][index] }; }) }],
+        sourceCell: clonePathCell(gripCells[0]),
+        sourceCells: gripCells.map(clonePathCell)
+      })];
+    }
+    return path.map(function(cell, index) {
+      var targetCellId = cellKey(cell);
+      return createNoteExerciseEvent({
+        id: state.exerciseId + ':note:' + index + ':' + targetCellId,
+        musicalIntent: { type: 'scale-degree', degree: getScaleDegree(cell, getScale()) },
+        cellId: targetCellId,
+        midi: cell.midi,
+        sourceCell: clonePathCell(cell),
+        targets: [{ cellId: targetCellId, midi: cell.midi, pc: cell.pc }],
+        fingering: { primary: fingers[index % fingers.length], alternatives: [] },
+        timing: { mode: 'sequential' },
+        remediation: { type: 'repeat-event' }
+      });
+    });
+  }
+
   function getScaleDegree(cell, scale) {
     var rel = mod(cell.pc - state.tonicPc, 12);
     for (var i = 0; i < scale.intervals.length; i++) {
@@ -3480,8 +4623,25 @@
   }
 
   function expectedCell() {
-    if (!currentPath.length) return null;
-    return currentPath[mod(state.step, currentPath.length)];
+    var event = expectedExerciseEvent();
+    if (!event || !event.targets.length) return null;
+    var target = event.targets[0];
+    for (var i = 0; i < currentPath.length; i++) {
+      var cell = currentPath[i];
+      if (cellKey(cell) === target.cellId && cell.midi === target.midi) return cell;
+    }
+    return null;
+  }
+
+  function expectedExerciseEvent() {
+    if (!currentExerciseEvents.length) return null;
+    return currentExerciseEvents[mod(state.step, currentExerciseEvents.length)];
+  }
+
+  function getPromptMidis(event) {
+    if (!event) return [];
+    if (event.musicalIntent && Array.isArray(event.musicalIntent.promptMidis)) return event.musicalIntent.promptMidis.slice();
+    return (event.targets || []).map(function(target) { return target.midi; });
   }
 
   function getFieldBounds(cells, scale) {
@@ -3613,6 +4773,18 @@
     state.feedbackKind = kind || 'neutral';
   }
 
+  function describeCoachAction(event, current, finger, gripAssignments) {
+    if (state.mode !== 'practice') return 'Play freely across the full Exquis surface.';
+    if (event && event.type === 'grip') {
+      var gripFingers = (gripAssignments || []).map(function(assignment) {
+        return fingerDisplayName(assignment.finger);
+      }).join(', ');
+      return 'Press every highlighted button together' + (gripFingers ? '. Suggested fingers: ' + gripFingers + '.' : '.');
+    }
+    if (!current) return 'Choose a lesson target to begin.';
+    return 'Press the highlighted ' + noteLabelFromMidi(current.midi) + ' with ' + fingerDisplayName(finger) + '.';
+  }
+
   function setMode(mode) {
     state.mode = mode === 'play' ? 'play' : 'practice';
     state.step = 0;
@@ -3724,6 +4896,56 @@
     return articulation && articulation.family === 'plucked' && articulation.onsetMode === 'release-strum';
   }
 
+  function scoreSinglePracticeNote(expected, expectedKey, midi) {
+    if (expected && mod(midi, 12) === expected.pc) {
+      state.correctCount += 1;
+      state.streak += 1;
+      state.calibrated[expectedKey] = { expectedMidi: expected.midi, receivedMidi: midi, at: state.lastMidiAt };
+      delete state.mismatched[expectedKey];
+      setFeedback('Correct: ' + noteLabelFromMidi(midi) + ' matches the current target.', 'good');
+      if (state.autoAdvance) {
+        state.step += 1;
+      }
+    } else if (expected) {
+      state.missCount += 1;
+      state.streak = 0;
+      state.mismatched[expectedKey] = { expectedMidi: expected.midi, receivedMidi: midi, at: state.lastMidiAt };
+      setFeedback('Not this one: heard ' + noteLabelFromMidi(midi) + ', target is ' + noteLabelFromMidi(expected.midi) + '.', 'bad');
+    }
+  }
+
+  function resolvePendingGripAttempt(event) {
+    if (!pendingGripAttempts || pendingGripAttempts.eventId !== event.id) return;
+    if (pendingGripTimer) window.clearTimeout(pendingGripTimer);
+    pendingGripTimer = null;
+    var result = evaluateGripAttempt(event, pendingGripAttempts.attempts);
+    pendingGripAttempts = null;
+    if (result.accepted) {
+      state.correctCount += 1;
+      state.streak += 1;
+      var declaredOption = event.fingering.alternatives.filter(function(option) { return option.id === state.gripFingeringOption; })[0];
+      setFeedback('Correct grip: ' + event.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ') + '.' + (declaredOption ? ' Declared ' + declaredOption.label + ' fingering.' : ''), 'good');
+      if (state.autoAdvance) state.step += 1;
+    } else {
+      state.missCount += 1;
+      state.streak = 0;
+      var detail = result.outcome === 'late' ? 'played too far apart' : (result.outcome === 'wrong' ? 'includes a wrong note' : 'is missing ' + result.missing.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + '));
+      setFeedback('Grip not accepted: ' + detail + '.', 'bad');
+    }
+    render();
+  }
+
+  function queueGripPracticeNote(event, attempt) {
+    if (!pendingGripAttempts || pendingGripAttempts.eventId !== event.id) {
+      pendingGripAttempts = { eventId: event.id, attempts: [] };
+      if (pendingGripTimer) window.clearTimeout(pendingGripTimer);
+      pendingGripTimer = window.setTimeout(function() { resolvePendingGripAttempt(event); }, (event.timing.toleranceMs || 80) + GRIP_COLLECTION_GRACE_MS);
+    }
+    pendingGripAttempts.attempts.push(attempt);
+    var result = evaluateGripAttempt(event, pendingGripAttempts.attempts);
+    if (result.accepted) resolvePendingGripAttempt(event);
+  }
+
   function handleMidiNote(rawMidi, velocity, channel) {
     var midi = displayMidiFromRaw(rawMidi);
     if (isReleaseBounceNoteOn(rawMidi, velocity)) {
@@ -3776,34 +4998,12 @@
     logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only') + ' ' + midiCellDebug(hitCell));
     rememberRecentMidiChordNote(midi, velocity, channel, hitCell);
 
+    var expectedEvent = expectedExerciseEvent();
     if (state.mode !== 'practice') {
       setFeedback('Play mode: ' + noteLabelFromMidi(midi) + ' is sounding freely.', 'live');
-    } else if (expected && mod(midi, 12) === expected.pc) {
-      state.correctCount += 1;
-      state.streak += 1;
-      state.calibrated[expectedKey] = {
-        expectedMidi: expected.midi,
-        receivedMidi: midi,
-        at: state.lastMidiAt
-      };
-      delete state.mismatched[expectedKey];
-      setFeedback('Correct: ' + noteLabelFromMidi(midi) + ' matches the current target.', 'good');
-      if (state.autoAdvance) {
-        window.setTimeout(function() {
-          state.step += 1;
-          render();
-        }, 220);
-      }
-    } else if (expected) {
-      state.missCount += 1;
-      state.streak = 0;
-      state.mismatched[expectedKey] = {
-        expectedMidi: expected.midi,
-        receivedMidi: midi,
-        at: state.lastMidiAt
-      };
-      setFeedback('Not this one: heard ' + noteLabelFromMidi(midi) + ', target is ' + noteLabelFromMidi(expected.midi) + '.', 'bad');
-    }
+    } else if (expectedEvent && expectedEvent.type === 'grip') {
+      queueGripPracticeNote(expectedEvent, { midi: midi, cellId: hitCell ? hitCell.id : '', at: state.lastMidiAt });
+    } else scoreSinglePracticeNote(expected, expectedKey, midi);
 
     if (midiHitTimer) window.clearTimeout(midiHitTimer);
     midiHitTimer = window.setTimeout(function() {
@@ -4535,8 +5735,14 @@
     if (els.exercise) els.exercise.value = state.exerciseId;
     if (els.octave) els.octave.value = state.octaveSide;
     if (els.view) els.view.value = state.view;
-    var path = getPracticePath(logicCells, scale);
-    currentPath = path;
+    var legacyPath = getPracticePath(logicCells, scale);
+    currentExerciseEvents = buildPracticeExerciseEvents(legacyPath, fingers);
+    currentPath = currentExerciseEvents.reduce(function(cells, event) {
+      return cells.concat(event.sourceCells || (event.sourceCell ? [event.sourceCell] : []));
+    }, []);
+    var currentEvent = expectedExerciseEvent();
+    var concealExerciseTargets = !!(isPracticeMode && currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets);
+    var path = concealExerciseTargets ? [] : currentPath;
     var current = path.length ? path[mod(state.step, path.length)] : null;
     var rootId = state.rootCellId;
     var rootCell = null;
@@ -4553,8 +5759,17 @@
     var fingerById = {};
     var i;
 
-    state.step = path.length ? mod(state.step, path.length) : 0;
+    state.step = currentExerciseEvents.length ? mod(state.step, currentExerciseEvents.length) : 0;
     var currentStepIndex = state.step;
+    currentEvent = expectedExerciseEvent();
+    var currentGripTargetsByKey = {};
+    var currentGripTargetNotes = [];
+    if (isPracticeMode && currentEvent && currentEvent.type === 'grip') {
+      currentEvent.targets.forEach(function(target, index) {
+        currentGripTargetsByKey[target.cellId + ':' + target.midi] = index + 1;
+        currentGripTargetNotes.push(noteLabelFromMidi(target.midi));
+      });
+    }
     var currentFinger = path.length ? fingers[mod(state.step, fingers.length)] : '';
     var ergonomicStep = scoreErgonomicStep(path, fingers, strategy, currentStepIndex);
     for (i = 0; i < path.length; i++) {
@@ -4600,6 +5815,26 @@
     var supportedRotationLabel = state.rotation === 0 ? 180 : 0;
     els.rotateSurface.textContent = 'Rotate ' + supportedRotationLabel;
     els.rotateSurface.setAttribute('aria-label', 'Rotate surface to ' + supportedRotationLabel + ' degrees');
+    var currentGripCells = cells.filter(function(cell) { return !!currentGripTargetsByKey[cell.id + ':' + cell.midi]; });
+    if (currentGripCells.length > 1) {
+      var keyWidth = CELL_W * layoutScale;
+      var keyHeight = CELL_H * layoutScale;
+      var minTargetX = Math.min.apply(null, currentGripCells.map(function(cell) { return cell.x + shiftX - keyWidth / 2; }));
+      var maxTargetX = Math.max.apply(null, currentGripCells.map(function(cell) { return cell.x + shiftX + keyWidth / 2; }));
+      var minTargetY = Math.min.apply(null, currentGripCells.map(function(cell) { return cell.y + shiftY - keyHeight / 2; }));
+      var maxTargetY = Math.max.apply(null, currentGripCells.map(function(cell) { return cell.y + shiftY + keyHeight / 2; }));
+      var bracket = document.createElement('div');
+      var progressionDegree = currentEvent.musicalIntent && currentEvent.musicalIntent.degree ? currentEvent.musicalIntent.degree + ' · ' : '';
+      bracket.className = 'chord-target-bracket';
+      bracket.setAttribute('data-testid', 'chord-target-bracket');
+      bracket.setAttribute('aria-hidden', 'true');
+      bracket.setAttribute('data-label', progressionDegree + currentGripTargetNotes.join(' · ') + ' together');
+      bracket.style.left = Math.round(minTargetX - 14) + 'px';
+      bracket.style.top = Math.round(minTargetY - 14) + 'px';
+      bracket.style.width = Math.round(maxTargetX - minTargetX + 28) + 'px';
+      bracket.style.height = Math.round(maxTargetY - minTargetY + 28) + 'px';
+      els.keyboard.appendChild(bracket);
+    }
     for (i = 0; i < cells.length; i++) {
       var cell = cells[i];
       var inPath = !!pathById[cell.id];
@@ -4608,6 +5843,8 @@
       var inScale = state.view === 'map' ? false : (isPracticeMode && state.view === 'practice' ? inPath : isScalePc(cell.pc, scale));
       var isTonic = cell.pc === state.tonicPc;
       var isCurrent = isPracticeMode && current && current.id.replace('-octave', '') === cell.id;
+      var currentGripTargetIndex = currentGripTargetsByKey[cell.id + ':' + cell.midi] || 0;
+      var isCurrentGripTarget = currentGripTargetIndex > 0;
       var heldInfo = getHeldInfoForCell(cell);
       var heldLevel = heldInfo.level;
       var heldPressure = heldLevel / 127;
@@ -4618,6 +5855,7 @@
       if (isPracticeMode && inPath && state.view === 'practice') classes.push('in-path');
       if (isTonic) classes.push('tonic');
       if (isCurrent) classes.push('current');
+      if (isCurrentGripTarget) classes.push('current-grip-target');
       if (isPracticeMode && state.view === 'calibration' && isCurrent) classes.push('calibration-target');
       if (heldLevel > 0 && heldInfo.exact) classes.push('midi-held');
       if (state.rawMidiFlash && state.activeMidiCellId === cell.id) classes.push('midi-hit');
@@ -4645,7 +5883,7 @@
         key.setAttribute('data-chain-offset', String(chainOffset(cell, rootCell)));
         key.setAttribute('data-chain-lane', hardwareLit ? String(litPracticeById[cell.id]) : chainLane(cell, rootCell));
       }
-      key.setAttribute('aria-label', cell.label + octave(displayMidi));
+      key.setAttribute('aria-label', cell.label + octave(displayMidi) + (isCurrentGripTarget ? ', chord target ' + currentGripTargetIndex + ' of ' + currentGripCells.length + ', play together with ' + currentGripTargetNotes.join(', ') : ''));
       key.addEventListener('pointerdown', (function(cellValue) {
         return function() {
           pressUiKey(cellValue, 96);
@@ -4667,6 +5905,9 @@
         };
       })(cell));
       key.innerHTML = '<span class="key-label"><span class="note">' + cell.label + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
+      if (isCurrentGripTarget) {
+        key.insertAdjacentHTML('beforeend', '<svg class="chord-target-hex-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon class="chord-target-hex-underlay" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon><polygon class="chord-target-hex-stroke" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon></svg>');
+      }
       if (isPracticeMode && inPath && state.view === 'practice') {
         var degree = document.createElement('span');
         degree.className = 'degree-badge';
@@ -4731,17 +5972,63 @@
     }
     els.fingerRule.textContent = getHandRule(strategy);
     els.drillPrompt.textContent = isPracticeMode ? exercise.prompt : 'Free-play the full Exquis surface. MIDI, pressure, audio, and note highlights stay live while scoring is paused.';
-    els.stepReadout.textContent = path.length ? String(state.step + 1) + ' / ' + path.length : '0 / 0';
-    els.currentNote.textContent = isPracticeMode && current ? noteName(current.midi) + octave(current.midi) : 'Free';
-    els.currentDegree.textContent = isPracticeMode && current ? 'Scale degree ' + getScaleDegree(current, scale) : 'No target in play mode';
-    if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && current ? fingerDisplayName(currentFinger) : 'Finger --';
-    if (els.targetStep) els.targetStep.textContent = isPracticeMode && current ? 'Step ' + String(state.step + 1) + ' of ' + String(path.length) : 'Step --';
+    els.stepReadout.textContent = currentExerciseEvents.length ? String(state.step + 1) + ' / ' + currentExerciseEvents.length : '0 / 0';
+    els.currentNote.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? currentEvent.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ') : (isPracticeMode && current ? noteName(current.midi) + octave(current.midi) : 'Free');
+    els.currentDegree.textContent = isPracticeMode && currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.progressionId
+      ? 'Progression ' + currentEvent.musicalIntent.degree
+      : (isPracticeMode && currentEvent && currentEvent.type === 'grip' ? 'Simultaneous ' + (currentEvent.musicalIntent.quality || 'multi-note') + ' grip' : (isPracticeMode && current ? 'Scale degree ' + getScaleDegree(current, scale) : 'No target in play mode'));
+    var selectedGripFingering = currentEvent && currentEvent.fingering && currentEvent.fingering.alternatives.filter(function(option) { return option.id === state.gripFingeringOption; })[0];
+    var displayedGripAssignments = selectedGripFingering ? selectedGripFingering.assignments : (currentEvent && currentEvent.fingering ? currentEvent.fingering.assignments : []);
+    var concealCoachTarget = !!(currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets);
+    var coachTarget = concealCoachTarget ? 'Listen, then answer' : (isPracticeMode && currentEvent && currentEvent.type === 'grip'
+      ? currentEvent.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ')
+      : (isPracticeMode && current ? noteLabelFromMidi(current.midi) : 'Free play'));
+    if (els.coachNowPlaying) els.coachNowPlaying.textContent = coachTarget;
+    if (els.coachActionCue) els.coachActionCue.textContent = concealCoachTarget
+      ? 'Hear the interval, then press the matching two-button shape together.'
+      : (currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.progressionId
+        ? 'Progression ' + currentEvent.musicalIntent.degree + ': press every highlighted button together.'
+        : describeCoachAction(currentEvent, current, currentFinger, displayedGripAssignments));
+    if (els.coachNextAction) {
+      var lastAttemptAccepted = state.feedbackKind === 'good';
+      els.coachNextAction.textContent = lastAttemptAccepted ? 'Continue' : (isPracticeMode ? 'Hear target' : 'Play target');
+      els.coachNextAction.setAttribute('aria-label', lastAttemptAccepted ? 'Continue to the next target' : 'Hear the current target');
+    }
+    if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? displayedGripAssignments.map(function(assignment) { return fingerDisplayName(assignment.finger); }).join(' / ') : (isPracticeMode && current ? fingerDisplayName(currentFinger) : 'Finger --');
+    if (els.targetStep) els.targetStep.textContent = isPracticeMode && currentEvent ? 'Step ' + String(state.step + 1) + ' of ' + String(currentExerciseEvents.length) : 'Step --';
     if (els.buttonReason) els.buttonReason.textContent = isPracticeMode && current ? describeButtonChoice(cells, current, rootCell) : 'Free-play chooses any physical button.';
     if (els.fingerReason) els.fingerReason.textContent = isPracticeMode && current ? describeFingerChoice(strategy, currentStepIndex, currentFinger, fingers) : 'No fingering scaffold in play mode.';
     if (els.motionReason) els.motionReason.textContent = isPracticeMode && current ? describeMotionChoice(strategy, currentStepIndex, fingers) : 'Move freely in play mode.';
     if (els.ergonomicReason) {
       els.ergonomicReason.textContent = isPracticeMode && current ? ergonomicStep.text : 'Movement load: not scored in play mode.';
       els.ergonomicReason.setAttribute('data-load-level', isPracticeMode && current ? ergonomicStep.level : 'off');
+    }
+    if (els.gripFingeringControl && els.gripFingering) {
+      var gripActive = !!(isPracticeMode && currentEvent && currentEvent.type === 'grip');
+      els.gripFingeringControl.hidden = !gripActive;
+      if (gripActive) {
+        clearChildren(els.gripFingering);
+        var primaryOption = document.createElement('option');
+        primaryOption.value = 'primary';
+        primaryOption.textContent = 'Pattern default';
+        els.gripFingering.appendChild(primaryOption);
+        currentEvent.fingering.alternatives.forEach(function(option) {
+          var alternativeOption = document.createElement('option');
+          alternativeOption.value = option.id;
+          alternativeOption.textContent = option.label;
+          els.gripFingering.appendChild(alternativeOption);
+        });
+        if (!currentEvent.fingering.alternatives.some(function(option) { return option.id === state.gripFingeringOption; })) state.gripFingeringOption = 'primary';
+        els.gripFingering.value = state.gripFingeringOption;
+      }
+    }
+    if (els.harmonyTriadControl) {
+      var harmonyActive = !!(isPracticeMode && (state.exerciseId === 'harmony_triad' || state.exerciseId === 'voice_leading'));
+      els.harmonyTriadControl.hidden = !harmonyActive;
+      if (harmonyActive) {
+        els.harmonyQuality.value = state.harmonyQuality;
+        els.harmonyInversion.value = String(state.harmonyInversion);
+      }
     }
     els.audioStatus.textContent = state.audioStatus;
     if (els.performanceVolume) els.performanceVolume.value = String(state.performanceVolume);
@@ -4777,7 +6064,9 @@
     els.midiActivity.textContent = state.midiActivity + '\n' + heldMidiActivitySummary();
     els.coachFeedback.className = 'feedback-' + state.feedbackKind;
     els.coachFeedback.textContent = state.feedback;
-    els.drillScore.textContent = isPracticeMode ? 'Score: ' + state.correctCount + ' correct / ' + state.missCount + ' missed / streak ' + state.streak : 'Play mode: score paused / all keys available';
+    els.drillScore.textContent = isPracticeMode
+      ? 'Step ' + String(state.step + 1) + ' / ' + String(currentExerciseEvents.length) + ' | Score: ' + state.correctCount + ' correct / ' + state.missCount + ' missed / streak ' + state.streak
+      : 'Play mode: score paused / all keys available';
     updateCalibrationStats();
     if (state.view === 'calibration') {
       els.assumptionText.className = 'calibration-note';
@@ -4910,6 +6199,26 @@
       state.strategyId = els.strategy.value;
       render();
     });
+    if (els.gripFingering) {
+      els.gripFingering.addEventListener('change', function() {
+        state.gripFingeringOption = els.gripFingering.value || 'primary';
+        render();
+      });
+    }
+    if (els.harmonyQuality) {
+      els.harmonyQuality.addEventListener('change', function() {
+        state.harmonyQuality = els.harmonyQuality.value;
+        state.step = 0;
+        render();
+      });
+    }
+    if (els.harmonyInversion) {
+      els.harmonyInversion.addEventListener('change', function() {
+        state.harmonyInversion = parseInt(els.harmonyInversion.value, 10) || 0;
+        state.step = 0;
+        render();
+      });
+    }
     els.view.addEventListener('change', function() {
       state.view = els.view.value;
       render();
@@ -4924,9 +6233,6 @@
       state.rootCellId = '';
       logEvent('ui', 'surface rotation ' + state.rotation);
       render();
-    });
-    els.tone.addEventListener('change', function() {
-      state.tone = els.tone.value;
     });
     els.soundEngine.addEventListener('change', function() {
       state.soundEngine = els.soundEngine.value;
@@ -5013,6 +6319,15 @@
       render();
     });
     els.playStep.addEventListener('click', playCurrent);
+    els.coachNextAction.addEventListener('click', function() {
+      if (state.feedbackKind === 'good' && state.mode === 'practice') {
+        state.step += 1;
+        setFeedback('Practice mode: follow the current target.', 'neutral');
+        render();
+      } else {
+        playCurrent();
+      }
+    });
     els.testAudio.addEventListener('click', playTestTone);
     els.playScale.addEventListener('click', playPath);
     els.enableMidi.addEventListener('click', enableMidi);
@@ -5072,10 +6387,14 @@
       exercise: document.getElementById('exerciseSelect'),
       exerciseButtons: document.getElementById('exerciseButtons'),
       strategy: document.getElementById('strategySelect'),
+      gripFingering: document.getElementById('gripFingeringSelect'),
+      gripFingeringControl: document.getElementById('gripFingeringControl'),
+      harmonyQuality: document.getElementById('harmonyQualitySelect'),
+      harmonyInversion: document.getElementById('harmonyInversionSelect'),
+      harmonyTriadControl: document.getElementById('harmonyTriadControl'),
       view: document.getElementById('viewSelect'),
       orientation: document.getElementById('orientationSelect'),
       rotateSurface: document.getElementById('rotateSurface'),
-      tone: document.getElementById('toneSelect'),
       soundEngine: document.getElementById('soundEngineSelect'),
       soundCategory: document.getElementById('soundCategorySelect'),
       soundPreset: document.getElementById('soundPresetSelect'),
@@ -5108,6 +6427,9 @@
       ergonomicReason: document.getElementById('ergonomicReason'),
       drillPrompt: document.getElementById('drillPrompt'),
       currentNote: document.getElementById('currentNote'),
+      coachNowPlaying: document.getElementById('coachNowPlaying'),
+      coachActionCue: document.getElementById('coachActionCue'),
+      coachNextAction: document.getElementById('coachNextAction'),
       stepReadout: document.getElementById('stepReadout'),
       currentDegree: document.getElementById('currentDegree'),
       assumptionText: document.getElementById('assumptionText'),
@@ -5155,7 +6477,6 @@
     els.strategy.value = state.strategyId;
     els.view.value = state.view;
     els.orientation.value = state.orientation;
-    els.tone.value = state.tone;
     els.soundEngine.value = state.soundEngine;
     els.soundCategory.value = state.soundCategory;
     els.soundPreset.value = state.soundPresetId;

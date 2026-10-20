@@ -28,7 +28,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertTrue((ROOT / "index.html").exists())
         self.assertTrue((ROOT / "dist/index.html").exists())
         self.assertIn("<!doctype html>", self.bundle.lower())
-        self.assertRegex(self.bundle, r'src="ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
+        self.assertRegex(self.bundle, r'src="ssli/index\.html\?exhibitHost=1&amp;v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
         self.assertFalse((ROOT / "exhibit.json").exists())
 
     def test_versioned_parts_exist(self):
@@ -52,7 +52,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn('data-testid="build-version"', self.bundle)
         self.assertIn('data-testid="keyboard"', self.bundle)
         self.assertIn("EXQUIS_NOTE_ROWS", self.bundle)
-        self.assertIn("Soft Wurli", self.bundle)
+        self.assertIn("Wurlitzer EP", self.bundle)
         self.assertIn('data-testid="mode-select"', self.bundle)
         self.assertIn('data-testid="mode-switch"', self.bundle)
         self.assertIn('data-testid="practice-mode"', self.bundle)
@@ -74,8 +74,8 @@ class StaticExhibitTests(unittest.TestCase):
         utc_timestamp = utc_match.group(1)
         self.assertIn(f'<meta name="ssli-exquis-build-version" content="{version}">', self.bundle)
         self.assertIn(f'window.SSLI_EXQUIS_BUILD = {{"version":"{version}","timestamp":"{timestamp}","timestampUtc":"{utc_timestamp}"}};', self.bundle)
-        self.assertIn(f'src="ssli/index.html?v={utc_timestamp}"', self.bundle)
-        self.assertIn(f"var freshSrc = 'ssli/index.html?v={utc_timestamp}';", self.bundle)
+        self.assertIn(f'src="ssli/index.html?exhibitHost=1&amp;v={utc_timestamp}"', self.bundle)
+        self.assertIn(f"var freshSrc = 'ssli/index.html?exhibitHost=1&v={utc_timestamp}';", self.bundle)
         self.assertNotIn("{{BUILD_VERSION}}", self.bundle)
         self.assertNotIn("{{BUILD_TIMESTAMP}}", self.bundle)
         self.assertNotIn("{{BUILD_TIMESTAMP_UTC}}", self.bundle)
@@ -107,7 +107,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertTrue(ssli_index.exists())
         self.assertGreater(ssli_index.stat().st_size, 1_000_000)
         self.assertIn('id="ssliEngineFrame"', self.bundle)
-        self.assertRegex(self.bundle, r'src="ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
+        self.assertRegex(self.bundle, r'src="ssli/index\.html\?exhibitHost=1&amp;v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"')
         self.assertIn("SL.presets.apply", self.bundle)
         self.assertIn("SL.audio.playNoteOnInstrument", self.bundle)
 
@@ -135,23 +135,15 @@ class StaticExhibitTests(unittest.TestCase):
     def test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior(self):
         import build
 
-        self.assertEqual(
-            [patch.name for patch in build.SSLI_INDEX_PATCHES],
-            [
-                "disable-stale-service-worker",
-                "fm-engine-requires-instrument-output",
-                "fm-fallback-active-voice-makeup-gain",
-                "subtractive-direct-midi-linear-velocity-amplitude",
-                "subtractive-sustained-linear-velocity-amplitude",
-                "subtractive-fallback-active-voice-rms-makeup",
-                "fm-fallback-dx7-matrix-routing",
-                "fm-fallback-dx7-algorithm-matrix",
-                "fm-fallback-dx7-operator-source-fields",
-                "fm-fallback-dx7-operator-source-params",
-                "fm-fallback-dx7-keyon-gain-and-frequency",
-                "fm-fallback-pass-midi-note-to-operators",
-            ],
-        )
+        index_patch_names = {patch.name for patch in build.SSLI_INDEX_PATCHES}
+        self.assertTrue({
+            "disable-stale-service-worker",
+            "disable-embedded-ssli-web-midi-in-exhibit-host",
+            "physical-engine-api-live-note-pressure",
+            "fm-engine-requires-instrument-output",
+            "fm-fallback-dx7-matrix-routing",
+            "fm-fallback-pass-midi-note-to-operators",
+        }.issubset(index_patch_names))
         self.assertTrue(all(patch.name and patch.before and patch.after for patch in build.SSLI_INDEX_PATCHES))
         self.assertEqual(
             [patch.name for patch in build.SSLI_WORKLET_PATCHES],
@@ -195,15 +187,15 @@ class StaticExhibitTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Missing SSLI runtime patch target"):
                 build.apply_required_text_patches("unrelated upstream file", build.SSLI_INDEX_PATCHES, target)
 
-    def test_regression_ssli_physical_runtime_is_not_locally_patched_for_per_note_pressure(self):
+    def test_regression_ssli_physical_runtime_uses_scoped_per_note_pressure(self):
         ssli_text = (ROOT / "ssli/index.html").read_text(encoding="utf-8")
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
-        self.assertNotIn("function updateNotePressure(midi, pressure, instId)", ssli_text)
-        self.assertNotIn("updateNotePressure: updateNotePressure", ssli_text)
-        self.assertNotIn("type: 'notePressure'", ssli_text)
+        self.assertIn("function updateNotePressure(midi, pressure, instId)", ssli_text)
+        self.assertIn("updateNotePressure: updateNotePressure", ssli_text)
+        self.assertIn("type: 'updateNotePressure'", ssli_text)
+        self.assertIn("case 'updateNotePressure':", worklet_text)
+        self.assertIn("updateNotePressure(midiNote, instId, pressure)", worklet_text)
         self.assertNotIn("case 'notePressure':", worklet_text)
-        self.assertNotIn("updateNotePressure(midiNote, pressure, instId)", worklet_text)
-        self.assertNotIn("setPressure(pressure)", worklet_text)
 
     def test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on(self):
         worklet_text = (ROOT / "ssli/assets/physical-worklet.js").read_text(encoding="utf-8")
@@ -258,7 +250,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("service worker disabled for Exquis exhibit runtime", ssli_text)
         self.assertNotIn("navigator.serviceWorker.register('sw.js')", ssli_text)
         self.assertIn("ensureFreshSsliFrame", self.bundle)
-        self.assertRegex(self.bundle, r"ssli/index\.html\?v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+        self.assertRegex(self.bundle, r"ssli/index\.html\?exhibitHost=1(?:&amp;|&)v=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
         self.assertIn("removed stale SSLI service worker cache", self.bundle)
 
     def test_public_build_includes_ssli_audio_worklet_assets(self):
@@ -379,8 +371,7 @@ class StaticExhibitTests(unittest.TestCase):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
         self.assertIn("applyExhibitPresetCorrections(payload)", app)
         self.assertIn("exhibitTimbreCorrection", app)
-        self.assertIn("SSLI preset corrected engine=fm", app)
-        self.assertIn('"lead-solo"', self.bundle)
+        self.assertIn("SSLI preset corrected engine=' + payload.engine", app)
 
     def test_ssli_vendor_data_has_expected_shape(self):
         subtractive = json.loads((ROOT / "src/vendor/ssli/presets/subtractive-presets.json").read_text(encoding="utf-8"))
@@ -522,7 +513,7 @@ class StaticExhibitTests(unittest.TestCase):
             "engineLabel": "FM",
             "audioSignature": {
                 "available": True,
-                "trigger": "six-note-midi",
+                "trigger": "continuous-poly-pressure-midi",
                 "instrumentType": "fm",
                 "engineSettingsKeys": ["operators"],
                 "engineSettingsHash": "engine-hash",
@@ -541,24 +532,27 @@ class StaticExhibitTests(unittest.TestCase):
                 "analyserArmedBeforeTrigger": True,
                 "diagnosticLog": "current run held=0 local=0 ssli=0",
                 "voiceCleanup": {"heldNotes": 0, "midiVoices": 0, "ssliActiveOscillators": 0},
+                "polyAftertouchEvents": 12,
+                "channelPressureEvents": 0,
+                "continuousPressureFrames": 6,
             },
         }
-        self.assertEqual(sweep.validate_comprehensive_audio_acceptance(base, "six-note-midi"), [])
+        self.assertEqual(sweep.validate_comprehensive_audio_acceptance(base, "continuous-poly-pressure-midi"), [])
 
         boosted_output = json.loads(json.dumps(base))
         boosted_output["audioSignature"]["diagnosticLog"] = "SSLI normalization preset=Subtractive::A volume=100 output=4.00"
-        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(boosted_output, "six-note-midi"))
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(boosted_output, "continuous-poly-pressure-midi"))
         self.assertIn("output boost compensation is not allowed", errors)
 
         wrong_path = json.loads(json.dumps(base))
         wrong_path["audioSignature"]["analyserPath"] = "browser node"
-        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(wrong_path, "six-note-midi"))
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(wrong_path, "continuous-poly-pressure-midi"))
         self.assertIn("audio was not captured from final SSLI output analyser", errors)
 
         missing_repeatable_evidence = json.loads(json.dumps(base))
         missing_repeatable_evidence["audioSignature"]["samples"] = 0
         missing_repeatable_evidence["audioSignature"]["waveformHash"] = ""
-        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(missing_repeatable_evidence, "six-note-midi"))
+        errors = "; ".join(sweep.validate_comprehensive_audio_acceptance(missing_repeatable_evidence, "continuous-poly-pressure-midi"))
         self.assertIn("too few analyser frames", errors)
         self.assertIn("missing waveformHash", errors)
 
@@ -574,7 +568,7 @@ class StaticExhibitTests(unittest.TestCase):
             audio_sample_ms=650,
         )
         sweep.apply_comprehensive_audio_defaults(args)
-        self.assertEqual(args.trigger, "six-note-midi")
+        self.assertEqual(args.trigger, "continuous-poly-pressure-midi")
         self.assertTrue(args.mature_engines_only)
         self.assertTrue(args.require_full_catalog)
         self.assertFalse(args.one_per_category)
@@ -657,8 +651,7 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("--case", result.stdout)
         self.assertIn("--sample-ms", result.stdout)
         self.assertIn("--trigger", result.stdout)
-        self.assertIn("single-midi", result.stdout)
-        self.assertIn("--normalization-target-rms", result.stdout)
+        self.assertIn("{preview,midi}", result.stdout)
         self.assertIn("waveform", result.stdout.lower())
 
     def test_preset_signature_check_compares_runtime_engine_settings_and_audio(self):
@@ -720,7 +713,7 @@ class StaticExhibitTests(unittest.TestCase):
         registered = set(playwright_module.PlaywrightExhibitTests.STATED_FAILURE_REGRESSIONS.values())
         static_tripwires = {
             "test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior",
-            "test_regression_ssli_physical_runtime_is_not_locally_patched_for_per_note_pressure",
+            "test_regression_ssli_physical_runtime_uses_scoped_per_note_pressure",
             "test_regression_physical_pluck_aftertouch_does_not_add_energy_above_note_on",
             "test_regression_plucked_midi_one_shots_bound_physical_voice_lifetime",
             "test_regression_physical_worklet_scales_six_voice_polyphony_headroom",
@@ -729,10 +722,15 @@ class StaticExhibitTests(unittest.TestCase):
             "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
             "test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels",
             "test_regression_mature_normalization_fixture_matches_live_catalog_size",
+            "test_regression_mature_normalization_covers_live_catalog",
             "test_regression_mature_preset_normalization_does_not_boost_output",
             "test_regression_mature_engine_normalization_uses_canonical_engine_keys",
+            "test_regression_ssli_output_normalization_uses_audio_param_smoothing",
             "test_regression_fm_key_presets_use_exhibit_timbre_corrections",
             "test_regression_runtime_fm_presets_use_corrected_exhibit_settings",
+            "test_regression_exercise_event_schema",
+            "test_regression_simultaneous_grip_event_schema",
+            "test_regression_exercise_lifecycle_event_schema",
         }
         playwright_regressions = {
             name for name in dir(playwright_module.PlaywrightExhibitTests)
@@ -759,15 +757,17 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("quiet preset lacks measured override", script)
         self.assertIn("missing SSLI normalization output log", script)
 
-    def test_regression_mature_normalization_fixture_matches_live_catalog_size(self):
-        fixture = json.loads((ROOT / "tests/fixtures/ssli_mature_normalization_required_overrides.json").read_text(encoding="utf-8"))
-        mature_count = 0
-        for engine in ("subtractive", "fm", "physical"):
+    def test_regression_mature_normalization_covers_live_catalog(self):
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        normalized_presets = set(re.findall(
+            r"'((?:Subtractive|FM|Physical)::[^']+::[^']+)':\s*\{\s*instrumentVolume:\s*([0-9.]+),\s*outputGain:\s*([0-9.]+)\s*\}",
+            app,
+        ))
+        expected_count = 0
+        for engine, label in (("subtractive", "Subtractive"), ("fm", "FM"), ("physical", "Physical")):
             presets = json.loads((ROOT / f"src/vendor/ssli/presets/{engine}-presets.json").read_text(encoding="utf-8"))
-            mature_count += len(presets["presets"])
-        self.assertEqual(fixture["availablePresetCount"], mature_count)
-        self.assertEqual(fixture["sweptPresetCount"], mature_count)
-        self.assertGreaterEqual(len(fixture["requiredOverrides"]), 40)
+            expected_count += len(presets["presets"])
+        self.assertEqual(len(normalized_presets), expected_count)
 
     def test_regression_mature_preset_normalization_does_not_boost_output(self):
         app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")

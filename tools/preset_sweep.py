@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--voice-stress-acceptance", action="store_true", help="Fail unless every selected live preset survives a repeatable 200-note MIDI voice-stress sequence with final-output audio analysis.")
     parser.add_argument("--normalization-min-spectrum-rms", type=float, default=0.0068, help="Minimum accepted spectrum RMS for a normalized single-midi preset sweep.")
     parser.add_argument("--normalization-max-clip-ratio", type=float, default=0.01, help="Maximum accepted clip ratio for normalization acceptance sweeps.")
-    parser.add_argument("--normalization-baseline-output-gain", type=float, default=4.0, help="Expected mature-engine baseline output gain in normalization acceptance sweeps.")
+    parser.add_argument("--normalization-baseline-output-gain", type=float, default=1.0, help="Expected mature-engine baseline output gain in normalization acceptance sweeps. Output normalization must not boost above unity.")
     parser.add_argument("--require-full-catalog", action="store_true", help="Fail if filters or list files reduce the sweep below the live preset catalog size.")
     parser.add_argument("--performance-volume", type=int, default=80, help="Sound-panel Volume value used during MIDI sweeps.")
     parser.add_argument("--engine", default="", help="Only sweep engines whose value or label contains this text.")
@@ -435,7 +435,11 @@ def normalization_recommendation(signature, target_rms, performance_volume):
     else:
         instrument_volume = 100
         instrument_multiplier = possible_up
-        global_multiplier = required / possible_up
+        # The exhibit deliberately does not compensate a quiet preset with a
+        # master-output boost: that can reintroduce clipping and starvation
+        # after sustained note bursts. Record the unachievable target through
+        # requiredAmplitudeMultiplier, but keep the applied recommendation safe.
+        global_multiplier = 1.0
     return {
         "targetRms": round(target_rms, 5),
         "measuredRms": round(rms, 5),
@@ -592,7 +596,11 @@ def ssli_single_note_midi_signature(page, sample_ms, midi, pressure):
           }
           send([0xD0 | channel, 0]);
           send([0x80 | channel, midi, 0]);
-          await new Promise(resolve => setTimeout(resolve, 180));
+            // Release-strum plucks are intentionally committed after note-off
+            // and own a bounded 320 ms physical one-shot. Wait past that
+            // lifecycle before taking the idle snapshot, otherwise the sweep
+            // reports a healthy decaying note as a stuck MIDI voice.
+            await new Promise(resolve => setTimeout(resolve, 460));
           framePeaks.sort((a, b) => a - b);
           frameMaxSteps.sort((a, b) => a - b);
           const tailFrames = frameRmsValues.slice(Math.floor(frameRmsValues.length * 0.8));

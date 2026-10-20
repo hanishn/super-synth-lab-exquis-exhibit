@@ -82,19 +82,21 @@ Exercise mode is separate from hand, octave side, and fingering strategy so the 
 
 All exercise modes reuse the selected Exquis root and the same octave/path-aware cells used by MIDI coaching and playback. Changing exercise mode changes the stepped practice path, not just the prompt text.
 
+Every generated step is represented as a validated exercise event: musical intent, exact physical-cell/MIDI target, primary and alternative fingering, timing mode, and remediation policy. The contract includes sequential notes, simultaneous grips, holds, releases, and non-audible position shifts. Existing scale drills currently emit one sequential note target per event; the same contract will support simultaneous diads/triads, rhythm, ear prompts, progressions, and repertoire without inventing a parallel scoring system for each.
+
+Scale events are the authoritative sequence for playback and coach scoring. The familiar practice path remains a derived visual and ergonomic projection, preserving the order, root selection, finger labels, and auto-advance behavior of the existing root-to-octave, two-octave, inner-ladder, and root-return drills.
+
+The first multi-note drills are a major-third diad and a root-position major triad, both derived from the selected root and scale. Their targets must arrive within the event's 80ms simultaneous window. Each scores once for the complete grip; partial, late, and wrong-note attempts do not advance. Exquis MIDI does not identify the finger that made contact, so alternate fingerings are learner-selected coaching options, never silently claimed as measured facts.
+
 When the same pitch exists on multiple physical buttons, the practice path chooses the exact pitch first, keeps the two-chain path second, then favors the more centered duplicate. The target panel explains that choice for the current note. Finger numbers are presented as a strategy scaffold rather than piano law: the default Natural clusters strategy maps nearby notes to pinky, ring, middle, and index clusters, then explicitly cues a wrist/hand shift when the pattern repeats.
 
 The target panel also reports a first-pass ergonomic movement load. The score is intentionally transparent: it combines physical button travel, a Fitts-style movement prior, repeated-finger movement, weak-finger pressure risk, and explicit hand-shift moments. It is not a universal truth engine; it is a tunable model based on the same research direction used by piano-fingering optimization and motor-control literature: Parncutt et al.'s ergonomic fingering model, Fitts' law for aimed movement, finger individuation/enslaving research, and MPE/continuous-control concerns around sustained pressure.
 
 The ergonomic model is key/mode agnostic. It scores the current physical path after the tonic, scale/mode, root, and exercise have produced exact MIDI targets and Exquis button coordinates. Dorian, Mixolydian, Blues, two-octave, and future modes must keep the same movement-load features instead of falling back to C-major-specific presets.
 
-### Built-In Guide Audio
+### Built-In Practice Audio
 
-The exhibit includes a self-contained WebAudio guide tone fallback. SSLI sound presets are not approximated locally when SSLI is available; selected presets are applied through `SynthLab.presets.apply`, short guide notes use `SynthLab.audio.playNoteOnInstrument`, plucked physical Exquis strums use onset-only physical model one-shots, and sustained Exquis MIDI performance uses `SynthLab.audio.startSustainedNote` / `stopSustainedNote`.
-
-- Soft Wurli
-- Round Sine
-- Muted Pluck
+The exhibit uses the selected SSLI sound preset for practice-note previews and path playback. A fixed self-contained WebAudio tone remains only for the explicit Test Tone diagnostic, so it can verify local audio output without competing with the selected musical timbre. SSLI sound presets are not approximated locally when SSLI is available; selected presets are applied through `SynthLab.presets.apply`, short practice notes use `SynthLab.audio.playNoteOnInstrument`, plucked physical Exquis strums use onset-only physical model one-shots, and sustained Exquis MIDI performance uses `SynthLab.audio.startSustainedNote` / `stopSustainedNote`.
 - Test Tone with visible audio status
 - SSLI preset selector with engine/category/preset selection delegated to the real SSLI preset/audio API for playback
 - SSLI FX preset selector applying selected chains through the real SSLI `EffectChain` API when SSLI is available
@@ -144,13 +146,13 @@ Repeated Exquis note bursts must not reapply the selected SSLI preset for every 
 
 Stale note-off messages for voices that were already pruned are ignored with a diagnostic log entry instead of double-stopping SSLI voices or clearing the current touch state. While multiple notes are held, global SSLI expression follows the strongest currently held pressure. A pressure-zero packet for one note must not collapse output gain/cutoff while another note is still pressed.
 
-For a single held note, pressure zero clears SSLI expression directly instead of falling back to the original note-on velocity. MIDI practice playback applies the user-facing Sound-panel Volume through `SynthLab.audio.setInstrumentVolume(inst, volume)` and converts Exquis pressure through the selected pressure curve before inverse-compensating SSLI's squared sustained-note velocity response. Presets with measured low output use an explicit normalization entry: a per-preset instrument-volume target plus a bounded output multiplier on the SSLI instrument output node. This normalization must be logged with the preset id, volume, and output gain; it must not be a silent wrapper around SSLI's final destination.
+For a single held note, pressure zero clears SSLI expression directly instead of falling back to the original note-on velocity. MIDI practice playback applies the user-facing Sound-panel Volume through `SynthLab.audio.setInstrumentVolume(inst, volume)` and converts Exquis pressure through the selected pressure curve before inverse-compensating SSLI's squared sustained-note velocity response. Every mature-engine preset has an explicit, sweep-measured instrument-volume target. Its output gain is capped at unity: normalization may attenuate a loud preset through instrument volume, but it must never add a compensating output boost that risks clipping or voice-pool instability. This normalization must be logged with the preset id, volume, and output gain; it must not be a silent wrapper around SSLI's final destination.
 
 When duplicate physical cells share the same exact MIDI note, incoming MIDI feedback highlights the centered matching cell by default. This keeps `C3` near the center (`r5c3`) instead of lighting an edge duplicate (`r4c0`) while still requiring an exact full MIDI note match.
 
 ### Repeatable Preset Sweep
 
-Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live final SSLI output path through `SL.audio.getAnalyser()` for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`. Comprehensive audio acceptance uses `--comprehensive-audio-acceptance`; it forces the mature Subtractive/FM/Physical catalog, six-note MIDI playback, full selected-catalog coverage, final-output analyser capture, repeatable waveform/spectrum/settings hashes, and JSON/CSV evidence. Normalization sweeps use `--trigger single-midi` with a fixed MIDI note and pressure, then report the per-preset instrument-volume recommendation plus any remaining global-output multiplier needed to hit the target RMS. Acceptance normalization sweeps must add `--normalization-acceptance --require-full-catalog` so missing normalization logs, low-level outliers without measured overrides, clipping, and incomplete preset coverage fail the run.
+Broad preset validation must use `tools/preset_sweep.py`, not inference from a few selected presets. The sweep builds/loads the standalone app with Playwright through a localhost HTTP server so the hidden SSLI frame is same-origin, enumerates the live Engine, Category, and Preset controls, can filter by engine/category/preset-name text for targeted checks, triggers playback for each selected preset, captures page errors and console errors, records SSLI instrument type/settings evidence after playback, samples the live final SSLI output path through `SL.audio.getAnalyser()` for waveform peak/RMS, spectrum peak/RMS, and waveform/spectrum hashes, and writes machine-readable JSON plus CSV results under `tmp_preset_sweep/`. Comprehensive audio acceptance uses `--comprehensive-audio-acceptance`; it forces the mature Subtractive/FM/Physical catalog, six-note MIDI playback, full selected-catalog coverage, final-output analyser capture, repeatable waveform/spectrum/settings hashes, and JSON/CSV evidence. Normalization sweeps use `--trigger single-midi` with a fixed MIDI note and pressure, then report the per-preset instrument-volume recommendation. When a quiet source cannot reach the target at volume 100, the report retains its required multiplier as measurement evidence but recommends unity output gain; no global-output boost is applied. Acceptance normalization sweeps must add `--normalization-acceptance --require-full-catalog` so missing normalization logs, low-level outliers without measured overrides, clipping, and incomplete preset coverage fail the run.
 
 The required mature-engine poly-pressure procedure is:
 
@@ -189,7 +191,7 @@ python tools/preset_sweep.py --mature-engines-only --one-per-category --trigger 
 
 ### Responsive Practice Ergonomics
 
-The page is designed around the Exquis surface first. Tonic, centered root, hand, fingering, orientation, and rotation stay in the top panel. SSLI preset, FX, and filter controls are visible in the right rail so sound design does not require opening a separate drawer.
+The page is designed around the Exquis surface first. Tonic, centered root, hand, fingering, orientation, and rotation stay in the top panel. The right rail begins with a single `Practice Coach` surface: current target, physical action cue, coaching result, next action, and progress. Sound design and diagnostics remain available through closed `Session settings` and `Hardware tools` sections.
 
 Current ergonomic guarantees:
 
@@ -204,15 +206,15 @@ Current ergonomic guarantees:
 - The Exquis key field is scaled up to use available stage space on desktop and after viewport resize, while preserving the locked regular-hex geometry.
 - Practice mode lights two in-scale pads per row. The C-major practice path is separately marked and fingered, while the broader purple key LEDs remain in-key rather than random physical lanes.
 - Hardware-lit scale pads stay visibly lit in both horizontal and vertical practice views, even when they are not part of the current fingering path.
-- Guide Tone selection is visually separate from the SSLI engine/category/preset and FX controls.
-- MIDI enablement is the first prominent side-rail action because connecting the Exquis is the first required user step.
+- Practice playback has no separate legacy guide-tone selector; the selected SSLI sound is the musical timbre.
+- The `Practice Coach` is the first prominent side-rail surface. MIDI connection remains available inside that surface before a session begins.
 - The keyboard surface uses a plain controller pad field, not a cartesian background grid.
-- Primary practice, sound, preset, FX, and filter controls remain visible at laptop size without relying on page clipping or document scrolling.
-- The diagnostic console is visible during practice as a dock with Reset, Copy, and Exit controls.
+- The active target, action cue, coaching result, next action, and progress remain visible at laptop size without relying on page clipping or document scrolling.
+- Sound, preset, FX, filter, hardware probe, calibration, legend, and console controls remain reachable through named closed sections rather than competing with active practice.
 - Mobile keeps the overall document width stable and makes the Exquis surface intentionally pannable.
 - Tonic, in-scale, practice-path, current-step, and MIDI touch states use distinct visual treatments.
 - Cutoff and resonance sliders expose live numeric values.
-- Verbose diagnostics, calibration, and explanatory legend text are demoted from the always-visible no-scroll view.
+- Raw MIDI activity, last-input data, verbose diagnostics, calibration, and explanatory legend text are demoted from the active teaching flow.
 
 ## Planned Capabilities
 
@@ -248,7 +250,7 @@ The stage includes an Exquis edge-control map so hardware zones are visible in t
 
 On the tested hardware, Probe produced a visible light change and an echoed legacy keepalive (`F0 00 21 7E F7`) while the official Developer Mode root/scale readback commands produced no response. Sync therefore also sends a legacy backend update: keepalive, per-pad MIDI note mapping (`F0 00 21 7E 04 pad note F7`), and legacy LED colors generated from the current UI tonic and mode. Legacy command `03h` targets note-color LEDs; command `07h` targets button-color LEDs and is the normal Sync default after hardware testing showed `03h` changed a different light set than the playable button lights. Normal Sync logs one compact summary per hardware update, sends note mapping once per sync session, debounces root/scale changes, and suppresses routine keepalive echo spam; Probe remains verbose for diagnostics. Because legacy pad numbering is not documented in the official API and may vary by firmware/orientation, the MIDI Coach exposes Legacy Map and Legacy Lights selectors for calibration.
 
-Diagnostic fields are intentionally visible:
+Hardware tools expose the following diagnostic fields on demand:
 
 - MIDI status
 - MIDI input selector
@@ -270,12 +272,57 @@ The current flow:
 
 ### Practice Coach
 
-The MIDI coach now behaves like a basic drill teacher:
+The Practice Coach consumes the current exercise event rather than relying on presentation-only labels. The active view owns one authoritative result message and one progress line:
+
+- `Now play` names the pitch or grip that matches the highlighted physical cells.
+- `How` gives a direct physical action cue, including suggested grip fingers when available.
+- `Coach result` reports neutral, success, or repair feedback in one polite live region.
+- `Hear target` provides a first-attempt reference; `Continue` appears after a successful gesture.
+- `Progress` shows step, correct count, missed count, and streak without a separate score panel.
 
 - Correct target notes increment correct count and streak.
 - Wrong notes increment misses and reset streak.
-- Auto advance moves to the next target after a correct note.
+- A partial, late, or wrong grip retains the target and names the smallest repair direction.
+- Auto advance moves to the next target after a correct note; `Continue` remains available as an explicit review command.
 - Clearing the calibration session also resets drill score.
+
+### Harmony Shape Fixtures
+
+Sprint 2 harmony exercises use a deterministic fixture contract rather than scale-degree shortcuts. Every interval or triad fixture defines a quality, an inversion, semitone offsets above the selected Exquis root, and the exact playable MIDI/cell targets derived from those offsets.
+
+- Interval qualities begin with minor third (`0, 3`) and major third (`0, 4`).
+- Triad qualities use major (`0, 4, 7`), minor (`0, 3, 7`), diminished (`0, 3, 6`), and augmented (`0, 4, 8`) semitone structures.
+- Root, first, and second inversions rotate the target voices upward by octaves while retaining the same harmonic quality.
+- The resolver accepts a fixture only when every target has an exact playable Exquis cell at the requested MIDI pitch. Missing physical targets produce no partial or guessed grip.
+- Fixture events retain quality, inversion, exact physical targets, fingering assignments, simultaneous timing, and repeat-event remediation.
+- Voice-leading lessons consume the same fixture output; no separate chord-target model is permitted.
+
+### Voice-Leading Transitions
+
+Voice-leading transitions are deterministic pairs of exact triad fixtures. The source quality, root, and inversion stay fixed; the resolver evaluates every playable destination inversion at the requested destination root and quality.
+
+- The resolver ranks destination candidates by the number of retained exact MIDI pitches, then by total low-to-high voice movement in semitones, then by inversion order.
+- The returned transition names retained pitches as anchors and reports the total semitone movement, so lesson feedback can distinguish a held anchor from moving voices.
+- A transition is unavailable when either fixture lacks an exact playable Exquis target. The system never substitutes a nearby cell or silently drops a chord member.
+- The first playable lesson presents the selected source triad followed by the selected closest destination shape; quality and inversion controls describe the source fixture.
+
+### Ear-To-Gesture Fixtures
+
+Ear-to-gesture lessons separate the audible prompt from the physical answer fixture. Initial minor-third, major-third, perfect-fourth, and perfect-fifth lessons play the root followed by the requested interval, conceal exact target pitches and visual target cells until the learner responds, and accept only the exact simultaneous two-button interval grip.
+
+- Prompt playback never changes score, miss count, step, or the expected answer.
+- Correct gestures use the existing simultaneous-grip scorer; wrong or partial gestures retain the same concealed prompt and produce repair feedback.
+- The prompt and answer share one root and interval definition so playback, score, and future review cannot drift into separate models.
+- The interval fixture table defines each lesson's semitone distance, learner-facing quality, and exercise identifier; a new interval must enter through that table rather than a copied lesson branch.
+
+### Repertoire And Progression Fixtures
+
+Repertoire lessons are named, ordered collections of existing exact harmony fixtures. A progression fixture declares a stable identifier, display title, tempo, ordered chord specifications, and a per-step recovery policy.
+
+- Each chord specification resolves through the triad fixture builder; a progression cannot introduce a separate chord or target resolver.
+- The initial progression library begins with C-major I-IV-V-I and ii-V-I exercises. Each chord step retains root, quality, inversion, exact targets, and simultaneous timing.
+- A correct chord advances to the next ordered progression event. A wrong or partial chord retains the current event, increments the miss count, and provides a repair message.
+- Prompt playback may demonstrate the current chord but never changes score or progression position.
 
 ## Test Expectations
 

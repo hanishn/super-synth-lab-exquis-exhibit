@@ -23,7 +23,7 @@
       "id": "scale_path_visualizer",
       "name": "Scale Path Visualizer",
       "status": "prototype",
-      "description": "Highlights in-scale keys and selects a compact practice path for the chosen tonic and scale.",
+      "description": "Highlights in-scale keys and selects a compact practice path for the chosen tonic and scale. Each path item is emitted as a validated exercise event with a musical intent, exact physical/MIDI target, fingering cue, timing mode, and remediation policy.",
       "userValue": "Turns the keyboard lights into a readable practice route rather than a cloud of possible duplicates.",
       "acceptanceCriteria": [
         "scale data is sourced from SSLI scales-modes.json",
@@ -34,12 +34,21 @@
         "default C-major practice path starts on the centered physical C3 cell and resolves to the virtual C4 octave target",
         "octave labels are derived from chromatic semitone row math with alternating vertical third row starts, not note-name special cases",
         "every physical key matching the selected tonic pitch class is shown as tonic/root-colored, not only the selected practice root",
-        "current drill note is visually distinct"
+        "current drill note is visually distinct",
+        "sequential notes, simultaneous grips, holds, releases, and position shifts share a validated event representation",
+        "every generated practice event has a validated musical intent, target, fingering, timing mode, and remediation policy"
       ],
       "testIds": [
         "test_regression_practice_lights_only_two_exquis_chains",
         "test_regression_scale_path_ascends_root_to_octave",
-        "test_regression_all_c_keys_are_tonic_in_default_c_major"
+        "test_regression_all_c_keys_are_tonic_in_default_c_major",
+        "test_regression_migrated_scale_paths_preserve_order",
+        "test_regression_exercise_event_schema",
+        "test_regression_simultaneous_grip_event_schema",
+        "test_regression_exercise_lifecycle_event_schema",
+        "test_regression_interval_grip_requires_complete_timed_targets",
+        "test_major_third_exercise_emits_selected_root_interval",
+        "test_major_triad_midi_grip_scores_once_and_advances_once"
       ]
     },
     {
@@ -78,18 +87,17 @@
       ]
     },
     {
-      "id": "guide_audio",
-      "name": "Built-In Guide Audio",
+      "id": "practice_audio",
+      "name": "Built-In Practice Audio",
       "status": "prototype",
-      "description": "Uses self-contained WebAudio guide tones to preview the current drill note or play the whole practice path.",
+      "description": "Uses the selected SSLI preset to preview the current drill note or play the whole practice path, with a fixed local diagnostic test tone.",
       "userValue": "Lets the player hear the intended scale motion without relying on Exquis, Vital, or any external plugin.",
       "acceptanceCriteria": [
-        "guide audio works without network access",
+        "practice audio works without network access",
         "audio status shows whether WebAudio is locked, unavailable, or playing",
         "a dedicated test tone can be triggered before starting a drill",
         "current note can be previewed",
         "full practice path can be played in sequence",
-        "at least three guide tone characters are selectable",
         "test tone uses the boosted local output bus and local analyser even when SSLI is available",
         "test tone produces a visibly non-flat waveform and leaves a readable peak trace after playback",
         "preview and path audio can still exercise SSLI one-shot playback"
@@ -181,7 +189,7 @@
       "id": "practice_coach",
       "name": "Practice Coach",
       "status": "prototype",
-      "description": "Scores correct and missed physical notes against the current target, tracks streaks, and optionally advances after correct notes.",
+      "description": "Scores correct and missed physical notes against the current exercise event, tracks streaks, and optionally advances after correct notes.",
       "userValue": "Supports focused left-hand scale drills without constantly touching the computer.",
       "acceptanceCriteria": [
         "correct notes increment score and streak",
@@ -198,8 +206,8 @@
       "id": "responsive_practice_ergonomics",
       "name": "Responsive Practice Ergonomics",
       "status": "prototype",
-      "description": "Prioritizes the playable Exquis surface, keeps required sound controls visible, and fits the main desktop/laptop practice view without page-level scrolling.",
-      "userValue": "Lets the player focus on fingering and touch feedback instead of fighting a diagnostic cockpit.",
+      "description": "Prioritizes one Practice Coach surface for target, action, result, next action, and progress; keeps sound and diagnostic controls available through Tools; and fits the main desktop/laptop practice view without page-level scrolling.",
+      "userValue": "Lets the player focus on fingering and touch feedback instead of searching through a diagnostic cockpit.",
       "acceptanceCriteria": [
         "desktop, tablet, and laptop layouts avoid document-level horizontal and vertical scrolling without clipping the right rail or horizontal Exquis slab",
         "horizontal orientation defaults to the corrected physical-facing view whose rotate button offers Rotate 180",
@@ -214,7 +222,7 @@
         "Exquis key field scales to available stage space on desktop and after viewport resize without changing the locked hex geometry",
         "practice mode lights two in-scale pads per row, matching the physical Exquis key LEDs without lighting out-of-key notes",
         "hardware-lit scale pads remain visibly lit in both horizontal and vertical practice views",
-        "guide tone selection is visually separate from SSLI engine, preset, and FX selection",
+        "practice playback has no separate legacy guide-tone selector",
         "scale, path, tonic, current, and MIDI touch states are visually distinct",
         "audio preset, FX, and filter controls are visible in the main practice view",
         "all primary sound and practice controls remain visible without document scrolling at laptop size",
@@ -291,7 +299,9 @@
       ],
       "testIds": [
         "test_regression_no_scroll_layout_does_not_clip_right_rail",
-        "test_regression_enable_midi_is_first_prominent_side_rail_action",
+        "test_regression_practice_coach_is_first_prominent_side_rail_surface",
+        "test_regression_practice_coach_is_the_authoritative_learning_surface",
+        "test_regression_practice_coach_outcome_names_the_next_action",
         "test_regression_console_actions_fit_on_one_row",
         "test_regression_exquis_ui_is_visually_dominant",
         "test_regression_physical_midi_pressure_does_not_call_global_expression",
@@ -329,7 +339,8 @@
         "sweep writes JSON and CSV artifacts with engine, category, preset, status, diagnostic log excerpt, browser errors, SSLI instrument type/settings evidence, and live audio signature evidence",
         "sweep samples the SSLI analyser after playback and records waveform peak/RMS plus spectrum peak/RMS, waveform hash, and spectrum hash so preset output can be compared repeatably",
         "comprehensive audio acceptance forces the mature Subtractive, FM, and Physical catalog through six-note MIDI, full selected-catalog coverage, final-output analyser capture, and repeatable waveform/spectrum/settings hashes",
-        "single-note normalization rows include recommended per-preset instrument volume and remaining global output multiplier for the configured target RMS",
+        "single-note normalization rows include recommended per-preset instrument volume and record any target shortfall without applying an output boost",
+        "every mature-engine preset uses an explicit sweep-measured instrument-volume normalization entry with output gain capped at unity",
         "single-note normalization acceptance sweeps require full mature-engine catalog coverage and fail on missing normalization logs, low-level outliers without measured overrides, or clipping",
         "six-note MIDI sweep samples the actual audible SSLI output and fails on silence, engine mismatches, material clipping, or missing voice cleanup",
         "sweep supports an explicit limit for smoke runs while defaulting to full coverage",
@@ -341,10 +352,9 @@
         "test_comprehensive_audio_acceptance_defaults_force_full_mature_six_note_sweep",
         "test_regression_preset_sweep_does_not_skip_known_hard_presets_by_preference_table",
         "test_regression_normalization_acceptance_sweep_can_fail_bad_catalog_levels",
-        "test_regression_mature_normalization_fixture_matches_live_catalog_size",
-        "test_regression_measured_quiet_presets_have_explicit_normalization_overrides",
+        "test_regression_mature_normalization_covers_live_catalog",
         "test_regression_mature_engine_normalization_uses_canonical_engine_keys",
-        "test_regression_preset_sweep_runs_mature_engine_category_poly_pressure_audio",
+        "test_regression_preset_sweep_runs_mature_engine_category_continuous_poly_aftertouch_audio",
         "test_regression_first_noise_industrial_preset_survives_six_note_poly_pressure_audio"
       ]
     }

@@ -211,12 +211,21 @@ input {
 }
 
 .exercise-switch {
-  grid-column: span 3;
-  min-width: 174px;
+  grid-column: span 4;
+  min-width: 210px;
 }
 
 .exercise-buttons {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.exercise-switch .exercise-buttons {
+  display: none;
+}
+
+.exercise-switch select {
+  width: 100%;
+  min-width: 0;
 }
 
 .mode-button,
@@ -1029,6 +1038,52 @@ input[type="range"]:focus-visible {
   letter-spacing: 0;
 }
 
+.key.current-grip-target {
+  z-index: 3;
+  outline: none;
+  box-shadow: none;
+}
+
+.chord-target-hex-outline {
+  position: absolute;
+  inset: 2px;
+  z-index: 2;
+  width: calc(100% - 4px);
+  height: calc(100% - 4px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.chord-target-hex-outline .chord-target-hex-underlay {
+  fill: none;
+  stroke: #10172d;
+  stroke-width: 6;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.chord-target-hex-outline .chord-target-hex-stroke {
+  fill: none;
+  stroke: #8a2eff;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.chord-target-bracket {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  border: 2px solid #35b9d6;
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(53, 185, 214, 0.12);
+  pointer-events: none;
+}
+
+.chord-target-bracket::before {
+  content: none;
+}
+
 .key.calibration-target {
   background: #4b3e72;
 }
@@ -1225,6 +1280,84 @@ input[type="range"]:focus-visible {
   line-height: 1;
 }
 
+.practice-coach {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(242, 109, 109, 0.72);
+  border-radius: 8px;
+  background: var(--panel-3);
+}
+
+.practice-coach h2 {
+  color: #fff1a8;
+}
+
+.practice-coach #midiStatus {
+  margin: 0;
+  color: #d4eee4;
+  font-weight: 700;
+}
+
+.coach-field-label {
+  margin: 3px 0 -3px !important;
+  color: var(--muted) !important;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.coach-now-playing {
+  margin: 0 !important;
+  color: #fff1a8 !important;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.coach-action-cue,
+.coach-result,
+.coach-progress {
+  margin: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 5px;
+  background: rgba(7, 17, 27, 0.48);
+  line-height: 1.25;
+}
+
+.coach-result p,
+.coach-progress p {
+  margin: 0 !important;
+}
+
+#coachNextAction {
+  min-height: 36px;
+  border-color: rgba(117, 167, 255, 0.72);
+  background: #25364a;
+}
+
+.practice-tools,
+.practice-reference {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.practice-tools > summary,
+.practice-reference > summary {
+  cursor: pointer;
+  padding: 7px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  list-style-position: inside;
+}
+
+.practice-tools[open] > summary,
+.practice-reference[open] > summary {
+  color: #fff1a8;
+}
+
 .midi-coach-section #midiStatus {
   margin-top: 0;
   line-height: 1.12;
@@ -1368,25 +1501,9 @@ input[type="range"]:focus-visible {
   background: #304760;
 }
 
-.guide-section label,
 .audio-section label {
   display: block;
   margin-top: 0;
-}
-
-.guide-section {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px;
-  align-items: end;
-}
-
-.guide-section h2 {
-  margin-bottom: 0;
-}
-
-.guide-section label span {
-  margin-bottom: 1px;
 }
 
 .audio-section {
@@ -1575,8 +1692,7 @@ input[type="range"]:focus-visible {
 
 #drillPrompt,
 #midiDevices,
-#lastMidi,
-#coachFeedback {
+#lastMidi {
   display: none;
 }
 

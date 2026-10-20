@@ -34,7 +34,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "fingering_must_only_label_two_lit_chains": "test_regression_fingering_labels_only_two_lit_chains",
         "keyboard_zoom_must_not_show_giant_empty_tray": "test_regression_keyboard_viewport_is_tight_around_physical_surface",
         "no_scroll_must_keep_primary_controls_visible": "test_regression_laptop_no_scroll_keeps_primary_controls_visible",
-        "midi_status_regions_must_remain_visible_on_laptop": "test_regression_midi_status_regions_remain_visible_and_live_on_laptop",
+        "practice_coach_status_regions_must_remain_visible_on_laptop": "test_regression_practice_coach_status_regions_remain_visible_and_live_on_laptop",
         "fingering_root_must_not_be_overwritten": "test_regression_selected_root_keeps_first_fingering_assignment",
         "fingering_labels_must_stay_valid": "test_regression_fingering_labels_are_valid_for_visible_path",
         "wrist_led_pairs_must_allow_same_finger_for_nearby_steps": "test_regression_wrist_led_pairs_allow_same_finger_for_d3_e3",
@@ -67,7 +67,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "practice_key_labels_must_be_explicit": "test_regression_practice_key_labels_are_explicit",
         "play_path_must_follow_visible_practice_order": "test_regression_play_path_audio_follows_visible_practice_order",
         "two_octave_play_path_must_follow_visible_order": "test_regression_two_octave_play_path_audio_follows_visible_order",
-        "guide_tone_must_be_separate_from_ssli_sound_controls": "test_regression_guide_tone_is_separate_from_ssli_sound_controls",
+        "practice_audio_must_not_expose_a_legacy_guide_tone_selector": "test_regression_practice_audio_has_no_legacy_guide_tone_selector",
         "exquis_ui_must_not_be_tiny": "test_regression_exquis_ui_is_visually_dominant",
         "ssli_presets_need_engine_category_preset_selectors": "test_regression_ssli_preset_selectors_are_hierarchical",
         "ssli_engine_dropdown_defaults_to_mature_engines": "test_regression_sound_engine_dropdown_defaults_to_mature_engines_with_show_all_opt_in",
@@ -117,7 +117,31 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "play_mode_pressure_must_affect_subtractive_audio": "test_regression_play_mode_pressure_changes_actual_subtractive_audio",
         "play_mode_pressure_must_reach_physical_runtime": "test_regression_play_mode_pressure_reaches_actual_physical_runtime",
         "same_channel_buttons_must_remain_independent": "test_regression_same_channel_buttons_keep_independent_held_voices",
-        "enable_midi_must_be_first_prominent_side_rail_action": "test_regression_enable_midi_is_first_prominent_side_rail_action",
+        "practice_coach_must_be_first_prominent_side_rail_surface": "test_regression_practice_coach_is_first_prominent_side_rail_surface",
+        "practice_coach_must_be_authoritative_learning_surface": "test_regression_practice_coach_is_the_authoritative_learning_surface",
+        "practice_coach_outcome_must_name_next_action": "test_regression_practice_coach_outcome_names_the_next_action",
+        "session_settings_must_use_a_specific_learner_facing_label": "test_regression_session_settings_uses_a_specific_learner_facing_label",
+        "harmony_fixture_must_resolve_minor_first_inversion_to_exact_cells": "test_regression_harmony_fixture_resolves_minor_first_inversion_to_exact_cells",
+        "harmony_fixtures_must_preserve_quality_through_inversions": "test_regression_harmony_fixtures_preserve_quality_through_inversions",
+        "harmony_triad_lesson_must_expose_quality_and_inversion": "test_regression_harmony_triad_lesson_exposes_quality_and_inversion",
+        "harmony_triad_must_score_an_inverted_minor_grip_once": "test_regression_harmony_triad_scores_an_inverted_minor_grip_once",
+        "voice_leading_must_choose_common_tone_minimum_motion_destination": "test_regression_voice_leading_chooses_common_tone_minimum_motion_destination",
+        "voice_leading_lesson_must_present_source_then_common_tone_destination": "test_regression_voice_leading_lesson_presents_source_then_common_tone_destination",
+        "voice_leading_must_score_source_and_destination_grips_in_sequence": "test_regression_voice_leading_scores_source_and_destination_grips_in_sequence",
+        "ear_to_gesture_must_conceal_exact_targets_and_preserve_score_when_prompting": "test_regression_ear_to_gesture_conceals_targets_and_prompt_playback_preserves_score",
+        "ear_to_gesture_must_score_exact_interval_and_repair_wrong_interval": "test_regression_ear_to_gesture_scores_exact_interval_and_repairs_wrong_interval",
+        "ear_to_gesture_interval_fixtures_must_keep_minor_and_major_prompts_exact": "test_regression_ear_to_gesture_interval_fixtures_keep_minor_and_major_prompts_exact",
+        "ear_to_gesture_perfect_fifth_must_score_exact_grip": "test_regression_ear_to_gesture_perfect_fifth_scores_exact_grip",
+        "progression_fixture_must_resolve_c_major_i_iv_v_i_to_exact_triads": "test_regression_progression_fixture_resolves_c_major_i_iv_v_i_to_exact_triads",
+        "progression_lesson_must_present_i_iv_v_i_in_order": "test_regression_progression_lesson_presents_i_iv_v_i_in_order",
+        "progression_lesson_must_retain_wrong_chord_and_advance_on_correct_chord": "test_regression_progression_lesson_retains_wrong_chord_and_advances_on_correct_chord",
+        "progression_fixture_must_resolve_c_major_ii_v_i_to_exact_triads": "test_regression_progression_fixture_resolves_c_major_ii_v_i_to_exact_triads",
+        "progression_lesson_must_present_ii_v_i_in_order": "test_regression_progression_lesson_presents_ii_v_i_in_order",
+        "progression_prompt_must_include_every_current_chord_member": "test_regression_progression_prompt_includes_every_current_chord_member",
+        "exercise_control_must_not_overflow_header_at_desktop_viewport": "test_regression_exercise_control_does_not_overflow_header_at_desktop_viewport",
+        "first_ssli_prompt_must_fall_back_until_preset_output_is_ready": "test_regression_first_ssli_prompt_falls_back_until_preset_output_is_ready",
+        "first_fallback_note_must_wait_for_audio_context_resume": "test_regression_first_fallback_note_waits_for_audio_context_resume",
+        "progression_current_chord_must_highlight_every_target_button": "test_regression_progression_current_chord_highlights_every_target_button",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
         "exquis_key_mode_sync_must_use_official_developer_sysex": "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
@@ -190,6 +214,25 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "physical_marimba_c3_must_not_be_blown_out_relative_to_c4": "test_regression_physical_marimba_c3_is_balanced_against_c4",
         "uat_spot_presets_must_not_require_hard_velocity_for_loudness": "test_regression_uat_spot_presets_have_medium_velocity_loudness",
         "uat_fm_spot_presets_must_not_collapse_to_same_timbre": "test_regression_uat_fm_spot_presets_do_not_collapse_to_same_timbre",
+        "embedded_ssli_iframe_must_not_bind_web_midi_directly": "test_regression_embedded_ssli_iframe_does_not_bind_web_midi_directly",
+        "fm_dx_rhodes_normal_pressure_must_remain_playable": "test_regression_fm_dx_rhodes_normal_pressure_is_playable",
+        "low_velocity_aftertouch_must_lift_subtractive_audio": "test_regression_low_velocity_aftertouch_lifts_actual_subtractive_audio",
+        "midi_coach_activity_must_list_currently_held_notes": "test_regression_midi_coach_activity_lists_all_currently_held_notes",
+        "physical_nylon_guitar_must_not_sound_like_sustained_pad": "test_regression_physical_nylon_guitar_does_not_ring_like_sustained_pad",
+        "plucked_duplicate_channel_press_must_not_fire_old_pending_release": "test_regression_plucked_duplicate_channel_press_does_not_fire_old_pending_release",
+        "plucked_contact_noise_must_not_become_note_attack": "test_regression_plucked_ignores_velocity_one_contact_noise_while_held",
+        "plucked_interaction_must_not_apply_low_velocity_pressure_swell": "test_regression_plucked_interaction_does_not_apply_low_velocity_pressure_swell",
+        "plucked_low_velocity_release_must_still_pluck": "test_regression_plucked_low_velocity_real_pressure_release_still_plucks",
+        "plucked_presets_must_trigger_on_note_up": "test_regression_plucked_presets_trigger_on_note_up_not_note_down",
+        "plucked_short_release_must_commit_before_next_press": "test_regression_plucked_short_release_fires_before_next_different_press",
+        "preset_sweep_voice_stress_must_remain_stable": "test_regression_preset_sweep_runs_mature_engine_category_200_note_voice_stress_audio",
+        "recontact_must_damp_committed_plucked_tail": "test_regression_real_plucked_same_key_recontact_damps_committed_release_tail",
+        "repeated_plucked_pressure_must_not_use_live_swell": "test_regression_repeated_plucked_pressure_never_enters_live_swell_path",
+        "ssli_voice_steal_cleanup_must_not_free_reused_voice": "test_regression_ssli_voice_steal_cleanup_does_not_free_reused_voice",
+        "struck_interaction_must_not_apply_low_velocity_pressure_swell": "test_regression_struck_interaction_does_not_apply_low_velocity_pressure_swell",
+        "three_note_pad_pressure_zero_must_recover_audio": "test_regression_three_note_pad_pressure_zero_recovers_actual_audio",
+        "migrated_scale_paths_must_preserve_existing_order": "test_regression_migrated_scale_paths_preserve_order",
+        "interval_grip_must_require_complete_timed_targets": "test_regression_interval_grip_requires_complete_timed_targets",
     }
 
     @classmethod
@@ -210,6 +253,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.pw.stop()
 
     def open_audio_drawer(self):
+        practice_tools = self.page.locator('[data-testid="practice-tools"]')
+        if practice_tools.count() and not practice_tools.evaluate("el => el.open"):
+            practice_tools.locator("summary").click()
         drawer = self.page.locator('[data-testid="audio-drawer"]')
         if drawer.count() == 0:
             return
@@ -689,13 +735,429 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertNotEqual(before, after)
 
     def test_audio_controls_are_present_and_clickable(self):
-        self.assertTrue(self.page.locator('[data-testid="tone-select"]').is_visible())
         self.assertIn("Audio:", self.page.locator('[data-testid="audio-status"]').inner_text())
-        self.page.select_option('[data-testid="tone-select"]', "muted_pluck")
+
+    def test_regression_exercise_event_schema(self):
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertGreater(len(events), 0, events)
+        first = events[0]
+        self.assertEqual(first["type"], "note", first)
+        self.assertEqual(first["targets"][0]["cellId"], first["cellId"], first)
+        self.assertEqual(first["targets"][0]["midi"], first["midi"], first)
+        self.assertIsInstance(first["targets"][0]["pc"], int, first)
+        self.assertIn("fingering", first)
+        self.assertIn("timing", first)
+        self.assertTrue(first["valid"], first)
+        self.assertTrue(all(event["valid"] for event in events), events)
         self.page.locator('[data-testid="test-audio"]').click()
         self.page.locator('[data-testid="test-audio"]').click()
         self.page.locator('[data-testid="play-scale"]').click()
         self.assertIn("Audio:", self.page.locator('[data-testid="audio-status"]').inner_text())
+
+    def test_regression_simultaneous_grip_event_schema(self):
+        grip = self.page.evaluate("""() => window.__exquisDebugBuildGripExerciseEvent({
+          id: 'C-major-triad',
+          targets: [
+            { cellId: 'r5c3', midi: 48, pc: 0 },
+            { cellId: 'r4c5', midi: 52, pc: 4 },
+            { cellId: 'r3c7', midi: 55, pc: 7 }
+          ],
+          fingerAssignments: [
+            { cellId: 'r5c3', finger: 5 },
+            { cellId: 'r4c5', finger: 3 },
+            { cellId: 'r3c7', finger: 1 }
+          ]
+        })""")
+        self.assertEqual(grip["type"], "grip", grip)
+        self.assertEqual(grip["timing"]["mode"], "simultaneous", grip)
+        self.assertEqual(len(grip["targets"]), 3, grip)
+        self.assertEqual(len(grip["fingering"]["assignments"]), 3, grip)
+        self.assertTrue(grip["valid"], grip)
+
+        duplicate_assignment = self.page.evaluate("""() => window.__exquisDebugBuildGripExerciseEvent({
+          id: 'bad-grip',
+          targets: [
+            { cellId: 'r5c3', midi: 48, pc: 0 },
+            { cellId: 'r4c5', midi: 52, pc: 4 },
+            { cellId: 'r3c7', midi: 55, pc: 7 }
+          ],
+          fingerAssignments: [
+            { cellId: 'r5c3', finger: 5 },
+            { cellId: 'r5c3', finger: 3 },
+            { cellId: 'r3c7', finger: 1 }
+          ]
+        })""")
+        self.assertFalse(duplicate_assignment["valid"], duplicate_assignment)
+
+    def test_regression_exercise_lifecycle_event_schema(self):
+        events = self.page.evaluate("""() => window.__exquisDebugBuildExerciseLifecycleEvents()""")
+        self.assertEqual([event["type"] for event in events], ["note", "hold", "release", "shift"], events)
+        self.assertTrue(all(event["valid"] for event in events), events)
+        self.assertEqual(events[3]["targets"], [], events[3])
+        self.assertEqual(events[3]["movement"]["type"], "position-shift", events[3])
+
+    def test_regression_interval_grip_requires_complete_timed_targets(self):
+        result = self.page.evaluate("""() => window.__exquisDebugEvaluateGrip({
+          id: 'C-E',
+          type: 'grip',
+          targets: [{ cellId: 'r5c3', midi: 48 }, { cellId: 'r4c5', midi: 52 }],
+          fingering: { primary: 5, assignments: [{ cellId: 'r5c3', finger: 5 }, { cellId: 'r4c5', finger: 3 }] },
+          timing: { mode: 'simultaneous', toleranceMs: 80 }
+        }, [
+          { midi: 48, cellId: 'r5c3', at: 1000 },
+          { midi: 52, cellId: 'r4c5', at: 1060 }
+        ])""")
+        self.assertTrue(result["accepted"], result)
+        self.assertEqual(result["outcome"], "complete", result)
+
+        partial = self.page.evaluate("""() => window.__exquisDebugEvaluateGrip({
+          id: 'C-E', type: 'grip', targets: [{ cellId: 'r5c3', midi: 48 }, { cellId: 'r4c5', midi: 52 }],
+          fingering: { primary: 5, assignments: [] }, timing: { mode: 'simultaneous', toleranceMs: 80 }
+        }, [{ midi: 48, cellId: 'r5c3', at: 1000 }])""")
+        self.assertFalse(partial["accepted"], partial)
+        self.assertEqual(partial["outcome"], "partial", partial)
+
+        late = self.page.evaluate("""() => window.__exquisDebugEvaluateGrip({
+          id: 'C-E', type: 'grip', targets: [{ cellId: 'r5c3', midi: 48 }, { cellId: 'r4c5', midi: 52 }],
+          fingering: { primary: 5, assignments: [] }, timing: { mode: 'simultaneous', toleranceMs: 80 }
+        }, [{ midi: 48, cellId: 'r5c3', at: 1000 }, { midi: 52, cellId: 'r4c5', at: 1090 }])""")
+        self.assertFalse(late["accepted"], late)
+        self.assertEqual(late["outcome"], "late", late)
+
+    def test_major_triad_exercise_emits_selected_root_grip(self):
+        self.page.select_option('[data-testid="exercise-select"]', "major_triad")
+        snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+        self.assertEqual(len(snapshot["exerciseEvents"]), 1, snapshot)
+        event = snapshot["exerciseEvents"][0]
+        self.assertEqual(event["type"], "grip", event)
+        self.assertEqual([target["midi"] for target in event["targets"]], [48, 52, 55], event)
+        self.assertTrue(event["valid"], event)
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 1")
+        self.assertEqual(self.page.locator('[data-testid="current-note"]').inner_text(), "C3 + E3 + G3")
+
+    def test_regression_harmony_fixture_resolves_minor_first_inversion_to_exact_cells(self):
+        fixture = self.page.evaluate("""() => window.__exquisDebugBuildHarmonyGripFixture({
+          id: 'minor-first-inversion',
+          quality: 'minor',
+          inversion: 1,
+          rootMidi: 48
+        })""")
+        self.assertTrue(fixture["valid"], fixture)
+        self.assertEqual(fixture["musicalIntent"], {"type": "triad", "quality": "minor", "inversion": "first"}, fixture)
+        self.assertEqual([target["midi"] for target in fixture["targets"]], [51, 55, 60], fixture)
+        self.assertEqual(len({target["cellId"] for target in fixture["targets"]}), 3, fixture)
+
+    def test_regression_harmony_fixtures_preserve_quality_through_inversions(self):
+        fixtures = self.page.evaluate("""() => [
+          ['major', 0, [48, 52, 55]], ['major', 1, [52, 55, 60]], ['major', 2, [55, 60, 64]],
+          ['minor', 0, [48, 51, 55]], ['minor', 1, [51, 55, 60]], ['minor', 2, [55, 60, 63]],
+          ['diminished', 0, [48, 51, 54]], ['diminished', 1, [51, 54, 60]], ['diminished', 2, [54, 60, 63]],
+          ['augmented', 0, [48, 52, 56]], ['augmented', 1, [52, 56, 60]], ['augmented', 2, [56, 60, 64]]
+        ].map(([quality, inversion, expected]) => {
+          const event = window.__exquisDebugBuildHarmonyGripFixture({ quality, inversion, rootMidi: 48 });
+          return { quality, inversion, expected, event };
+        })""")
+        for fixture in fixtures:
+            event = fixture["event"]
+            self.assertTrue(event and event["valid"], fixture)
+            self.assertEqual([target["midi"] for target in event["targets"]], fixture["expected"], fixture)
+
+    def test_regression_harmony_triad_lesson_exposes_quality_and_inversion(self):
+        self.page.select_option('[data-testid="exercise-select"]', "harmony_triad")
+        self.page.select_option('[data-testid="harmony-quality-select"]', "minor")
+        self.page.select_option('[data-testid="harmony-inversion-select"]', "2")
+        event = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0]")
+        self.assertTrue(self.page.locator('[data-testid="harmony-triad-controls"]').is_visible())
+        self.assertEqual(event["musicalIntent"], {"type": "triad", "quality": "minor", "inversion": "second"}, event)
+        self.assertEqual([target["midi"] for target in event["targets"]], [55, 60, 63], event)
+        self.assertEqual(self.page.locator('[data-testid="coach-now-playing"]').inner_text(), "G3 + C4 + D#4")
+
+    def test_regression_harmony_triad_scores_an_inverted_minor_grip_once(self):
+        self.page.select_option('[data-testid="exercise-select"]', "harmony_triad")
+        self.page.select_option('[data-testid="harmony-quality-select"]', "minor")
+        self.page.select_option('[data-testid="harmony-inversion-select"]', "2")
+        self.page.evaluate("""() => {
+          window.__harmonyInput = { id: 'harmony-input', name: 'Harmony Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__harmonyInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__harmonyInput && window.__harmonyInput.onmidimessage")
+        for midi, channel in [(55, 0), (60, 1), (63, 2)]:
+            self.page.evaluate("(args) => window.__harmonyInput.onmidimessage({ data: [0x90 | args.channel, args.midi, 84] })", {"midi": midi, "channel": channel})
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-feedback\"]').textContent.includes('Correct grip')")
+        self.assertIn("Score: 1 correct / 0 missed", self.page.locator('[data-testid="coach-progress"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 1")
+
+    def test_regression_voice_leading_chooses_common_tone_minimum_motion_destination(self):
+        transition = self.page.evaluate("""() => window.__exquisDebugBuildVoiceLeadingTransition({
+          from: { quality: 'major', rootMidi: 48, inversion: 0 },
+          to: { quality: 'major', rootMidi: 41 }
+        })""")
+        self.assertIsNotNone(transition)
+        self.assertEqual([target["midi"] for target in transition["from"]["targets"]], [48, 52, 55], transition)
+        self.assertEqual(transition["to"]["musicalIntent"]["inversion"], "second", transition)
+        self.assertEqual([target["midi"] for target in transition["to"]["targets"]], [48, 53, 57], transition)
+        self.assertEqual(transition["anchorMidis"], [48], transition)
+        self.assertEqual(transition["movementSemitones"], 3, transition)
+
+    def test_regression_voice_leading_lesson_presents_source_then_common_tone_destination(self):
+        self.page.select_option('[data-testid="exercise-select"]', "voice_leading")
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertTrue(self.page.locator('[data-testid="harmony-triad-controls"]').is_visible())
+        self.assertEqual(len(events), 2, events)
+        self.assertEqual([target["midi"] for target in events[0]["targets"]], [48, 52, 55], events)
+        self.assertEqual([target["midi"] for target in events[1]["targets"]], [48, 53, 57], events)
+        self.assertEqual(events[1]["musicalIntent"]["anchorMidis"], [48], events)
+
+    def test_regression_voice_leading_scores_source_and_destination_grips_in_sequence(self):
+        self.page.select_option('[data-testid="exercise-select"]', "voice_leading")
+        self.page.evaluate("""() => {
+          window.__voiceLeadingInput = { id: 'voice-leading-input', name: 'Voice Leading Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__voiceLeadingInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__voiceLeadingInput && window.__voiceLeadingInput.onmidimessage")
+
+        def send_notes(notes, status):
+            for midi, channel in zip(notes, range(len(notes))):
+                self.page.evaluate("(args) => window.__voiceLeadingInput.onmidimessage({ data: [args.status | args.channel, args.midi, 84] })", {"midi": midi, "channel": channel, "status": status})
+
+        send_notes([48, 52, 55], 0x90)
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 0 missed')")
+        send_notes([48, 52, 55], 0x80)
+        send_notes([48, 53, 57], 0x90)
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('2 correct / 0 missed')")
+        self.assertIn("Step 1 / 2", self.page.locator('[data-testid="coach-progress"]').inner_text())
+
+    def test_regression_ear_to_gesture_conceals_targets_and_prompt_playback_preserves_score(self):
+        self.page.select_option('[data-testid="exercise-select"]', "ear_major_third")
+        event = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0]")
+        self.assertEqual(event["musicalIntent"], {"type": "heard-interval", "quality": "major-third", "promptMidis": [48, 52], "concealTargets": True}, event)
+        self.assertEqual(self.page.locator('[data-testid="coach-now-playing"]').inner_text(), "Listen, then answer")
+        self.assertEqual(self.page.locator('[data-testid="exquis-key"].in-path').count(), 0)
+        score_before = self.page.locator('[data-testid="coach-progress"]').inner_text()
+        self.page.locator('[data-testid="coach-next-action"]').click()
+        self.assertEqual(self.page.locator('[data-testid="coach-progress"]').inner_text(), score_before)
+        self.assertIn("Listen for the interval", self.page.locator('[data-testid="coach-feedback"]').inner_text())
+
+    def test_regression_ear_to_gesture_scores_exact_interval_and_repairs_wrong_interval(self):
+        self.page.select_option('[data-testid="exercise-select"]', "ear_major_third")
+        self.page.evaluate("""() => {
+          window.__earInput = { id: 'ear-input', name: 'Ear Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__earInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__earInput && window.__earInput.onmidimessage")
+
+        def send(notes):
+            for midi, channel in zip(notes, range(len(notes))):
+                self.page.evaluate("(args) => window.__earInput.onmidimessage({ data: [0x90 | args.channel, args.midi, 84] })", {"midi": midi, "channel": channel})
+
+        send([48, 51])
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('0 correct / 1 missed')")
+        self.assertEqual(self.page.locator('[data-testid="coach-now-playing"]').inner_text(), "Listen, then answer")
+        send([48, 52])
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 1 missed')")
+        self.assertIn("Correct grip", self.page.locator('[data-testid="coach-feedback"]').inner_text())
+
+    def test_regression_ear_to_gesture_interval_fixtures_keep_minor_and_major_prompts_exact(self):
+        fixtures = self.page.evaluate("""() => ['ear_minor_third', 'ear_major_third', 'ear_perfect_fourth', 'ear_perfect_fifth'].map((exerciseId) => {
+          document.querySelector('[data-testid="exercise-select"]').value = exerciseId;
+          document.querySelector('[data-testid="exercise-select"]').dispatchEvent(new Event('change', { bubbles: true }));
+          return { exerciseId, event: window.__exquisDebugSnapshot().exerciseEvents[0] };
+        })""")
+        self.assertEqual(fixtures[0]["event"]["musicalIntent"]["promptMidis"], [48, 51], fixtures)
+        self.assertEqual(fixtures[0]["event"]["musicalIntent"]["quality"], "minor-third", fixtures)
+        self.assertEqual(fixtures[1]["event"]["musicalIntent"]["promptMidis"], [48, 52], fixtures)
+        self.assertEqual(fixtures[1]["event"]["musicalIntent"]["quality"], "major-third", fixtures)
+        self.assertEqual(fixtures[2]["event"]["musicalIntent"]["promptMidis"], [48, 53], fixtures)
+        self.assertEqual(fixtures[2]["event"]["musicalIntent"]["quality"], "perfect-fourth", fixtures)
+        self.assertEqual(fixtures[3]["event"]["musicalIntent"]["promptMidis"], [48, 55], fixtures)
+        self.assertEqual(fixtures[3]["event"]["musicalIntent"]["quality"], "perfect-fifth", fixtures)
+
+    def test_regression_ear_to_gesture_perfect_fifth_scores_exact_grip(self):
+        self.page.select_option('[data-testid="exercise-select"]', "ear_perfect_fifth")
+        self.page.evaluate("""() => {
+          window.__fifthInput = { id: 'fifth-input', name: 'Fifth Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__fifthInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__fifthInput && window.__fifthInput.onmidimessage")
+        for midi, channel in [(48, 0), (55, 1)]:
+            self.page.evaluate("(args) => window.__fifthInput.onmidimessage({ data: [0x90 | args.channel, args.midi, 84] })", {"midi": midi, "channel": channel})
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 0 missed')")
+        self.assertIn("Correct grip", self.page.locator('[data-testid="coach-feedback"]').inner_text())
+
+    def test_regression_progression_fixture_resolves_c_major_i_iv_v_i_to_exact_triads(self):
+        progression = self.page.evaluate("() => window.__exquisDebugBuildProgressionFixture('c-major-i-iv-v-i')")
+        self.assertEqual(progression["title"], "C major I-IV-V-I", progression)
+        self.assertEqual([[target["midi"] for target in event["targets"]] for event in progression["events"]], [[48, 52, 55], [41, 45, 48], [43, 47, 50], [48, 52, 55]], progression)
+        self.assertTrue(all(event["valid"] for event in progression["events"]), progression)
+
+    def test_regression_progression_lesson_presents_i_iv_v_i_in_order(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual([event["musicalIntent"]["degree"] for event in events], ["I", "IV", "V", "I"], events)
+        self.assertEqual([target["midi"] for target in events[0]["targets"]], [48, 52, 55], events)
+        self.assertEqual([target["midi"] for target in events[1]["targets"]], [41, 45, 48], events)
+        self.assertIn("Progression I", self.page.locator('[data-testid="coach-action-cue"]').inner_text())
+
+    def test_regression_progression_lesson_retains_wrong_chord_and_advances_on_correct_chord(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        self.page.evaluate("""() => {
+          window.__progressionInput = { id: 'progression-input', name: 'Progression Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__progressionInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__progressionInput && window.__progressionInput.onmidimessage")
+
+        def play(notes):
+            for midi, channel in zip(notes, range(len(notes))):
+                self.page.evaluate("(args) => window.__progressionInput.onmidimessage({ data: [0x90 | args.channel, args.midi, 84] })", {"midi": midi, "channel": channel})
+
+        play([48, 51, 55])
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('0 correct / 1 missed')")
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 4")
+        play([48, 52, 55])
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 1 missed')")
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "2 / 4")
+
+    def test_regression_progression_fixture_resolves_c_major_ii_v_i_to_exact_triads(self):
+        progression = self.page.evaluate("() => window.__exquisDebugBuildProgressionFixture('c-major-ii-v-i')")
+        self.assertEqual(progression["title"], "C major ii-V-I", progression)
+        self.assertEqual([event["musicalIntent"]["degree"] for event in progression["events"]], ["ii", "V", "I"], progression)
+        self.assertEqual([[target["midi"] for target in event["targets"]] for event in progression["events"]], [[50, 53, 57], [43, 47, 50], [48, 52, 55]], progression)
+
+    def test_regression_progression_lesson_presents_ii_v_i_in_order(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_ii_v_i")
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual([event["musicalIntent"]["degree"] for event in events], ["ii", "V", "I"], events)
+
+    def test_regression_progression_prompt_includes_every_current_chord_member(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        self.assertEqual(self.page.evaluate("() => window.__exquisDebugPromptMidis()"), [48, 52, 55])
+
+    def test_regression_exercise_control_does_not_overflow_header_at_desktop_viewport(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        overflow = self.page.evaluate("""() => Array.from(document.querySelectorAll('[data-testid="exercise-buttons"] .exercise-button'))
+          .filter((button) => getComputedStyle(button).display !== 'none')
+          .filter((button) => button.scrollWidth > button.clientWidth || button.scrollHeight > button.clientHeight)
+          .map((button) => ({ text: button.textContent, width: button.clientWidth, scrollWidth: button.scrollWidth }))""")
+        self.assertEqual(overflow, [], overflow)
+        self.assertTrue(self.page.locator('[data-testid="exercise-select"]').is_visible())
+
+    def test_regression_first_ssli_prompt_falls_back_until_preset_output_is_ready(self):
+        decision = self.page.evaluate("""() => ({
+          applyFailed: window.__exquisDebugShouldUseSsliPlayback(false, true),
+          outputMissing: window.__exquisDebugShouldUseSsliPlayback(true, false),
+          ready: window.__exquisDebugShouldUseSsliPlayback(true, true)
+        })""")
+        self.assertEqual(decision, {"applyFailed": False, "outputMissing": False, "ready": True})
+
+    def test_regression_first_fallback_note_waits_for_audio_context_resume(self):
+        events = self.page.evaluate("""async () => {
+          const events = [];
+          let resolveResume;
+          const context = {
+            state: 'suspended',
+            resume: () => {
+              events.push('resume');
+              return new Promise((resolve) => { resolveResume = () => { context.state = 'running'; resolve(); }; });
+            }
+          };
+          const playback = window.__exquisDebugStartAfterAudioResume(context, () => events.push('start'));
+          events.push('before-resolve');
+          resolveResume();
+          await playback;
+          return events;
+        }""")
+        self.assertEqual(events, ["resume", "before-resolve", "start"])
+
+    def test_regression_progression_current_chord_highlights_every_target_button(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        targets = self.page.locator('[data-testid="exquis-key"].current-grip-target')
+        self.assertEqual(targets.count(), 3)
+        self.assertEqual(sorted(targets.evaluate_all("elements => elements.map((element) => Number(element.dataset.midi))")), [48, 52, 55])
+        bracket = self.page.locator('[data-testid="chord-target-bracket"]')
+        self.assertEqual(bracket.count(), 1)
+        self.assertTrue(all("chord target" in label for label in targets.evaluate_all("elements => elements.map((element) => element.getAttribute('aria-label'))")))
+        self.assertEqual(self.page.locator('[data-testid="exquis-key"].current-grip-target .chord-target-marker').count(), 0)
+        outlines = targets.locator('.chord-target-hex-outline .chord-target-hex-stroke')
+        self.assertEqual(outlines.count(), 3)
+        self.assertEqual(targets.locator('.chord-target-hex-outline .chord-target-hex-underlay').count(), 3)
+        self.assertTrue(all(color == "rgb(138, 46, 255)" for color in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).stroke)")))
+        self.assertTrue(all(width == "3px" for width in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).strokeWidth)")))
+        self.assertEqual(bracket.evaluate("element => getComputedStyle(element, '::before').content"), "none")
+        bracket_box = bracket.bounding_box()
+        target_boxes = targets.evaluate_all("elements => elements.map((element) => element.getBoundingClientRect().toJSON())")
+        self.assertIsNotNone(bracket_box)
+        self.assertLessEqual(bracket_box["x"], min(box["x"] for box in target_boxes) - 8)
+        self.assertLessEqual(bracket_box["y"], min(box["y"] for box in target_boxes) - 8)
+
+    def test_major_third_exercise_emits_selected_root_interval(self):
+        self.page.select_option('[data-testid="exercise-select"]', "major_third")
+        event = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0]")
+        self.assertEqual(event["type"], "grip", event)
+        self.assertEqual([target["midi"] for target in event["targets"]], [48, 52], event)
+        self.assertTrue(event["valid"], event)
+
+    def test_major_triad_midi_grip_scores_once_and_advances_once(self):
+        self.page.select_option('[data-testid="exercise-select"]', "major_triad")
+        self.page.select_option('[data-testid="grip-fingering-select"]', "compact")
+        self.assertIn("Pinky", self.page.locator('[data-testid="target-finger"]').inner_text())
+        self.assertIn("Thumb", self.page.locator('[data-testid="target-finger"]').inner_text())
+        self.page.evaluate("""() => {
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) }, outputs: { forEach: () => {} }, onstatechange: null
+          });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        for raw, channel in [(48, 0), (52, 1), (55, 2)]:
+            self.page.evaluate("(args) => window.__mockExquisInput.onmidimessage({ data: [0x90 | args.channel, args.raw, 80] })", {"raw": raw, "channel": channel})
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-feedback\"]').textContent.includes('Correct grip')")
+        self.assertIn("Declared Compact 5-3-1 fingering", self.page.locator('[data-testid="coach-feedback"]').inner_text())
+        self.assertIn("Score: 1 correct / 0 missed", self.page.locator('[data-testid="drill-score"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 1")
+
+    def test_major_triad_partial_grip_does_not_advance(self):
+        self.page.select_option('[data-testid="exercise-select"]', "major_triad")
+        self.page.evaluate("""() => {
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__mockExquisInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90, 48, 80] })")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-feedback\"]').textContent.includes('Grip not accepted')")
+        self.assertIn("missing E3 + G3", self.page.locator('[data-testid="coach-feedback"]').inner_text())
+        self.assertIn("Score: 0 correct / 1 missed", self.page.locator('[data-testid="drill-score"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 1")
+
+    def test_major_triad_late_grip_does_not_advance(self):
+        self.page.select_option('[data-testid="exercise-select"]', "major_triad")
+        self.page.evaluate("""() => {
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({ inputs: { forEach: (cb) => cb(window.__mockExquisInput) }, outputs: { forEach: () => {} }, onstatechange: null });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90, 48, 80] })")
+        self.page.wait_for_timeout(100)
+        for raw, channel in [(52, 1), (55, 2)]:
+            self.page.evaluate("(args) => window.__mockExquisInput.onmidimessage({ data: [0x90 | args.channel, args.raw, 80] })", {"raw": raw, "channel": channel})
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-feedback\"]').textContent.includes('played too far apart')")
+        self.assertIn("Score: 0 correct / 1 missed", self.page.locator('[data-testid="drill-score"]').inner_text())
+
+    def test_regression_migrated_scale_paths_preserve_order(self):
+        for exercise_id in ["root_octave", "two_octaves", "inner_ladder", "root_returns"]:
+            self.page.select_option('[data-testid="exercise-select"]', exercise_id)
+            snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+            path_midis = [step["midi"] for step in snapshot["currentPath"]]
+            event_midis = [event["targets"][0]["midi"] for event in snapshot["exerciseEvents"]]
+            self.assertEqual(event_midis, path_midis, (exercise_id, snapshot))
+            self.assertTrue(all(event["type"] == "note" and event["valid"] for event in snapshot["exerciseEvents"]), snapshot)
 
     def test_center_root_selector_defaults_to_centered_root(self):
         options = self.page.locator('[data-testid="root-select"] option')
@@ -1288,7 +1750,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
     def test_regression_practice_controls_are_hidden_in_play_mode(self):
         self.assertTrue(self.page.locator('[data-testid="exercise-control"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="practice-stepper"]').is_visible())
-        self.assertTrue(self.page.locator('[data-testid="practice-target-panel"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="practice-coach"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="practice-target-panel"]').is_visible())
         self.page.locator('[data-testid="play-mode"]').click()
         for test_id in [
             "root-control",
@@ -1297,11 +1760,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
             "fingering-control",
             "view-control",
             "practice-stepper",
-            "practice-target-panel",
             "drill-section",
             "practice-path-strip",
         ]:
             self.assertFalse(self.page.locator(f'[data-testid="{test_id}"]').is_visible(), test_id)
+        self.assertTrue(self.page.locator('[data-testid="practice-coach"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+        self.open_audio_drawer()
         self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
 
     def test_regression_practice_mode_shows_visible_hand_and_two_octave_controls(self):
@@ -2161,8 +2626,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockMidiInput && window.__mockMidiInput.onmidimessage")
-        self.assertIn("Exquis Mock", self.page.locator('[data-testid="midi-input-select"]').inner_text())
-        self.assertIn("Exquis Mock", self.page.locator('[data-testid="midi-devices"]').inner_text())
+        self.assertIn("Exquis Mock", self.page.locator('[data-testid="midi-input-select"]').text_content())
+        self.assertIn("Exquis Mock", self.page.locator('[data-testid="midi-devices"]').text_content())
         target_midi = self.page.locator(".key.current").get_attribute("data-midi")
         self.page.evaluate("""
         (midi) => {
@@ -2170,9 +2635,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }
         """, target_midi)
         self.assertIn("Correct", self.page.locator('[data-testid="coach-feedback"]').inner_text())
-        self.assertIn("note-on", self.page.locator('[data-testid="midi-activity"]').inner_text())
+        self.assertIn("note-on", self.page.locator('[data-testid="midi-activity"]').text_content())
         self.assertIn("1 correct", self.page.locator('[data-testid="drill-score"]').inner_text())
-        self.assertEqual(self.page.locator('[data-testid="calibration-stats"]').inner_text(), "1 verified / 0 mismatched")
+        self.assertEqual(self.page.locator('[data-testid="calibration-stats"]').text_content(), "1 verified / 0 mismatched")
 
     def test_exquis_mpe_note_sequence_scores_and_advances(self):
         self.page.evaluate("""
@@ -2205,7 +2670,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """, second_midi)
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"drill-score\"]').textContent.includes('2 correct')")
         self.assertIn("streak 2", self.page.locator('[data-testid="drill-score"]').inner_text())
-        self.assertIn("note-on", self.page.locator('[data-testid="midi-activity"]').inner_text())
+        self.assertIn("note-on", self.page.locator('[data-testid="midi-activity"]').text_content())
 
         wrong_midi = (int(second_midi) + 1) % 127
         self.page.evaluate("""
@@ -2300,7 +2765,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('released all UI keys') || document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('key up')")
         self.assertEqual(self.page.locator(".midi-held, .midi-held-pitch").count(), 0)
 
-    def test_guide_audio_creates_output_graph(self):
+    def test_test_tone_creates_output_graph(self):
         self.open_audio_drawer()
         self.page.evaluate("""
         () => {
@@ -2366,7 +2831,6 @@ class PlaywrightExhibitTests(unittest.TestCase):
           window.webkitAudioContext = FakeAudioContext;
         }
         """)
-        self.page.select_option('[data-testid="tone-select"]', "soft_wurli")
         self.page.locator('[data-testid="test-audio"]').click()
         events = self.page.evaluate("() => window.__audioEvents")
         starts = [event for event in events if event[0] == "start"]
@@ -2376,7 +2840,6 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(len(stops), 1)
         self.assertGreaterEqual(len(destination_connections), 1)
         self.assertIn("Audio: playing C4.", self.page.locator('[data-testid="audio-status"]').inner_text())
-        self.assertIn("local test tone C4", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"scope-readout\"]').textContent.includes('peak')")
         self.assertTrue(self.page.locator('[data-testid="audio-scope"]').is_visible())
 
@@ -6714,12 +7177,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
         self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["setInstrumentVolume", 0, 80], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 96 and call[3] == 80 and call[4] == 1 for call in calls), calls)
+        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 127 and call[3] == 100 and call[4] == 1 for call in calls), calls)
         self.page.wait_for_timeout(80)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertNotIn("SSLI normalization output preset=" + celesta_value, log)
-        self.assertNotIn("SSLI normalization preset=" + celesta_value, log)
+        self.assertIn("SSLI normalization preset=" + celesta_value + " volume=100 output=1.00", log)
 
     def test_regression_ssli_rhodes_does_not_use_output_boost_compensation(self):
         self.open_audio_drawer()
@@ -6764,11 +7227,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x91, 48, 96] })")
         self.page.wait_for_function("() => window.__ssliCalls.some((call) => call[0] === 'startSustainedNote')")
         calls = self.page.evaluate("() => window.__ssliCalls")
-        self.assertIn(["setInstrumentVolume", 0, 80], calls)
-        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 96 and call[3] == 80 and call[4] == 1 for call in calls), calls)
+        self.assertIn(["setInstrumentVolume", 0, 100], calls)
+        self.assertTrue(any(call[0] == "startSustainedNote" and call[1] == 48 and call[2] == 127 and call[3] == 100 and call[4] == 1 for call in calls), calls)
         self.page.wait_for_timeout(80)
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertNotIn("SSLI normalization output preset=" + rhodes_value, log)
+        self.assertIn("SSLI normalization preset=" + rhodes_value + " volume=100 output=1.00", log)
 
     def test_regression_exquis_midi_uses_linear_velocity_and_live_pressure_expression(self):
         self.open_audio_drawer()
@@ -7593,6 +8057,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("SSLI all sustained voices cleared after MIDI idle", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
 
     def test_regression_midi_diagnostics_console_is_visible(self):
+        self.open_audio_drawer()
         console = self.page.locator('[data-testid="console-panel"]')
         log = self.page.locator('[data-testid="diagnostic-log"]')
         self.assertTrue(console.is_visible())
@@ -7632,6 +8097,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("scopePeak=", log)
 
     def test_regression_console_actions_fit_on_one_row(self):
+        self.open_audio_drawer()
         self.page.set_viewport_size({"width": 1366, "height": 768})
         metrics = self.page.evaluate("""
         () => {
@@ -7654,6 +8120,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLessEqual(metrics["panelRight"], metrics["sideRight"] + 1, metrics)
 
     def test_regression_ssli_preset_selectors_are_hierarchical(self):
+        self.open_audio_drawer()
         self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="sound-category-select"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="sound-preset-select"]').is_visible())
@@ -7662,12 +8129,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("Wurlitzer EP", self.page.locator('[data-testid="sound-preset-select"]').inner_text())
 
     def test_regression_fx_chain_selectors_are_hierarchical(self):
+        self.open_audio_drawer()
         self.assertTrue(self.page.locator('[data-testid="fx-category-select"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="fx-preset-select"]').is_visible())
         self.page.select_option('[data-testid="fx-category-select"]', "Performance / Live")
         self.assertIn("Lead Solo", self.page.locator('[data-testid="fx-preset-select"]').inner_text())
 
     def test_regression_fx_controls_share_one_visual_row(self):
+        self.open_audio_drawer()
         self.page.set_viewport_size({"width": 1366, "height": 768})
         metrics = self.page.evaluate("""() => {
           const category = document.querySelector('[data-testid="fx-category-select"]').getBoundingClientRect();
@@ -7760,6 +8229,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.mouse.up()
 
     def test_console_reset_and_exit_controls(self):
+        self.open_audio_drawer()
         self.assertTrue(self.page.locator('[data-testid="console-panel"]').is_visible())
         self.assertEqual(self.page.locator('[data-testid="reset-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="copy-console"]').count(), 1)
@@ -8089,15 +8559,60 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(metrics["fieldHeight"], 360, metrics)
         self.assertLessEqual(metrics["pageY"], 1)
 
-    def test_regression_guide_tone_is_separate_from_ssli_sound_controls(self):
-        grouping = self.page.evaluate("""() => ({
-          guideSection: document.querySelector('[data-testid="tone-select"]').closest('section').className,
-          soundSection: document.querySelector('[data-testid="sound-engine-select"]').closest('section').className,
-          sameSection: document.querySelector('[data-testid="tone-select"]').closest('section') === document.querySelector('[data-testid="sound-engine-select"]').closest('section')
-        })""")
-        self.assertEqual(grouping["guideSection"], "guide-section")
-        self.assertEqual(grouping["soundSection"], "audio-section")
-        self.assertFalse(grouping["sameSection"])
+    def test_regression_practice_audio_has_no_legacy_guide_tone_selector(self):
+        self.assertEqual(self.page.locator('[data-testid="tone-select"]').count(), 0)
+        self.assertEqual(self.page.locator('.guide-section').count(), 0)
+        self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+
+    def test_regression_practice_coach_is_the_authoritative_learning_surface(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        coach = self.page.locator('[data-testid="practice-coach"]')
+        self.assertTrue(coach.is_visible())
+        for test_id in [
+            "coach-now-playing",
+            "coach-action-cue",
+            "coach-result",
+            "coach-next-action",
+            "coach-progress",
+        ]:
+            field = coach.locator(f'[data-testid="{test_id}"]')
+            self.assertTrue(field.is_visible(), test_id)
+        self.assertEqual(coach.locator('[data-testid="coach-result"]').count(), 1)
+        self.assertEqual(coach.locator('[data-testid="coach-progress"]').count(), 1)
+        self.assertEqual(coach.locator('[data-testid="coach-result"]').get_attribute("role"), "status")
+        self.assertEqual(coach.locator('[data-testid="coach-result"]').get_attribute("aria-live"), "polite")
+        self.assertFalse(self.page.locator('[data-testid="midi-activity"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="last-midi"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="console-panel"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="calibration-section"]').is_visible())
+
+    def test_regression_session_settings_uses_a_specific_learner_facing_label(self):
+        settings = self.page.locator('[data-testid="practice-tools"]')
+        self.assertEqual(settings.locator('summary').inner_text(), 'Session settings')
+        self.assertFalse(settings.evaluate('el => el.open'))
+
+    def test_regression_practice_coach_outcome_names_the_next_action(self):
+        self.page.evaluate("""
+        () => {
+          window.__practiceCoachInput = { id: 'practice-coach', name: 'Practice Coach Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__practiceCoachInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__practiceCoachInput && window.__practiceCoachInput.onmidimessage")
+        target_midi = self.page.locator('.key.current').get_attribute('data-midi')
+        self.page.evaluate("(midi) => window.__practiceCoachInput.onmidimessage({ data: [0x90, Number(midi), 100] })", target_midi)
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-result\"]').textContent.includes('Correct:')")
+        result = self.page.locator('[data-testid="coach-result"]').inner_text()
+        next_action = self.page.locator('[data-testid="coach-next-action"]').inner_text()
+        self.assertIn("Correct:", result)
+        self.assertIn("Continue", next_action)
+        self.assertIn("Score:", self.page.locator('[data-testid="coach-progress"]').inner_text())
+        self.assertIn("Step", self.page.locator('[data-testid="coach-progress"]').inner_text())
 
     def test_regression_no_scroll_layout_does_not_clip_right_rail(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
@@ -8121,15 +8636,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
           const selectors = [
             '[data-testid="orientation-select"]',
             '[data-testid="rotate-surface"]',
-            '[data-testid="sound-engine-select"]',
-            '[data-testid="sound-category-select"]',
-            '[data-testid="sound-preset-select"]',
-            '[data-testid="fx-category-select"]',
-            '[data-testid="fx-preset-select"]',
-            '[data-testid="filter-cutoff"]',
-            '[data-testid="filter-resonance"]',
-            '[data-testid="test-audio"]',
-            '[data-testid="play-scale"]',
+            '[data-testid="practice-coach"]',
+            '[data-testid="coach-now-playing"]',
+            '[data-testid="coach-action-cue"]',
+            '[data-testid="coach-result"]',
+            '[data-testid="coach-next-action"]',
+            '[data-testid="coach-progress"]',
             '[data-testid="enable-midi"]'
           ];
           const viewport = { width: innerWidth, height: innerHeight };
@@ -8149,45 +8661,36 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(metrics["belowViewport"], [])
         self.assertEqual(metrics["rightOfViewport"], [])
 
-    def test_regression_enable_midi_is_first_prominent_side_rail_action(self):
+    def test_regression_practice_coach_is_first_prominent_side_rail_surface(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         metrics = self.page.evaluate("""() => {
           const side = document.querySelector('.side-panel').getBoundingClientRect();
-          const midiSection = document.querySelector('[data-testid="midi-coach-section"]');
-          const guideSection = document.querySelector('.guide-section');
-          const soundSection = document.querySelector('.audio-section');
-          const drillSection = document.querySelector('[data-testid="drill-section"]');
+          const coach = document.querySelector('[data-testid="practice-coach"]');
           const enable = document.querySelector('[data-testid="enable-midi"]').getBoundingClientRect();
-          const status = document.querySelector('[data-testid="midi-status"]').getBoundingClientRect();
+          const nowPlaying = document.querySelector('[data-testid="coach-now-playing"]').getBoundingClientRect();
           return {
             sideTop: side.top,
-            midiSectionIndex: Array.from(document.querySelector('.side-panel').children).indexOf(midiSection),
-            guideIndex: Array.from(document.querySelector('.side-panel').children).indexOf(guideSection),
-            soundIndex: Array.from(document.querySelector('.side-panel').children).indexOf(soundSection),
-            drillIndex: Array.from(document.querySelector('.side-panel').children).indexOf(drillSection),
+            coachIndex: Array.from(document.querySelector('.side-panel').children).indexOf(coach),
+            coachTop: coach.getBoundingClientRect().top,
             enableTop: enable.top,
             enableHeight: enable.height,
-            statusTop: status.top,
+            nowPlayingTop: nowPlaying.top,
             enableText: document.querySelector('[data-testid="enable-midi"]').textContent.trim()
           };
         }""")
-        self.assertEqual(metrics["midiSectionIndex"], 0)
-        self.assertLess(metrics["midiSectionIndex"], metrics["guideIndex"])
-        self.assertLess(metrics["midiSectionIndex"], metrics["soundIndex"])
-        self.assertLess(metrics["midiSectionIndex"], metrics["drillIndex"])
-        self.assertLess(metrics["enableTop"] - metrics["sideTop"], 86)
-        self.assertLess(metrics["statusTop"], metrics["enableTop"])
+        self.assertEqual(metrics["coachIndex"], 0)
+        self.assertLess(metrics["coachTop"] - metrics["sideTop"], 24)
+        self.assertLess(metrics["enableTop"], metrics["nowPlayingTop"])
         self.assertGreaterEqual(metrics["enableHeight"], 44)
         self.assertIn("Enable MIDI", metrics["enableText"])
 
-    def test_regression_midi_status_regions_remain_visible_and_live_on_laptop(self):
+    def test_regression_practice_coach_status_regions_remain_visible_and_live_on_laptop(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         metrics = self.page.evaluate("""() => {
           const selectors = [
             '[data-testid="midi-status"]',
-            '[data-testid="midi-activity"]',
-            '[data-testid="drill-score"]',
-            '[data-testid="audio-status"]'
+            '[data-testid="coach-result"]',
+            '[data-testid="coach-progress"]'
           ];
           return selectors.map((selector) => {
             const el = document.querySelector(selector);
@@ -8202,6 +8705,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }""")
         for item in metrics:
             self.assertTrue(item["visible"], item)
+        for item in metrics[:2]:
             self.assertEqual(item["role"], "status", item)
             self.assertEqual(item["live"], "polite", item)
 

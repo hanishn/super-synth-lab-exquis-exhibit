@@ -137,6 +137,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "progression_lesson_must_retain_wrong_chord_and_advance_on_correct_chord": "test_regression_progression_lesson_retains_wrong_chord_and_advances_on_correct_chord",
         "progression_fixture_must_resolve_c_major_ii_v_i_to_exact_triads": "test_regression_progression_fixture_resolves_c_major_ii_v_i_to_exact_triads",
         "progression_lesson_must_present_ii_v_i_in_order": "test_regression_progression_lesson_presents_ii_v_i_in_order",
+        "ii_v_i_fixture_must_transpose_functions_and_voicings_for_c_f_and_bb": "test_regression_ii_v_i_fixture_transposes_functions_and_voicings_for_c_f_and_bb",
+        "ii_v_i_lesson_must_rebuild_from_selected_tonic": "test_regression_ii_v_i_lesson_rebuilds_from_the_selected_tonic",
+        "f_major_resolution_must_use_compact_centerward_voicing": "test_regression_f_major_resolution_uses_the_compact_centerward_voicing",
+        "dorian_vamp_must_transpose_and_resolve_as_playable_minor_to_major_pair": "test_regression_dorian_vamp_transposes_and_resolves_as_playable_minor_to_major_pair",
+        "exercise_order_must_remain_stable_when_scale_changes": "test_regression_exercise_order_remains_stable_when_scale_changes",
+        "exercise_chooser_must_use_explicit_families_without_scale_driven_reordering": "test_regression_exercise_chooser_uses_explicit_families_without_scale_driven_reordering",
+        "exercise_chooser_controls_must_remain_readable_at_desktop_width": "test_regression_exercise_chooser_controls_remain_readable_at_desktop_width",
+        "progression_library_must_offer_a_broad_transposable_curriculum": "test_regression_progression_library_offers_a_broad_transposable_curriculum",
+        "ssli_genre_progression_library_must_remain_browsable_and_playable": "test_regression_ssli_genre_progression_library_remains_browsable_and_playable",
+        "progression_library_templates_must_resolve_playable_chords_across_major_keys": "test_regression_progression_library_templates_resolve_playable_chords_across_major_keys",
         "progression_prompt_must_include_every_current_chord_member": "test_regression_progression_prompt_includes_every_current_chord_member",
         "exercise_control_must_not_overflow_header_at_desktop_viewport": "test_regression_exercise_control_does_not_overflow_header_at_desktop_viewport",
         "first_ssli_prompt_must_fall_back_until_preset_output_is_ready": "test_regression_first_ssli_prompt_falls_back_until_preset_output_is_ready",
@@ -161,7 +171,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "audio_diagnostics_must_include_ssli_voice_pool_health": "test_regression_audio_diag_reports_ssli_voice_pool_health",
         "console_actions_must_fit_on_one_row": "test_regression_console_actions_fit_on_one_row",
         "midi_note_highlight_must_match_exact_midi_note_only": "test_regression_midi_highlight_matches_exact_note_only",
-        "midi_duplicate_note_highlight_must_use_centered_physical_cell": "test_regression_midi_duplicate_note_highlights_centered_physical_cell",
+        "midi_duplicate_note_highlight_must_illuminate_all_matching_physical_cells": "test_regression_midi_duplicate_note_illuminates_all_matching_physical_cells",
+        "midi_duplicate_note_must_not_invent_a_physical_pad_identity": "test_regression_midi_duplicate_note_keeps_hardware_identity_ambiguous",
+        "duplicate_pitch_hardware_evidence_must_score_the_guided_grip_without_inventing_pad_identity": "test_regression_grip_accepts_pitch_only_hardware_evidence_for_duplicate_target",
         "midi_note_on_must_be_blue_white_not_root_white": "test_regression_midi_note_on_color_is_distinct_from_root_white",
         "all_tonic_pitch_class_keys_must_be_root_white": "test_regression_all_c_keys_are_tonic_in_default_c_major",
         "horizontal_and_vertical_scale_leds_must_stay_visibly_lit": "test_regression_scale_leds_are_visible_in_horizontal_and_vertical",
@@ -824,6 +836,25 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertFalse(late["accepted"], late)
         self.assertEqual(late["outcome"], "late", late)
 
+    def test_regression_grip_accepts_pitch_only_hardware_evidence_for_duplicate_target(self):
+        result = self.page.evaluate("""() => window.__exquisDebugEvaluateGrip({
+          id: 'F-major-resolution',
+          type: 'grip',
+          targets: [
+            { cellId: 'r3c1', midi: 53 },
+            { cellId: 'r2c2', midi: 57 },
+            { cellId: 'r1c1', midi: 60 }
+          ],
+          fingering: { primary: 5, assignments: [] },
+          timing: { mode: 'simultaneous', toleranceMs: 80 }
+        }, [
+          { midi: 53, cellId: 'r3c1', at: 1000 },
+          { midi: 57, cellId: 'r2c2', at: 1020 },
+          { midi: 60, cellId: '', cellIds: ['r1c1', 'r2c5'], at: 1040 }
+        ])""")
+        self.assertTrue(result["accepted"], result)
+        self.assertEqual(result["outcome"], "complete", result)
+
     def test_major_triad_exercise_emits_selected_root_grip(self):
         self.page.select_option('[data-testid="exercise-select"]', "major_triad")
         snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
@@ -1028,6 +1059,204 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual([event["musicalIntent"]["degree"] for event in progression["events"]], ["ii", "V", "I"], progression)
         self.assertEqual([[target["midi"] for target in event["targets"]] for event in progression["events"]], [[50, 53, 57], [43, 47, 50], [48, 52, 55]], progression)
 
+    def test_regression_ii_v_i_fixture_transposes_functions_and_voicings_for_c_f_and_bb(self):
+        fixtures = self.page.evaluate("""() => [
+          { tonicPc: 0, targets: [[50, 53, 57], [43, 47, 50], [48, 52, 55]] },
+          { tonicPc: 5, targets: [[55, 58, 62], [48, 52, 55], [53, 57, 60]] },
+          { tonicPc: 10, targets: [[60, 63, 67], [53, 57, 60], [58, 62, 65]] }
+        ].map((expected) => {
+          const progression = window.__exquisDebugBuildProgressionFixture('c-major-ii-v-i', expected.tonicPc);
+          return {
+            tonicPc: expected.tonicPc,
+            title: progression && progression.title,
+            degrees: progression && progression.events.map((event) => event.musicalIntent.degree),
+            qualities: progression && progression.events.map((event) => event.musicalIntent.quality),
+            targets: progression && progression.events.map((event) => event.targets.map((target) => target.midi))
+          };
+        })""")
+        self.assertEqual([fixture["degrees"] for fixture in fixtures], [["ii", "V", "I"]] * 3, fixtures)
+        self.assertEqual([fixture["qualities"] for fixture in fixtures], [["minor", "major", "major"]] * 3, fixtures)
+        self.assertEqual([fixture["targets"] for fixture in fixtures], [
+            [[50, 53, 57], [43, 47, 50], [48, 52, 55]],
+            [[55, 58, 62], [48, 52, 55], [53, 57, 60]],
+            [[60, 63, 67], [53, 57, 60], [58, 62, 65]]
+        ], fixtures)
+
+    def test_regression_ii_v_i_lesson_rebuilds_from_the_selected_tonic(self):
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_ii_v_i")
+        observed = []
+        for tonic_pc in ["0", "5", "10"]:
+            self.page.select_option('[data-testid="tonic-select"]', tonic_pc)
+            observed.append(self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents.map((event) => event.targets.map((target) => target.midi))"))
+        self.assertEqual(observed, [
+            [[50, 53, 57], [43, 47, 50], [48, 52, 55]],
+            [[55, 58, 62], [48, 52, 55], [53, 57, 60]],
+            [[60, 63, 67], [53, 57, 60], [58, 62, 65]]
+        ])
+
+    def test_regression_f_major_resolution_uses_the_compact_centerward_voicing(self):
+        progression = self.page.evaluate("() => window.__exquisDebugBuildProgressionFixture('c-major-ii-v-i', 5)")
+        resolution = progression["events"][2]
+        self.assertEqual([target["midi"] for target in resolution["targets"]], [53, 57, 60], resolution)
+        self.assertEqual([target["cellId"] for target in resolution["targets"]], ["r3c1", "r2c2", "r1c1"], resolution)
+
+    def test_regression_progression_library_templates_resolve_playable_chords_across_major_keys(self):
+        observed = self.page.evaluate("""() => {
+          const ids = ['c-major-i-v-vi-iv', 'c-major-i-vi-ii-v', 'c-major-12-bar-blues'];
+          return [0, 5, 10].map((tonicPc) => ids.map((id) => {
+            const progression = window.__exquisDebugBuildProgressionFixture(id, tonicPc);
+            return {
+              id,
+              title: progression && progression.title,
+              degrees: progression && progression.events.map((event) => event.musicalIntent.degree),
+              valid: progression && progression.events.every((event) => event.valid),
+              eventCount: progression && progression.events.length
+            };
+          }));
+        }""")
+        expected_degrees = {
+            "c-major-i-v-vi-iv": ["I", "V", "vi", "IV"],
+            "c-major-i-vi-ii-v": ["I", "vi", "ii", "V"],
+            "c-major-12-bar-blues": ["I", "I", "I", "I", "IV", "IV", "I", "I", "V", "IV", "I", "V"]
+        }
+        expected_titles = ["C", "F", "Bb"]
+        for tonic_name, fixtures in zip(expected_titles, observed):
+            self.assertEqual([fixture["id"] for fixture in fixtures], list(expected_degrees), fixtures)
+            self.assertTrue(all(fixture["valid"] for fixture in fixtures), fixtures)
+            self.assertTrue(all(fixture["title"].startswith(tonic_name + " major") for fixture in fixtures), fixtures)
+            for fixture in fixtures:
+                self.assertEqual(fixture["degrees"], expected_degrees[fixture["id"]], fixture)
+
+    def test_regression_dorian_vamp_transposes_and_resolves_as_playable_minor_to_major_pair(self):
+        observed = self.page.evaluate("""() => [0, 5, 10].map((tonicPc) => {
+          const progression = window.__exquisDebugBuildProgressionFixture('c-dorian-i-iv-vamp', tonicPc);
+          return {
+            title: progression && progression.title,
+            degrees: progression && progression.events.map((event) => event.musicalIntent.degree),
+            qualities: progression && progression.events.map((event) => event.musicalIntent.quality),
+            targetMidis: progression && progression.events.map((event) => event.targets.map((target) => target.midi)),
+            valid: progression && progression.events.every((event) => event.valid)
+          };
+        })""")
+        self.assertEqual([item["title"] for item in observed], ["C Dorian i-IV vamp", "F Dorian i-IV vamp", "Bb Dorian i-IV vamp"], observed)
+        self.assertTrue(all(item["valid"] for item in observed), observed)
+        self.assertTrue(all(item["degrees"] == ["i", "IV", "i", "IV"] for item in observed), observed)
+        self.assertTrue(all(item["qualities"] == ["minor", "major", "minor", "major"] for item in observed), observed)
+        self.assertEqual([item["targetMidis"][:2] for item in observed], [
+            [[36, 39, 43], [41, 45, 48]],
+            [[41, 44, 48], [46, 50, 53]],
+            [[46, 49, 53], [51, 55, 58]]
+        ], observed)
+
+    def test_regression_exercise_order_remains_stable_when_scale_changes(self):
+        self.page.select_option('[data-testid="scale-select"]', 'dorian')
+        dorian_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
+        self.assertEqual(dorian_options, [
+            {"value": "root_octave", "label": "Root to octave"},
+            {"value": "two_octaves", "label": "Two octaves"},
+            {"value": "inner_ladder", "label": "Inner-chain ladder"},
+            {"value": "root_returns", "label": "Root returns"}
+        ], dorian_options)
+        self.page.select_option('[data-testid="scale-select"]', 'ionian')
+        ionian_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
+        self.assertEqual(ionian_options, dorian_options)
+
+    def test_regression_exercise_chooser_uses_explicit_families_without_scale_driven_reordering(self):
+        families = self.page.locator('[data-testid="exercise-family-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
+        self.assertEqual(families, [
+            {"value": "technique", "label": "Technique"},
+            {"value": "shapes", "label": "Shapes"},
+            {"value": "progressions", "label": "Progressions"},
+            {"value": "ear", "label": "Ear training"}
+        ], families)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        progression_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => element.value)")
+        self.assertEqual(progression_options, [
+            'dorian_i_iv_vamp', 'major_i_iv_vi_v', 'major_i_iii_iv_v', 'major_i_ii_vi_iv',
+            'major_circle_of_fifths', 'minor_i_iv_v_i', 'minor_i_bVII_bVI_bVII', 'dorian_i_bVII_iv',
+            'phrygian_i_bII_vamp', 'c_major_progression', 'c_major_ii_v_i', 'major_i_v_vi_iv',
+            'major_i_vi_ii_v', 'major_12_bar_blues'
+        ], progression_options)
+        self.page.select_option('[data-testid="scale-select"]', 'dorian')
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'progressions')
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => element.value)"), progression_options)
+        self.page.select_option('[data-testid="exercise-select"]', 'dorian_i_iv_vamp')
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'progressions')
+
+    def test_regression_progression_library_offers_a_broad_transposable_curriculum(self):
+        fixture_ids = [
+            'c-dorian-i-iv-vamp', 'c-major-i-iv-vi-v', 'c-major-i-iii-iv-v', 'c-major-i-ii-vi-iv',
+            'c-major-circle-of-fifths', 'c-minor-i-iv-v-i', 'c-minor-i-bVII-bVI-bVII',
+            'c-dorian-i-bVII-iv', 'c-phrygian-i-bII-vamp', 'c-major-i-iv-v-i', 'c-major-ii-v-i',
+            'c-major-i-v-vi-iv', 'c-major-i-vi-ii-v', 'c-major-12-bar-blues'
+        ]
+        observed = self.page.evaluate("""(fixtureIds) => [0, 5, 10].map((tonicPc) => fixtureIds.map((id) => {
+          const progression = window.__exquisDebugBuildProgressionFixture(id, tonicPc);
+          return { id, valid: !!progression && progression.events.every((event) => event.valid), count: progression && progression.events.length };
+        }))""", fixture_ids)
+        self.assertEqual(len(fixture_ids), 14)
+        self.assertTrue(all(item["valid"] and item["count"] >= 3 for key in observed for item in key), observed)
+
+    def test_regression_ssli_genre_progression_library_remains_browsable_and_playable(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.assertTrue(self.page.locator('[data-testid="progression-genre-control"]').is_visible())
+        genres = self.page.locator('[data-testid="progression-genre-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
+        self.assertEqual(genres[0], {"value": "starter", "label": "Starter repertoire"}, genres)
+        self.assertEqual([genre["label"] for genre in genres[1:]], [
+            'Pop & Rock', 'Jazz', 'Blues', 'Classical', 'R&B / Soul', 'EDM / Electronic', 'Folk / Country',
+            'Film / Cinematic', 'Theory: Building Blocks', 'Theory: Mediant Subs', 'Reggaeton / Latin Pop',
+            'Gospel / Worship', 'Bossa Nova / MPB', 'Prog Rock / Art Rock', 'Ambient / Drone'
+        ], genres)
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-1')
+        jazz_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
+        self.assertEqual(len(jazz_options), 31, jazz_options)
+        self.assertEqual(jazz_options[0], {"value": "ssli_progression_1_0", "label": "ii-V-I"}, jazz_options)
+        self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_1_0')
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual([event["musicalIntent"]["degree"] for event in events], ['ii', 'V', 'I'], events)
+        result = self.page.evaluate("""() => {
+          const groups = window.SSLI_VENDOR.progressionGroups;
+          const invalid = [];
+          for (const tonicPc of [0, 5, 10]) {
+            groups.forEach((group, genreIndex) => group.progressions.forEach((_progression, progressionIndex) => {
+              const fixture = window.__exquisDebugBuildSsliProgressionFixture(genreIndex, progressionIndex, tonicPc, 'ionian');
+              if (!fixture || !fixture.events.every((event) => event.valid)) invalid.push({ tonicPc, genreIndex, progressionIndex });
+            }));
+          }
+          return { genres: groups.length, progressions: groups.reduce((total, group) => total + group.progressions.length, 0), invalid };
+        }""")
+        self.assertEqual(result["genres"], 15, result)
+        self.assertEqual(result["progressions"], 466, result)
+        self.assertEqual(result["invalid"], [], result)
+
+    def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        controls = {
+            "family": self.page.locator('[data-testid="exercise-family-select"]').bounding_box(),
+            "genre": self.page.locator('[data-testid="progression-genre-select"]').bounding_box(),
+            "exercise": self.page.locator('[data-testid="exercise-select"]').bounding_box(),
+            "gripFingering": self.page.locator('[data-testid="grip-fingering-select"]').bounding_box()
+        }
+        self.assertGreaterEqual(controls["family"]["width"], 150, controls)
+        self.assertLessEqual(controls["family"]["width"], 156, controls)
+        self.assertGreaterEqual(controls["genre"]["width"], 168, controls)
+        self.assertLessEqual(controls["genre"]["width"], 174, controls)
+        self.assertGreaterEqual(controls["exercise"]["width"], 280, controls)
+        self.assertLessEqual(controls["exercise"]["width"], 342, controls)
+        self.assertGreaterEqual(controls["gripFingering"]["width"], 138, controls)
+        self.assertLessEqual(controls["gripFingering"]["width"], 142, controls)
+        self.assertTrue(self.page.locator('[data-testid="progression-genre-control"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="octave-control"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="root-control"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="fingering-control"]').is_visible())
+        self.assertEqual(self.page.locator('#practiceTitle').inner_text(), 'Progression lab')
+        self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        self.assertTrue(self.page.locator('[data-testid="octave-control"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="root-control"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="fingering-control"]').is_visible())
+        self.assertEqual(self.page.locator('#practiceTitle').inner_text(), 'Scale map')
+
     def test_regression_progression_lesson_presents_ii_v_i_in_order(self):
         self.page.select_option('[data-testid="exercise-select"]', "c_major_ii_v_i")
         events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
@@ -1104,8 +1333,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
     def test_major_triad_midi_grip_scores_once_and_advances_once(self):
         self.page.select_option('[data-testid="exercise-select"]', "major_triad")
         self.page.select_option('[data-testid="grip-fingering-select"]', "compact")
-        self.assertIn("Pinky", self.page.locator('[data-testid="target-finger"]').inner_text())
-        self.assertIn("Thumb", self.page.locator('[data-testid="target-finger"]').inner_text())
+        target_fingers = self.page.locator('[data-testid="target-finger"]').text_content()
+        self.assertIn("Pinky", target_fingers)
+        self.assertIn("Thumb", target_fingers)
         self.page.evaluate("""() => {
           window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
           navigator.requestMIDIAccess = () => Promise.resolve({
@@ -1852,7 +2082,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(overlaps, [])
 
     def test_regression_practice_header_controls_follow_information_hierarchy(self):
-        order = self.page.evaluate("""() => [...document.querySelector('.controls-grid').children].map((el) => (
+        order = self.page.evaluate("""() => [
+          ...document.querySelector('.controls-grid').children,
+          ...document.querySelector('.practice-workflow-controls').children
+        ].map((el) => (
           el.getAttribute('data-testid') || el.querySelector('[data-testid]')?.getAttribute('data-testid') || ''
         ))""")
         self.assertEqual(order, [
@@ -1862,18 +2095,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
             "octave-control",
             "root-control",
             "hand-control",
+            "exercise-family-control",
+            "progression-genre-control",
             "exercise-control",
             "fingering-control",
+            "grip-fingering-control",
+            "harmony-triad-controls",
             "view-control",
-            "orientation-select",
-            "rotate-surface",
         ])
         header_text = self.page.locator(".top-panel").inner_text()
         self.assertIn("Session", header_text)
         self.assertIn("Root Octave", header_text)
         self.assertIn("Start Button", header_text)
         self.assertIn("Finger Pattern", header_text)
-        self.assertIn("Overlay", header_text)
+        self.assertIn("Surface", header_text)
 
     def test_regression_play_mode_midi_does_not_score_or_advance(self):
         self.page.evaluate("""
@@ -6466,7 +6701,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("raw=48", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
         self.assertEqual(self.page.locator(".midi-held").get_attribute("data-cell-id"), "r5c3")
 
-    def test_regression_midi_duplicate_note_highlights_centered_physical_cell(self):
+    def test_regression_midi_duplicate_note_illuminates_all_matching_physical_cells(self):
         self.page.evaluate("""
         () => {
           window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -6479,12 +6714,29 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x9F, 48, 96] })")
-        self.page.wait_for_function("() => document.querySelectorAll('.midi-held').length === 1")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x9F, 60, 96] })")
+        self.page.wait_for_function("() => document.querySelectorAll('.midi-held').length === 2")
         held = self.page.locator(".midi-held")
-        self.assertEqual(held.get_attribute("data-midi"), "48")
-        self.assertEqual(held.get_attribute("data-cell-id"), "r5c3")
-        self.assertNotEqual(held.get_attribute("data-cell-id"), "r4c0")
+        self.assertEqual(sorted(held.evaluate_all("elements => elements.map((element) => element.getAttribute('data-cell-id'))")), ["r1c1", "r2c5"])
+
+    def test_regression_midi_duplicate_note_keeps_hardware_identity_ambiguous(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-usb', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockExquisInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90, 60, 96] })")
+        self.page.wait_for_function("() => document.querySelectorAll('.midi-held').length === 2")
+        snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+        self.assertEqual(snapshot["lastMidi"]["cellId"], "", snapshot)
+        self.assertEqual(snapshot["lastMidi"]["cellIds"], ["r1c1", "r2c5"], snapshot)
 
     def test_regression_repeated_exquis_notes_do_not_reapply_preset_or_leak_ssli_voices(self):
         self.open_audio_drawer()

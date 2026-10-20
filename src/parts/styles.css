@@ -77,7 +77,7 @@ input {
 .top-panel {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 136px minmax(0, 1fr);
+  grid-template-columns: 156px minmax(0, 1fr);
   gap: 12px;
   padding: 8px 12px;
 }
@@ -91,8 +91,9 @@ input {
 
 .brand-block h1 {
   max-width: none;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .build-version {
@@ -145,6 +146,35 @@ input {
   grid-template-columns: repeat(20, minmax(30px, 1fr));
   gap: 4px;
   align-items: end;
+}
+
+.practice-workflow-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(20, minmax(30px, 1fr));
+  gap: 4px;
+  align-items: end;
+}
+
+.practice-workflow-controls.progression-layout {
+  display: grid;
+  grid-template-columns: 152px 170px minmax(280px, 340px) 140px 230px;
+  justify-content: start;
+  gap: 4px;
+  align-items: end;
+}
+
+.practice-workflow-controls.progression-layout .exercise-family-control,
+.practice-workflow-controls.progression-layout .progression-genre-control,
+.practice-workflow-controls.progression-layout .exercise-switch,
+.practice-workflow-controls.progression-layout .grip-fingering-control,
+.practice-workflow-controls.progression-layout .surface-controls {
+  grid-column: auto;
+  min-width: 0;
+}
+
+.practice-workflow-controls.progression-layout .exercise-switch {
+  width: 100%;
 }
 
 .control-break {
@@ -211,8 +241,66 @@ input {
 }
 
 .exercise-switch {
+  grid-column: span 6;
+  min-width: 240px;
+}
+
+.exercise-family-control {
+  grid-column: 1 / span 3;
+  min-width: 150px;
+}
+
+.progression-genre-control {
+  grid-column: span 3;
+  min-width: 150px;
+}
+
+.progression-genre-control:not([hidden]) ~ .exercise-switch {
+  grid-column: span 7;
+  min-width: 320px;
+}
+
+.practice-workflow-controls.progression-layout .progression-genre-control:not([hidden]) ~ .exercise-switch {
+  grid-column: auto;
+  min-width: 0;
+}
+
+.fingering-control,
+.grip-fingering-control {
+  grid-column: span 3;
+  min-width: 120px;
+}
+
+.surface-controls {
   grid-column: span 4;
-  min-width: 210px;
+  min-width: 230px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.surface-controls legend {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.surface-control-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+}
+
+.surface-control-fields label {
+  min-width: 0;
+}
+
+.surface-control-fields select,
+.surface-control-fields button {
+  width: 100%;
+  min-width: 0;
 }
 
 .exercise-buttons {
@@ -1814,9 +1902,18 @@ input[type="range"]:focus-visible {
   .hand-switch,
   .octave-switch,
   .exercise-switch,
+  .exercise-family-control,
+  .progression-genre-control,
+  .fingering-control,
+  .grip-fingering-control,
+  .surface-controls,
   [data-testid="root-control"] {
     grid-column: auto;
     min-width: 0;
+  }
+
+  .practice-workflow-controls.progression-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .exercise-buttons {

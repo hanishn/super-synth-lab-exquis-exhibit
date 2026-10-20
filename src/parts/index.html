@@ -3,13 +3,13 @@
   <section class="top-panel" aria-label="Practice controls">
     <div class="brand-block">
       <p class="eyebrow">Exquis Fingering Lab</p>
-      <h1>Scale map</h1>
+      <h1 id="practiceTitle">Scale map</h1>
       <p class="build-version" data-testid="build-version" title="Built {{BUILD_TIMESTAMP}}">
         <span>Build</span>
         <b>{{BUILD_VERSION}}</b>
       </p>
     </div>
-    <div class="controls-grid primary-controls">
+    <div class="controls-grid primary-controls" id="primaryControls">
       <fieldset class="mode-switch" data-testid="mode-switch" aria-label="Session">
         <legend>Session</legend>
         <select id="modeSelect" hidden data-testid="mode-select" aria-hidden="true" tabindex="-1">
@@ -29,7 +29,7 @@
         <span>Scale</span>
         <select id="scaleSelect" data-testid="scale-select"></select>
       </label>
-      <fieldset class="practice-control choice-switch octave-switch control-break" data-testid="octave-control">
+      <fieldset class="practice-control choice-switch octave-switch control-break" id="octaveControl" data-testid="octave-control">
         <legend>Root Octave</legend>
         <div class="choice-buttons" id="octaveButtons" data-testid="octave-buttons">
           <button id="lowerOctaveButton" type="button" class="choice-button" data-value="lower" data-testid="lower-octave-button">Lower</button>
@@ -40,7 +40,7 @@
           <option value="higher">Higher</option>
         </select>
       </fieldset>
-      <label class="practice-control" data-testid="root-control">
+      <label class="practice-control" id="rootControl" data-testid="root-control">
         <span>Start Button</span>
         <select id="rootSelect" data-testid="root-select"></select>
       </label>
@@ -55,16 +55,26 @@
           <option value="right">Right</option>
         </select>
       </fieldset>
+      </div>
+      <div class="practice-workflow-controls" id="practiceWorkflowControls">
+      <label class="practice-control exercise-family-control control-break" data-testid="exercise-family-control">
+        <span>Practice family</span>
+        <select id="exerciseFamilySelect" data-testid="exercise-family-select"></select>
+      </label>
+      <label class="practice-control progression-genre-control" id="progressionGenreControl" data-testid="progression-genre-control" hidden>
+        <span>Progression genre</span>
+        <select id="progressionGenreSelect" data-testid="progression-genre-select"></select>
+      </label>
       <fieldset class="practice-control choice-switch exercise-switch" data-testid="exercise-control">
         <legend>Exercise</legend>
         <div class="exercise-buttons" id="exerciseButtons" data-testid="exercise-buttons"></div>
         <select id="exerciseSelect" data-testid="exercise-select"></select>
       </fieldset>
-      <label class="practice-control" data-testid="fingering-control">
+      <label class="practice-control fingering-control" id="fingeringControl" data-testid="fingering-control">
         <span>Finger Pattern</span>
         <select id="strategySelect" data-testid="strategy-select"></select>
       </label>
-      <label class="practice-control" id="gripFingeringControl" data-testid="grip-fingering-control" hidden>
+      <label class="practice-control grip-fingering-control" id="gripFingeringControl" data-testid="grip-fingering-control" hidden>
         <span>Grip Fingering</span>
         <select id="gripFingeringSelect" data-testid="grip-fingering-select"></select>
       </label>
@@ -72,27 +82,32 @@
         <label><span>Triad quality</span><select id="harmonyQualitySelect" data-testid="harmony-quality-select"><option value="major">Major</option><option value="minor">Minor</option><option value="diminished">Diminished</option><option value="augmented">Augmented</option></select></label>
         <label><span>Inversion</span><select id="harmonyInversionSelect" data-testid="harmony-inversion-select"><option value="0">Root</option><option value="1">First</option><option value="2">Second</option></select></label>
       </div>
-      <label class="practice-control control-break" data-testid="view-control">
-        <span>Overlay</span>
-        <select id="viewSelect" data-testid="view-select">
-          <option value="practice">Practice path</option>
-          <option value="scale">All scale tones</option>
-          <option value="map">Full note map</option>
-          <option value="calibration">Calibration preview</option>
-        </select>
-      </label>
-      <label>
-        <span>Orientation</span>
-        <select id="orientationSelect" data-testid="orientation-select">
-          <option value="vertical">Vertical</option>
-          <option value="horizontal">Horizontal</option>
-        </select>
-      </label>
-      <label class="rotation-control">
-        <span>Rotate</span>
-        <button id="rotateSurface" type="button" data-testid="rotate-surface">Rotate 90</button>
-      </label>
-    </div>
+      <fieldset class="surface-controls control-break">
+        <legend>Surface</legend>
+        <div class="surface-control-fields">
+          <label class="practice-control" data-testid="view-control">
+            <span>Overlay</span>
+            <select id="viewSelect" data-testid="view-select">
+              <option value="practice">Practice path</option>
+              <option value="scale">All scale tones</option>
+              <option value="map">Full note map</option>
+              <option value="calibration">Calibration preview</option>
+            </select>
+          </label>
+          <label>
+            <span>Orientation</span>
+            <select id="orientationSelect" data-testid="orientation-select">
+              <option value="vertical">Vertical</option>
+              <option value="horizontal">Horizontal</option>
+            </select>
+          </label>
+          <label class="rotation-control">
+            <span>Rotate</span>
+            <button id="rotateSurface" type="button" data-testid="rotate-surface">Rotate 180</button>
+          </label>
+        </div>
+      </fieldset>
+      </div>
   </section>
 
   <section class="stage-panel" aria-label="Exquis keyboard visualization">

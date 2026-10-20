@@ -5,6 +5,7 @@
   var SSLI_MODES = SSLI_VENDOR.scalesModes || {};
   var SSLI_PRESETS = SSLI_VENDOR.presetLibraries || {};
   var SSLI_FX_PRESETS = SSLI_VENDOR.fxPresets || {};
+  var SSLI_PROGRESSION_GROUPS = SSLI_VENDOR.progressionGroups || [];
   var NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   var NOTES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
   var FLAT_KEY_ROOTS = [5, 10, 3, 8, 1, 6];
@@ -125,73 +126,165 @@
     {
       id: 'root_octave',
       name: 'Root to octave',
+      family: 'technique',
       prompt: 'Play the centered root-to-octave scale path. Keep the shape on the inner two Exquis chains.'
     },
     {
       id: 'two_octaves',
       name: 'Two octaves',
+      family: 'technique',
       prompt: 'Continue the same Exquis chain shape through the second octave without switching into piano-style fingering.'
     },
     {
       id: 'inner_ladder',
       name: 'Inner-chain ladder',
+      family: 'technique',
       prompt: 'Climb the inner two chains, then reverse the same physical path back to the centered root.'
     },
     {
       id: 'root_returns',
       name: 'Root returns',
+      family: 'technique',
       prompt: 'Return to the centered root between every scale tone so the hand keeps its home reference.'
+    },
+    {
+      id: 'dorian_i_iv_vamp',
+      name: 'Dorian i-IV vamp',
+      family: 'progressions',
+      prompt: 'Alternate the Dorian minor home chord and major IV shape. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_i_iv_vi_v',
+      name: 'Pop I-IV-vi-V',
+      family: 'progressions',
+      prompt: 'Move through the pop loop in order. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_i_iii_iv_v',
+      name: 'Cadence I-iii-IV-V',
+      family: 'progressions',
+      prompt: 'Move from tonic through the mediant into a dominant cadence. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_i_ii_vi_iv',
+      name: 'Pop I-ii-vi-IV',
+      family: 'progressions',
+      prompt: 'Move through the four-chord loop in order. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_circle_of_fifths',
+      name: 'Circle I-IV-vii-iii-vi-ii-V-I',
+      family: 'progressions',
+      prompt: 'Follow the circle sequence. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'minor_i_iv_v_i',
+      name: 'Minor i-iv-V-i',
+      family: 'progressions',
+      prompt: 'Resolve the minor cadence with a major dominant. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'minor_i_bVII_bVI_bVII',
+      name: 'Minor i-bVII-bVI-bVII',
+      family: 'progressions',
+      prompt: 'Move through the descending minor-color loop. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'dorian_i_bVII_iv',
+      name: 'Dorian i-bVII-IV',
+      family: 'progressions',
+      prompt: 'Move through the Dorian vamp in order. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'phrygian_i_bII_vamp',
+      name: 'Phrygian i-bII vamp',
+      family: 'progressions',
+      prompt: 'Alternate the Phrygian minor home chord and bII shape. Keep each chord together and repair the current chord before moving on.'
     },
     {
       id: 'major_third',
       name: 'Major third',
+      family: 'shapes',
       prompt: 'Press the root and third together as one compact interval grip.'
     },
     {
       id: 'major_triad',
       name: 'Major triad',
+      family: 'shapes',
       prompt: 'Press the root, third, and fifth together as one compact grip.'
     },
     {
       id: 'harmony_triad',
       name: 'Harmony triad',
+      family: 'shapes',
       prompt: 'Choose a quality and inversion, then press the highlighted chord shape together.'
     },
     {
       id: 'voice_leading',
       name: 'Voice leading',
+      family: 'shapes',
       prompt: 'Play the source triad, then move only the voices needed for the closest common-tone destination.'
     },
     {
       id: 'c_major_progression',
-      name: 'C major I-IV-V-I',
+      name: 'Major I-IV-V-I',
+      family: 'progressions',
       prompt: 'Play each chord in order. Keep the pulse steady and repair the current chord before moving on.'
     },
     {
       id: 'c_major_ii_v_i',
-      name: 'C major ii-V-I',
+      name: 'Major ii-V-I',
+      family: 'progressions',
       prompt: 'Play each chord in order. Keep the pulse steady and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_i_v_vi_iv',
+      name: 'Major I-V-vi-IV',
+      family: 'progressions',
+      prompt: 'Move through the pop progression in order. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_i_vi_ii_v',
+      name: 'Major I-vi-ii-V',
+      family: 'progressions',
+      prompt: 'Move through the turnaround in order. Keep each chord together and repair the current chord before moving on.'
+    },
+    {
+      id: 'major_12_bar_blues',
+      name: 'Major 12-bar blues',
+      family: 'progressions',
+      prompt: 'Hold the twelve-bar form. Keep each chord together and repair the current chord before moving on.'
     },
     {
       id: 'ear_minor_third',
       name: 'Hear a minor third',
+      family: 'ear',
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     },
     {
       id: 'ear_major_third',
       name: 'Hear a major third',
+      family: 'ear',
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     },
     {
       id: 'ear_perfect_fourth',
       name: 'Hear a perfect fourth',
+      family: 'ear',
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     },
     {
       id: 'ear_perfect_fifth',
       name: 'Hear a perfect fifth',
+      family: 'ear',
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     }
+  ];
+  var EXERCISE_FAMILIES = [
+    { id: 'technique', name: 'Technique' },
+    { id: 'shapes', name: 'Shapes' },
+    { id: 'progressions', name: 'Progressions' },
+    { id: 'ear', name: 'Ear training' }
   ];
   var HEARD_INTERVAL_FIXTURES = {
     ear_minor_third: { quality: 'minor-third', semitones: 3 },
@@ -903,6 +996,8 @@
     mode: 'practice',
     hand: 'left',
     exerciseId: 'root_octave',
+    exerciseFamily: 'technique',
+    progressionGenre: 'starter',
     scaleId: 'ionian',
     strategyId: 'natural_clusters',
     view: 'practice',
@@ -924,6 +1019,7 @@
     step: 0,
     lastMidi: null,
     activeMidiCellId: '',
+    activeMidiCellIds: {},
     activeMidiPc: null,
     lastMidiCellId: '',
     lastMidiPc: null,
@@ -1000,6 +1096,7 @@
 
   function resetVisualMidi() {
     state.activeMidiCellId = '';
+    state.activeMidiCellIds = {};
     state.activeMidiPc = null;
     state.lastMidiCellId = '';
     state.lastMidiPc = null;
@@ -1135,6 +1232,12 @@
     return {
       heldNotes: objectKeyCount(state.heldNotes),
       midiVoices: objectKeyCount(midiVoices),
+      lastMidi: state.lastMidi ? {
+        midi: state.lastMidi.midi,
+        velocity: state.lastMidi.velocity,
+        cellId: state.lastMidi.cellId,
+        cellIds: (state.lastMidi.cellIds || []).slice()
+      } : null,
       ssliActiveOscillators: getSsliActiveOscillatorCount(),
       lastAppliedSsliPresetKey: lastAppliedSsliPresetKey,
       soundPresetId: state.soundPresetId,
@@ -1182,6 +1285,7 @@
   window.__exquisDebugBuildGripExerciseEvent = createGripExerciseEvent;
   window.__exquisDebugBuildHarmonyGripFixture = buildHarmonyGripFixture;
   window.__exquisDebugBuildProgressionFixture = buildProgressionFixture;
+  window.__exquisDebugBuildSsliProgressionFixture = buildSsliProgressionFixture;
   window.__exquisDebugPromptMidis = function() { return getPromptMidis(expectedExerciseEvent()); };
   window.__exquisDebugShouldUseSsliPlayback = shouldUseSsliPlayback;
   window.__exquisDebugStartAfterAudioResume = startAfterAudioResume;
@@ -1196,6 +1300,14 @@
   function noteName(midi) {
     var names = FLAT_KEY_ROOTS.indexOf(state.tonicPc) >= 0 ? NOTES_FLAT : NOTES_SHARP;
     return names[mod(midi, 12)];
+  }
+
+  function tonicNameForPc(pc) {
+    pc = mod(pc, 12);
+    for (var i = 0; i < TONICS.length; i++) {
+      if (TONICS[i].pc === pc) return TONICS[i].name;
+    }
+    return NOTES_SHARP[pc];
   }
 
   function octave(midi) {
@@ -1339,7 +1451,35 @@
     for (var i = 0; i < EXERCISES.length; i++) {
       if (EXERCISES[i].id === state.exerciseId) return EXERCISES[i];
     }
+    var sslProgression = getSsliProgressionByExerciseId(state.exerciseId);
+    if (sslProgression) return sslProgression.exercise;
     return EXERCISES[0];
+  }
+
+  function ssliProgressionExerciseId(genreIndex, progressionIndex) {
+    return 'ssli_progression_' + genreIndex + '_' + progressionIndex;
+  }
+
+  function getSsliProgressionByExerciseId(exerciseId) {
+    var match = /^ssli_progression_(\d+)_(\d+)$/.exec(exerciseId || '');
+    if (!match) return null;
+    var genreIndex = parseInt(match[1], 10);
+    var progressionIndex = parseInt(match[2], 10);
+    var group = SSLI_PROGRESSION_GROUPS[genreIndex];
+    var progression = group && group.progressions && group.progressions[progressionIndex];
+    if (!progression) return null;
+    return {
+      genreIndex: genreIndex,
+      progressionIndex: progressionIndex,
+      group: group,
+      progression: progression,
+      exercise: {
+        id: exerciseId,
+        name: progression.name,
+        family: 'progressions',
+        prompt: group.genre + ': ' + (progression.usage || 'SSLI progression library')
+      }
+    };
   }
 
   function exerciseButtonLabel(exercise) {
@@ -2157,6 +2297,14 @@
     window.setTimeout(clearSsliMidiExpressionIfIdle, Math.max(220, (duration || 0.55) * 1000));
     render();
     return true;
+  }
+
+  function exerciseFamilyForId(exerciseId) {
+    for (var i = 0; i < EXERCISES.length; i++) {
+      if (EXERCISES[i].id === exerciseId) return EXERCISES[i].family || 'technique';
+    }
+    if (getSsliProgressionByExerciseId(exerciseId)) return 'progressions';
+    return 'technique';
   }
 
   function shouldUseSsliPlayback(presetApplied, hasOutput) {
@@ -4368,8 +4516,11 @@
   };
   var PROGRESSION_FIXTURES = {
     'c-major-i-iv-v-i': {
-      title: 'C major I-IV-V-I',
+      label: 'I-IV-V-I',
+      tonicPc: 0,
       tempo: 72,
+      rhythm: 'whole-note',
+      prerequisites: ['major-triad'],
       chords: [
         { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
         { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
@@ -4378,19 +4529,221 @@
       ]
     },
     'c-major-ii-v-i': {
-      title: 'C major ii-V-I',
+      label: 'ii-V-I',
+      tonicPc: 0,
       tempo: 72,
+      rhythm: 'whole-note',
+      prerequisites: ['major-triad', 'minor-triad'],
       chords: [
         { degree: 'ii', quality: 'minor', rootMidi: 50, inversion: 0 },
         { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 },
         { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }
       ]
+    },
+    'c-major-i-v-vi-iv': {
+      label: 'I-V-vi-IV',
+      tonicPc: 0,
+      tempo: 84,
+      rhythm: 'whole-note',
+      prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 },
+        { degree: 'vi', quality: 'minor', rootMidi: 45, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 }
+      ]
+    },
+    'c-major-i-vi-ii-v': {
+      label: 'I-vi-ii-V',
+      tonicPc: 0,
+      tempo: 80,
+      rhythm: 'whole-note',
+      prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'vi', quality: 'minor', rootMidi: 45, inversion: 0 },
+        { degree: 'ii', quality: 'minor', rootMidi: 50, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }
+      ]
+    },
+    'c-major-12-bar-blues': {
+      label: '12-bar blues',
+      tonicPc: 0,
+      tempo: 76,
+      rhythm: 'one-bar',
+      prerequisites: ['major-triad', 'steady-pulse'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }
+      ]
+    },
+    'c-dorian-i-iv-vamp': {
+      label: 'i-IV vamp',
+      modeName: 'Dorian',
+      tonicPc: 0,
+      tempo: 84,
+      rhythm: 'whole-note',
+      prerequisites: ['minor-triad', 'major-triad'],
+      chords: [
+        { degree: 'i', quality: 'minor', rootMidi: 36, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'i', quality: 'minor', rootMidi: 36, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 }
+      ]
+    },
+    'c-major-i-iv-vi-v': {
+      label: 'I-IV-vi-V', tonicPc: 0, tempo: 84, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }, { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'vi', quality: 'minor', rootMidi: 45, inversion: 0 }, { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }
+      ]
+    },
+    'c-major-i-iii-iv-v': {
+      label: 'I-iii-IV-V', tonicPc: 0, tempo: 80, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }, { degree: 'iii', quality: 'minor', rootMidi: 40, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 }, { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }
+      ]
+    },
+    'c-major-i-ii-vi-iv': {
+      label: 'I-ii-vi-IV', tonicPc: 0, tempo: 84, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }, { degree: 'ii', quality: 'minor', rootMidi: 50, inversion: 0 },
+        { degree: 'vi', quality: 'minor', rootMidi: 45, inversion: 0 }, { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 }
+      ]
+    },
+    'c-major-circle-of-fifths': {
+      label: 'circle of fifths', tonicPc: 0, tempo: 72, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad', 'diminished-triad'],
+      chords: [
+        { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }, { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 },
+        { degree: 'vii', quality: 'diminished', rootMidi: 47, inversion: 0 }, { degree: 'iii', quality: 'minor', rootMidi: 40, inversion: 0 },
+        { degree: 'vi', quality: 'minor', rootMidi: 45, inversion: 0 }, { degree: 'ii', quality: 'minor', rootMidi: 50, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }, { degree: 'I', quality: 'major', rootMidi: 48, inversion: 0 }
+      ]
+    },
+    'c-minor-i-iv-v-i': {
+      label: 'i-iv-V-i', modeName: 'minor', tonicPc: 0, tempo: 72, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }, { degree: 'iv', quality: 'minor', rootMidi: 41, inversion: 0 },
+        { degree: 'V', quality: 'major', rootMidi: 43, inversion: 0 }, { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }
+      ]
+    },
+    'c-minor-i-bVII-bVI-bVII': {
+      label: 'i-bVII-bVI-bVII', modeName: 'minor', tonicPc: 0, tempo: 80, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }, { degree: 'bVII', quality: 'major', rootMidi: 46, inversion: 0 },
+        { degree: 'bVI', quality: 'major', rootMidi: 44, inversion: 0 }, { degree: 'bVII', quality: 'major', rootMidi: 46, inversion: 0 }
+      ]
+    },
+    'c-dorian-i-bVII-iv': {
+      label: 'i-bVII-IV', modeName: 'Dorian', tonicPc: 0, tempo: 84, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }, { degree: 'bVII', quality: 'major', rootMidi: 46, inversion: 0 },
+        { degree: 'IV', quality: 'major', rootMidi: 41, inversion: 0 }
+      ]
+    },
+    'c-phrygian-i-bII-vamp': {
+      label: 'i-bII vamp', modeName: 'Phrygian', tonicPc: 0, tempo: 76, rhythm: 'whole-note', prerequisites: ['major-triad', 'minor-triad'],
+      chords: [
+        { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }, { degree: 'bII', quality: 'major', rootMidi: 49, inversion: 0 },
+        { degree: 'i', quality: 'minor', rootMidi: 48, inversion: 0 }, { degree: 'bII', quality: 'major', rootMidi: 49, inversion: 0 }
+      ]
     }
   };
   var PROGRESSION_EXERCISE_FIXTURE_IDS = {
     c_major_progression: 'c-major-i-iv-v-i',
-    c_major_ii_v_i: 'c-major-ii-v-i'
+    c_major_ii_v_i: 'c-major-ii-v-i',
+    major_i_v_vi_iv: 'c-major-i-v-vi-iv',
+    major_i_vi_ii_v: 'c-major-i-vi-ii-v',
+    major_12_bar_blues: 'c-major-12-bar-blues',
+    dorian_i_iv_vamp: 'c-dorian-i-iv-vamp',
+    major_i_iv_vi_v: 'c-major-i-iv-vi-v',
+    major_i_iii_iv_v: 'c-major-i-iii-iv-v',
+    major_i_ii_vi_iv: 'c-major-i-ii-vi-iv',
+    major_circle_of_fifths: 'c-major-circle-of-fifths',
+    minor_i_iv_v_i: 'c-minor-i-iv-v-i',
+    minor_i_bVII_bVI_bVII: 'c-minor-i-bVII-bVI-bVII',
+    dorian_i_bVII_iv: 'c-dorian-i-bVII-iv',
+    phrygian_i_bII_vamp: 'c-phrygian-i-bII-vamp'
   };
+
+  function exactMidiCandidates(cells, midi) {
+    return cells.filter(function(cell) { return cell.midi === midi; });
+  }
+
+  function ergonomicGripScore(gripCells) {
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var minY = Infinity;
+    var maxY = -Infinity;
+    var centerCost = 0;
+    gripCells.forEach(function(cell) {
+      minX = Math.min(minX, cell.x);
+      maxX = Math.max(maxX, cell.x);
+      minY = Math.min(minY, cell.y);
+      maxY = Math.max(maxY, cell.y);
+      centerCost += centerScore(cell);
+    });
+    // Keep simultaneous grips compact in the physical vertical direction;
+    // edge-spanning voicings are harder to land together than close clusters.
+    return (maxX - minX) + (maxY - minY) * 2 + centerCost * 80;
+  }
+
+  function selectErgonomicGripCells(cells, targetMidis) {
+    var candidateGroups = targetMidis.map(function(midi) { return exactMidiCandidates(cells, midi); });
+    if (candidateGroups.some(function(group) { return !group.length; })) return null;
+    var best = null;
+    var bestScore = Infinity;
+    function visit(index, selected) {
+      if (index === candidateGroups.length) {
+        var score = ergonomicGripScore(selected);
+        if (score < bestScore) {
+          bestScore = score;
+          best = selected.slice();
+        }
+        return;
+      }
+      candidateGroups[index].forEach(function(candidate) {
+        selected.push(candidate);
+        visit(index + 1, selected);
+        selected.pop();
+      });
+    }
+    visit(0, []);
+    return best;
+  }
+
+  function resolvePlayableTriadRootMidi(desiredRootMidi, quality) {
+    var intervals = HARMONY_TRIAD_INTERVALS[quality];
+    var cells = makeGrid();
+    if (!intervals) return null;
+    var seenMidis = {};
+    var best = null;
+    var bestScore = Infinity;
+    cells.forEach(function(cell) {
+      if (cell.pc !== mod(desiredRootMidi, 12) || seenMidis[cell.midi]) return;
+      seenMidis[cell.midi] = true;
+      var targetMidis = intervals.map(function(interval) { return cell.midi + interval; });
+      var gripCells = selectErgonomicGripCells(cells, targetMidis);
+      if (!gripCells) return;
+      var score = Math.abs(cell.midi - desiredRootMidi) * 32 + ergonomicGripScore(gripCells);
+      if (score < bestScore) {
+        bestScore = score;
+        best = cell.midi;
+      }
+    });
+    return best;
+  }
 
   function buildHarmonyGripFixture(spec) {
     spec = spec || {};
@@ -4401,14 +4754,22 @@
       return interval + (index < inversion ? 12 : 0);
     }).sort(function(a, b) { return a - b; });
     var cells = makeGrid();
-    var root = bestCellForTarget(cells, mod(spec.rootMidi, 12), spec.rootMidi, null, null);
-    if (!root || root.midi !== spec.rootMidi) return null;
-    var gripCells = offsets.map(function(offset) {
-      var targetMidi = spec.rootMidi + offset;
-      var cell = bestCellForTarget(cells, mod(targetMidi, 12), targetMidi, root, null);
-      return cell && cell.midi === targetMidi ? cell : null;
-    });
-    if (gripCells.some(function(cell) { return !cell; })) return null;
+    var root;
+    var gripCells;
+    if (spec.compactVoicing) {
+      gripCells = selectErgonomicGripCells(cells, offsets.map(function(offset) { return spec.rootMidi + offset; }));
+      if (!gripCells) return null;
+      root = gripCells[0];
+    } else {
+      root = bestCellForTarget(cells, mod(spec.rootMidi, 12), spec.rootMidi, null, null);
+      if (!root || root.midi !== spec.rootMidi) return null;
+      gripCells = offsets.map(function(offset) {
+        var targetMidi = spec.rootMidi + offset;
+        var cell = bestCellForTarget(cells, mod(targetMidi, 12), targetMidi, root, null);
+        return cell && cell.midi === targetMidi ? cell : null;
+      });
+      if (gripCells.some(function(cell) { return !cell; })) return null;
+    }
     var inversionName = ['root', 'first', 'second'][inversion];
     var fingers = state.hand === 'right' ? [1, 3, 5] : [5, 3, 1];
     return createGripExerciseEvent({
@@ -4424,12 +4785,16 @@
   function buildProgressionFixture(id) {
     var fixture = PROGRESSION_FIXTURES[id];
     if (!fixture) return null;
+    var requestedTonicPc = arguments.length > 1 && typeof arguments[1] === 'number' ? arguments[1] : state.tonicPc;
+    var tonicPc = mod(requestedTonicPc, 12);
+    var transposition = mod(tonicPc - (fixture.tonicPc || 0), 12);
     var events = fixture.chords.map(function(chord, index) {
       var event = buildHarmonyGripFixture({
         id: id + ':' + index + ':' + chord.degree,
         quality: chord.quality,
-        rootMidi: chord.rootMidi,
-        inversion: chord.inversion
+        rootMidi: chord.rootMidi + transposition,
+        inversion: chord.inversion,
+        compactVoicing: true
       });
       if (event) {
         event.musicalIntent.progressionId = id;
@@ -4439,7 +4804,60 @@
       return event;
     });
     if (events.some(function(event) { return !event || !event.valid; })) return null;
-    return { id: id, title: fixture.title, tempo: fixture.tempo, events: events };
+    return {
+      id: id,
+      title: tonicNameForPc(tonicPc) + ' ' + (fixture.modeName || 'major') + ' ' + fixture.label,
+      tonicPc: tonicPc,
+      tempo: fixture.tempo,
+      rhythm: fixture.rhythm,
+      prerequisites: fixture.prerequisites ? fixture.prerequisites.slice() : [],
+      events: events
+    };
+  }
+
+  function buildSsliProgressionFixture(genreIndex, progressionIndex, tonicPc, scaleId) {
+    var group = SSLI_PROGRESSION_GROUPS[genreIndex];
+    var progression = group && group.progressions && group.progressions[progressionIndex];
+    var mode = SSLI_MODES[scaleId || state.scaleId] || SSLI_MODES.ionian;
+    var qualityMap = { maj: 'major', min: 'minor', dim: 'diminished', aug: 'augmented' };
+    if (!progression || !mode || !Array.isArray(progression.degs) || !Array.isArray(mode.scale) || !Array.isArray(mode.triads)) return null;
+    var resolvedTonicPc = mod(typeof tonicPc === 'number' ? tonicPc : state.tonicPc, 12);
+    var roman = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii'];
+    var events = progression.degs.map(function(degree, index) {
+      var interval = mode.scale[degree];
+      var quality = qualityMap[mode.triads[degree]];
+      if (typeof interval !== 'number' || !quality) return null;
+      var rootMidi = 48 + interval;
+      if (rootMidi > 52) rootMidi -= 12;
+      var playableRootMidi = resolvePlayableTriadRootMidi(rootMidi + resolvedTonicPc, quality);
+      if (playableRootMidi === null) return null;
+      var event = buildHarmonyGripFixture({
+        id: ssliProgressionExerciseId(genreIndex, progressionIndex) + ':' + index,
+        quality: quality,
+        rootMidi: playableRootMidi,
+        inversion: 0,
+        compactVoicing: true
+      });
+      if (event) {
+        event.musicalIntent.progressionId = ssliProgressionExerciseId(genreIndex, progressionIndex);
+        event.musicalIntent.degree = roman[degree] || String(degree + 1);
+        event.musicalIntent.step = index + 1;
+        event.musicalIntent.genre = group.genre;
+        event.musicalIntent.usage = progression.usage || '';
+      }
+      return event;
+    });
+    if (events.some(function(event) { return !event || !event.valid; })) return null;
+    return {
+      id: ssliProgressionExerciseId(genreIndex, progressionIndex),
+      title: tonicNameForPc(resolvedTonicPc) + ' ' + mode.name + ' · ' + group.genre + ' · ' + progression.name,
+      genre: group.genre,
+      usage: progression.usage || '',
+      tempo: 80,
+      rhythm: 'whole-note',
+      prerequisites: ['major-triad', 'minor-triad'],
+      events: events
+    };
   }
 
   function fixtureTargetMidis(fixture) {
@@ -4532,6 +4950,11 @@
   }
 
   function buildPracticeExerciseEvents(path, fingers) {
+    var ssliProgression = getSsliProgressionByExerciseId(state.exerciseId);
+    if (ssliProgression) {
+      var generatedProgression = buildSsliProgressionFixture(ssliProgression.genreIndex, ssliProgression.progressionIndex);
+      return generatedProgression ? generatedProgression.events : [];
+    }
     var progressionFixtureId = PROGRESSION_EXERCISE_FIXTURE_IDS[state.exerciseId];
     if (progressionFixtureId) {
       var progression = buildProgressionFixture(progressionFixtureId);
@@ -4707,6 +5130,10 @@
     return Math.max(minScale, Math.min(1.9, available.width / baseWidth, available.height / baseHeight));
   }
 
+  function findCellsByMidi(cells, midi) {
+    return cells.filter(function(cell) { return cell.midi === midi; });
+  }
+
   function findCellByMidi(cells, midi) {
     var best = null;
     var bestScore = Infinity;
@@ -4814,7 +5241,7 @@
     var info = { level: 0, exact: false };
     Object.keys(state.heldNotes).forEach(function(key) {
       var held = state.heldNotes[key];
-      if (held && held.midi === cell.midi && held.cellId === cell.id) {
+      if (held && held.midi === cell.midi && ((held.cellIds && held.cellIds.indexOf(cell.id) >= 0) || held.cellId === cell.id)) {
         var level = held.pressure || held.velocity || 0;
         info.exact = true;
         info.level = Math.max(info.level, level);
@@ -4965,9 +5392,20 @@
     var cells = makeGrid();
     var expected = expectedCell();
     var expectedKey = cellKey(expected);
-    var hitCell = findCellByMidi(cells, midi);
-    state.lastMidi = { midi: midi, velocity: velocity, cellId: hitCell ? hitCell.id : '' };
+    var matchingCells = findCellsByMidi(cells, midi);
+    // MIDI identifies a physical pad only when this pitch has one visual alias.
+    // Duplicate pads are intentionally recorded as pitch-only hardware evidence.
+    var hitCell = matchingCells.length === 1 ? matchingCells[0] : null;
+    var matchingCellIds = {};
+    matchingCells.forEach(function(cell) { matchingCellIds[cell.id] = true; });
+    state.lastMidi = {
+      midi: midi,
+      velocity: velocity,
+      cellId: hitCell ? hitCell.id : '',
+      cellIds: matchingCells.map(function(cell) { return cell.id; })
+    };
     state.activeMidiCellId = hitCell ? hitCell.id : '';
+    state.activeMidiCellIds = matchingCellIds;
     state.activeMidiPc = mod(midi, 12);
     state.lastMidiCellId = '';
     state.lastMidiPc = null;
@@ -4989,13 +5427,14 @@
       pressure: velocity,
       peakPressure: velocity,
       cellId: hitCell ? hitCell.id : '',
+      cellIds: matchingCells.map(function(cell) { return cell.id; }),
       channel: channel,
       startedAt: Date.now()
     };
     rememberChannelHeldNote(channel, midi);
     scheduleMidiVoiceStart(heldKey, midi, velocity, hitCell ? hitCell.id : '', channel);
     updateSsliExpressionFromHeldNotes();
-    logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only') + ' ' + midiCellDebug(hitCell));
+    logEvent('midi', 'note-on ' + noteLabelFromMidi(midi) + ' midi=' + midi + ' raw=' + rawMidi + ' velocity=' + velocity + ' channel=' + (channel + 1) + ' match=' + (hitCell ? hitCell.id : 'pitch-only') + ' aliases=' + (matchingCells.length ? matchingCells.map(function(cell) { return cell.id; }).join('|') : 'none') + ' ' + midiCellDebug(hitCell));
     rememberRecentMidiChordNote(midi, velocity, channel, hitCell);
 
     var expectedEvent = expectedExerciseEvent();
@@ -5008,6 +5447,7 @@
     if (midiHitTimer) window.clearTimeout(midiHitTimer);
     midiHitTimer = window.setTimeout(function() {
       state.activeMidiCellId = '';
+      state.activeMidiCellIds = {};
       state.activeMidiPc = null;
       state.lastMidiCellId = '';
       state.lastMidiPc = null;
@@ -5676,6 +6116,58 @@
     els.fxPreset.value = state.fxPresetId;
   }
 
+  function renderExerciseOptions() {
+    clearChildren(els.exercise);
+    if (els.exerciseButtons) clearChildren(els.exerciseButtons);
+    var exercises = exercisesForSelectedFamily();
+    if (!exercises.some(function(exercise) { return exercise.id === state.exerciseId; })) {
+      state.exerciseId = exercises.length ? exercises[0].id : EXERCISES[0].id;
+    }
+    for (var i = 0; i < exercises.length; i++) {
+      var exercise = exercises[i];
+      var eo = document.createElement('option');
+      eo.value = exercise.id;
+      eo.textContent = exercise.name;
+      els.exercise.appendChild(eo);
+      if (els.exerciseButtons) {
+        var eb = document.createElement('button');
+        eb.type = 'button';
+        eb.className = 'exercise-button';
+        eb.dataset.value = exercise.id;
+        eb.setAttribute('data-testid', 'exercise-button-' + exercise.id);
+        eb.textContent = exerciseButtonLabel(exercise);
+        eb.setAttribute('aria-label', exercise.name + ': ' + exercise.prompt);
+        els.exerciseButtons.appendChild(eb);
+      }
+    }
+    els.exercise.value = state.exerciseId;
+  }
+
+  function progressionGenreOptions() {
+    return [{ id: 'starter', name: 'Starter repertoire' }].concat(SSLI_PROGRESSION_GROUPS.map(function(group, index) {
+      return { id: 'ssli-' + index, name: group.genre };
+    }));
+  }
+
+  function exercisesForSelectedFamily() {
+    if (state.exerciseFamily !== 'progressions') {
+      return EXERCISES.filter(function(exercise) { return exercise.family === state.exerciseFamily; });
+    }
+    var sslGenre = /^ssli-(\d+)$/.exec(state.progressionGenre || '');
+    if (!sslGenre) return EXERCISES.filter(function(exercise) { return exercise.family === 'progressions'; });
+    var genreIndex = parseInt(sslGenre[1], 10);
+    var group = SSLI_PROGRESSION_GROUPS[genreIndex];
+    if (!group || !Array.isArray(group.progressions)) return EXERCISES.filter(function(exercise) { return exercise.family === 'progressions'; });
+    return group.progressions.map(function(progression, progressionIndex) {
+      return {
+        id: ssliProgressionExerciseId(genreIndex, progressionIndex),
+        name: progression.name,
+        family: 'progressions',
+        prompt: group.genre + ': ' + (progression.usage || 'SSLI progression library')
+      };
+    });
+  }
+
   function renderOptions() {
     var i;
     for (i = 0; i < TONICS.length; i++) {
@@ -5697,22 +6189,9 @@
       fo.textContent = STRATEGIES[i].name;
       els.strategy.appendChild(fo);
     }
-    for (i = 0; i < EXERCISES.length; i++) {
-      var eo = document.createElement('option');
-      eo.value = EXERCISES[i].id;
-      eo.textContent = EXERCISES[i].name;
-      els.exercise.appendChild(eo);
-      if (els.exerciseButtons) {
-        var eb = document.createElement('button');
-        eb.type = 'button';
-        eb.className = 'exercise-button';
-        eb.dataset.value = EXERCISES[i].id;
-        eb.setAttribute('data-testid', 'exercise-button-' + EXERCISES[i].id);
-        eb.textContent = exerciseButtonLabel(EXERCISES[i]);
-        eb.setAttribute('aria-label', EXERCISES[i].name + ': ' + EXERCISES[i].prompt);
-        els.exerciseButtons.appendChild(eb);
-      }
-    }
+    appendOptions(els.exerciseFamily, EXERCISE_FAMILIES, 'id', 'name');
+    appendOptions(els.progressionGenre, progressionGenreOptions(), 'id', 'name');
+    renderExerciseOptions();
     syncSoundSelectorsFromPreset();
     syncFxSelectorsFromPreset();
     renderSoundSelectorOptions();
@@ -5858,7 +6337,7 @@
       if (isCurrentGripTarget) classes.push('current-grip-target');
       if (isPracticeMode && state.view === 'calibration' && isCurrent) classes.push('calibration-target');
       if (heldLevel > 0 && heldInfo.exact) classes.push('midi-held');
-      if (state.rawMidiFlash && state.activeMidiCellId === cell.id) classes.push('midi-hit');
+      if (state.rawMidiFlash && state.activeMidiCellIds[cell.id]) classes.push('midi-hit');
       if (!state.rawMidiFlash && state.lastMidiCellId === cell.id) classes.push('midi-last');
       if (state.rawMidiFlash && state.activeMidiPc === null && isCurrent) classes.push('raw-midi-hit');
       if (state.calibrated[cell.id]) classes.push('calibrated');
@@ -5994,6 +6473,15 @@
       els.coachNextAction.textContent = lastAttemptAccepted ? 'Continue' : (isPracticeMode ? 'Hear target' : 'Play target');
       els.coachNextAction.setAttribute('aria-label', lastAttemptAccepted ? 'Continue to the next target' : 'Hear the current target');
     }
+    if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
+    var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
+    if (els.practiceTitle) els.practiceTitle.textContent = progressionPractice ? 'Progression lab' : 'Scale map';
+    if (els.practiceWorkflowControls) els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
+    if (els.progressionGenreControl) els.progressionGenreControl.hidden = state.exerciseFamily !== 'progressions';
+    if (els.octaveControl) els.octaveControl.hidden = progressionPractice;
+    if (els.rootControl) els.rootControl.hidden = progressionPractice;
+    if (els.fingeringControl) els.fingeringControl.hidden = progressionPractice;
+    if (els.progressionGenre) els.progressionGenre.value = state.progressionGenre;
     if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? displayedGripAssignments.map(function(assignment) { return fingerDisplayName(assignment.finger); }).join(' / ') : (isPracticeMode && current ? fingerDisplayName(currentFinger) : 'Finger --');
     if (els.targetStep) els.targetStep.textContent = isPracticeMode && currentEvent ? 'Step ' + String(state.step + 1) + ' of ' + String(currentExerciseEvents.length) : 'Step --';
     if (els.buttonReason) els.buttonReason.textContent = isPracticeMode && current ? describeButtonChoice(cells, current, rootCell) : 'Free-play chooses any physical button.';
@@ -6192,9 +6680,27 @@
     }
     els.exercise.addEventListener('change', function() {
       state.exerciseId = els.exercise.value;
+      state.exerciseFamily = exerciseFamilyForId(state.exerciseId);
       state.step = 0;
       render();
     });
+    if (els.exerciseFamily) {
+      els.exerciseFamily.addEventListener('change', function() {
+        state.exerciseFamily = els.exerciseFamily.value;
+        state.step = 0;
+        renderExerciseOptions();
+        render();
+      });
+    }
+    if (els.progressionGenre) {
+      els.progressionGenre.addEventListener('change', function() {
+        state.progressionGenre = els.progressionGenre.value;
+        state.exerciseFamily = 'progressions';
+        state.step = 0;
+        renderExerciseOptions();
+        render();
+      });
+    }
     els.strategy.addEventListener('change', function() {
       state.strategyId = els.strategy.value;
       render();
@@ -6386,7 +6892,15 @@
       handButtons: document.getElementById('handButtons'),
       exercise: document.getElementById('exerciseSelect'),
       exerciseButtons: document.getElementById('exerciseButtons'),
+      exerciseFamily: document.getElementById('exerciseFamilySelect'),
+      progressionGenre: document.getElementById('progressionGenreSelect'),
+      progressionGenreControl: document.getElementById('progressionGenreControl'),
+      practiceWorkflowControls: document.getElementById('practiceWorkflowControls'),
+      practiceTitle: document.getElementById('practiceTitle'),
+      octaveControl: document.getElementById('octaveControl'),
+      rootControl: document.getElementById('rootControl'),
       strategy: document.getElementById('strategySelect'),
+      fingeringControl: document.getElementById('fingeringControl'),
       gripFingering: document.getElementById('gripFingeringSelect'),
       gripFingeringControl: document.getElementById('gripFingeringControl'),
       harmonyQuality: document.getElementById('harmonyQualitySelect'),

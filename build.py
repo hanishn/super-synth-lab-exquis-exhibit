@@ -2360,7 +2360,8 @@ def build_bundle(metadata: dict) -> str:
         ],
         "scalesModes": read_json(VENDOR / "ssli" / "scales-modes.json"),
         "presetLibraries": preset_libraries,
-        "fxPresets": read_json(VENDOR / "ssli" / "fx-presets.json")
+        "fxPresets": read_json(VENDOR / "ssli" / "fx-presets.json"),
+        "progressionGroups": read_json(VENDOR / "ssli" / "progression-groups.json")
     }
     bundle = template.replace("{{TITLE}}", metadata["name"])
     bundle = bundle.replace("{{CSS}}", read_text(PARTS / "styles.css"))

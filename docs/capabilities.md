@@ -90,6 +90,8 @@ The first multi-note drills are a major-third diad and a root-position major tri
 
 When the same pitch exists on multiple physical buttons, the practice path chooses the exact pitch first, keeps the two-chain path second, then favors the more centered duplicate. The target panel explains that choice for the current note. Finger numbers are presented as a strategy scaffold rather than piano law: the default Natural clusters strategy maps nearby notes to pinky, ring, middle, and index clusters, then explicitly cues a wrist/hand shift when the pattern repeats.
 
+Raw Exquis MIDI identifies pitch, velocity, channel, and pressure; duplicate physical pads that emit the same MIDI pitch remain indistinguishable. The virtual instrument lights every matching physical alias for incoming duplicate-pitch MIDI. A centered target pad remains ergonomic guidance, not inferred hardware provenance. Grip scoring accepts the demonstrated pitch for an otherwise valid target without claiming which duplicate pad generated the contact.
+
 The target panel also reports a first-pass ergonomic movement load. The score is intentionally transparent: it combines physical button travel, a Fitts-style movement prior, repeated-finger movement, weak-finger pressure risk, and explicit hand-shift moments. It is not a universal truth engine; it is a tunable model based on the same research direction used by piano-fingering optimization and motor-control literature: Parncutt et al.'s ergonomic fingering model, Fitts' law for aimed movement, finger individuation/enslaving research, and MPE/continuous-control concerns around sustained pressure.
 
 The ergonomic model is key/mode agnostic. It scores the current physical path after the tonic, scale/mode, root, and exercise have produced exact MIDI targets and Exquis button coordinates. Dorian, Mixolydian, Blues, two-octave, and future modes must keep the same movement-load features instead of falling back to C-major-specific presets.
@@ -317,10 +319,10 @@ Ear-to-gesture lessons separate the audible prompt from the physical answer fixt
 
 ### Repertoire And Progression Fixtures
 
-Repertoire lessons are named, ordered collections of existing exact harmony fixtures. A progression fixture declares a stable identifier, display title, tempo, ordered chord specifications, and a per-step recovery policy.
+Repertoire lessons are named, ordered collections of existing exact harmony fixtures. A progression fixture declares a stable identifier, functional label, base tonic, tempo, ordered chord specifications, and a per-step recovery policy.
 
 - Each chord specification resolves through the triad fixture builder; a progression cannot introduce a separate chord or target resolver.
-- The initial progression library begins with C-major I-IV-V-I and ii-V-I exercises. Each chord step retains root, quality, inversion, exact targets, and simultaneous timing.
+- The Progressions family begins with fourteen Exquis-specific starter paths, then exposes SSLI's imported genre library: 466 named degree progressions across Pop & Rock, Jazz, Blues, Classical, R&B / Soul, EDM / Electronic, Folk / Country, Film / Cinematic, theory, Latin, Gospel, Bossa Nova, Prog Rock, and Ambient groups. `Progression genre` is an explicit learner choice, never a side effect of key or scale changes. The selected key and mode resolve each imported degree pattern through the same compact, exact physical-triad builder. Every imported template must resolve to playable cells in C, F, and Bb without a copied fixture.
 - A correct chord advances to the next ordered progression event. A wrong or partial chord retains the current event, increments the miss count, and provides a repair message.
 - Prompt playback may demonstrate the current chord but never changes score or progression position.
 

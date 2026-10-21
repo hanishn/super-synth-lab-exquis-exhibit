@@ -1,5 +1,14 @@
 <main class="app-shell" data-testid="app-shell">
   <iframe id="ssliEngineFrame" class="ssli-engine-frame" title="SSLI audio engine" src="ssli/index.html?exhibitHost=1&amp;v={{BUILD_TIMESTAMP_UTC}}" aria-hidden="true" tabindex="-1"></iframe>
+  <section id="connectionGate" class="connection-gate" data-testid="connection-gate" aria-label="Connect your Exquis">
+    <div class="connection-gate-card">
+      <p class="eyebrow">Exquis Fingering Lab</p>
+      <h2>Connect your Exquis first.</h2>
+      <p>Enable MIDI to light the hardware, hear your playing, and receive live practice feedback.</p>
+      <button id="enableMidiGate" type="button" class="connection-gate-primary" data-testid="enable-midi-gate">Enable MIDI</button>
+      <button id="continueWithoutMidi" type="button" class="connection-gate-secondary" data-testid="continue-without-midi">Explore without Exquis</button>
+    </div>
+  </section>
   <section class="top-panel" aria-label="Practice controls">
     <div class="brand-block">
       <p class="eyebrow">Exquis Fingering Lab</p>
@@ -9,6 +18,14 @@
         <b>{{BUILD_VERSION}}</b>
       </p>
     </div>
+    <nav class="workspace-nav" aria-label="App workspace" data-testid="workspace-nav">
+      <button type="button" data-workspace="practice" data-testid="workspace-practice">Practice</button>
+      <button type="button" data-workspace="library" data-testid="workspace-library">Library</button>
+      <button type="button" data-workspace="studio" data-testid="workspace-studio">Studio</button>
+      <button type="button" data-workspace="setup" data-testid="workspace-setup">Setup</button>
+    </nav>
+    <section class="session-setup" data-testid="session-setup">
+      <div class="setup-drawer-body">
     <div class="controls-grid primary-controls" id="primaryControls">
       <fieldset class="mode-switch" data-testid="mode-switch" aria-label="Session">
         <legend>Session</legend>
@@ -108,6 +125,45 @@
         </div>
       </fieldset>
       </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="workspace-screen library-workspace" data-testid="library-workspace" aria-label="Lesson library" hidden>
+    <header class="workspace-screen-header">
+      <p class="eyebrow">Library</p>
+      <h2>Choose the next musical task.</h2>
+      <p>Select a family, lesson, voicing, and surface before starting a focused practice session.</p>
+    </header>
+    <div class="library-controls-slot" id="libraryControlsSlot"></div>
+    <button id="startLibrarySession" class="workspace-primary-action" type="button" data-testid="start-library-session">Start practice</button>
+  </section>
+
+  <section class="workspace-screen studio-workspace" data-testid="studio-workspace" aria-label="Sound and hardware studio" hidden>
+    <header class="workspace-screen-header">
+      <p class="eyebrow">Studio</p>
+      <h2 id="studioTitle">Connect hardware.</h2>
+      <p>Sound design, MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.</p>
+    </header>
+    <nav class="studio-tabs" aria-label="Studio mode" data-testid="studio-tabs">
+      <button type="button" data-studio-tab="hardware" data-testid="studio-hardware-tab">Hardware</button>
+      <button type="button" data-studio-tab="sound" data-testid="studio-sound-tab">Sound</button>
+    </nav>
+    <nav class="sound-tabs" aria-label="Sound controls" data-testid="sound-tabs">
+      <button type="button" data-sound-tab="voice" data-testid="sound-voice-tab">Voice</button>
+      <button type="button" data-sound-tab="effects" data-testid="sound-effects-tab">Effects</button>
+      <button type="button" data-sound-tab="performance" data-testid="sound-performance-tab">Performance</button>
+    </nav>
+    <div class="studio-controls-slot" id="studioControlsSlot"></div>
+  </section>
+
+  <section class="workspace-screen setup-workspace" data-testid="setup-workspace" aria-label="Session setup" hidden>
+    <header class="workspace-screen-header">
+      <p class="eyebrow">Setup</p>
+      <h2>Set the key, lesson, and surface.</h2>
+      <p>Configure the session before returning to the instrument.</p>
+    </header>
+    <div class="setup-controls-slot" id="setupControlsSlot"></div>
   </section>
 
   <section class="stage-panel" aria-label="Exquis keyboard visualization">
@@ -116,6 +172,8 @@
         <h2 id="stateTitle">C Major</h2>
         <p id="stateSubtitle">Left hand: Natural clusters</p>
       </div>
+      <div id="practicePathStrip" class="practice-path-strip practice-control" data-testid="practice-path-strip" aria-label="Practice path"></div>
+      <button id="coachToggle" class="coach-toggle" type="button" data-testid="coach-toggle" aria-expanded="false">Coach</button>
       <div class="stepper practice-control" aria-label="Practice note stepper" data-testid="practice-stepper">
         <button id="prevStep" type="button" aria-label="Previous note" data-testid="prev-step">Prev</button>
         <output id="stepReadout" data-testid="step-readout">1 / 8</output>
@@ -123,19 +181,34 @@
         <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
       </div>
     </div>
-    <div id="practicePathStrip" class="practice-path-strip practice-control" data-testid="practice-path-strip" aria-label="Practice path"></div>
-    <div id="exquisDevice" class="exquis-device" data-testid="exquis-device">
-      <section class="edge-controls edge-controls-top" aria-label="Exquis top edge controls" data-testid="edge-controls">
-        <div class="edge-controls-header">
-          <h3>Edge controls</h3>
-          <p id="edgeControlStatus" data-testid="edge-control-status">Developer zones: normal</p>
-        </div>
-        <div id="edgeTopControls" class="edge-top-controls" data-testid="edge-top-controls"></div>
-      </section>
-      <div id="keyboard" class="keyboard" data-testid="keyboard"></div>
-      <section class="edge-controls edge-controls-bottom" aria-label="Exquis bottom edge controls">
-        <div id="edgeBottomControls" class="edge-bottom-controls" data-testid="edge-bottom-controls"></div>
-      </section>
+    <div class="practice-surface" data-testid="practice-surface">
+      <div id="exquisDevice" class="exquis-device" data-testid="exquis-device">
+        <section class="edge-controls edge-controls-top" aria-label="Exquis top edge controls" data-testid="edge-controls">
+          <div class="edge-controls-header">
+            <h3>Edge controls</h3>
+            <p id="edgeControlStatus" data-testid="edge-control-status">Developer zones: normal</p>
+          </div>
+          <div id="edgeTopControls" class="edge-top-controls" data-testid="edge-top-controls"></div>
+        </section>
+        <div id="keyboard" class="keyboard" data-testid="keyboard"></div>
+        <section class="edge-controls edge-controls-bottom" aria-label="Exquis bottom edge controls">
+          <div id="edgeBottomControls" class="edge-bottom-controls" data-testid="edge-bottom-controls"></div>
+        </section>
+      </div>
+      <aside class="practice-dashboard" data-testid="practice-dashboard" aria-label="Current practice">
+        <section class="practice-dashboard-card">
+          <p class="eyebrow">Current target</p>
+          <strong id="dashboardNowPlaying" data-testid="dashboard-now-playing">C4</strong>
+          <p id="dashboardTargetMeta" data-testid="dashboard-target-meta">Scale degree 1 · Sequence Pinky</p>
+          <button id="dashboardHearTarget" type="button" data-testid="dashboard-hear-target">Hear target</button>
+        </section>
+        <section class="practice-dashboard-card">
+          <p class="eyebrow">Session</p>
+          <strong id="dashboardSessionTitle" data-testid="dashboard-session-title">C Major</strong>
+          <p id="dashboardSessionMeta" data-testid="dashboard-session-meta">Practice · Root to octave</p>
+          <button id="dashboardOpenSetup" type="button" data-testid="dashboard-open-setup">Change setup</button>
+        </section>
+      </aside>
     </div>
   </section>
 
@@ -143,7 +216,6 @@
     <section class="practice-coach" data-testid="practice-coach" aria-label="Practice Coach">
       <h2>Practice Coach</h2>
       <p id="midiStatus" role="status" aria-live="polite" data-testid="midi-status">Connect your Exquis to start live coaching.</p>
-      <button id="enableMidi" type="button" data-testid="enable-midi">Enable MIDI</button>
       <p class="coach-field-label">Now play</p>
       <p id="coachNowPlaying" class="coach-now-playing" data-testid="coach-now-playing">C4</p>
       <p id="coachActionCue" class="coach-action-cue" data-testid="coach-action-cue">Follow the highlighted target.</p>
@@ -175,6 +247,7 @@
       <section class="midi-coach-section" data-testid="midi-coach-section">
       <h2>Connection and diagnostics</h2>
       <div class="midi-action-row">
+        <button id="enableMidi" type="button" data-testid="enable-midi">Reconnect Exquis</button>
         <button id="syncExquis" type="button" data-testid="sync-exquis" disabled>Sync Key/Mode</button>
         <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Probe</button>
         <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" title="Probe native Exquis root/scale write masks" disabled>Native</button>

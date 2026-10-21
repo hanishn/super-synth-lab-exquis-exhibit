@@ -996,6 +996,11 @@
     rootCellId: '',
     octaveSide: 'higher',
     mode: 'practice',
+    workspace: 'practice',
+    coachOpen: false,
+    launchGateOpen: true,
+    studioTab: 'hardware',
+    soundTab: 'voice',
     hand: 'left',
     exerciseId: 'root_octave',
     exerciseFamily: 'technique',
@@ -1065,6 +1070,7 @@
     mismatched: {}
   };
   var els = {};
+  var workspaceHomes = {};
   var physicalPluckedOneShotSequence = 0;
 
   function logEvent(kind, message) {
@@ -5288,6 +5294,9 @@
     if (!stage || !stage.getBoundingClientRect) return { width: 0, height: 0 };
     var stageBox = stage.getBoundingClientRect();
     var headerBox = header && header.getBoundingClientRect ? header.getBoundingClientRect() : { bottom: stageBox.top };
+    var practicePath = document.querySelector('[data-testid="practice-path-strip"]');
+    var practicePathBox = practicePath && practicePath.getBoundingClientRect ? practicePath.getBoundingClientRect() : null;
+    var contentTop = practicePathBox && practicePathBox.bottom > headerBox.bottom ? practicePathBox.bottom : headerBox.bottom;
     var safeBottom = stageBox.bottom;
     ['[data-testid="console-panel"]', '[data-testid="build-version"]'].forEach(function(selector) {
       var overlay = document.querySelector(selector);
@@ -5302,15 +5311,17 @@
     var bottomHeight = bottomControls && bottomControls.getBoundingClientRect ? bottomControls.getBoundingClientRect().height : 0;
     var topWidth = topControls && topControls.getBoundingClientRect ? topControls.getBoundingClientRect().width : 0;
     var bottomWidth = bottomControls && bottomControls.getBoundingClientRect ? bottomControls.getBoundingClientRect().width : 0;
+    var dashboard = document.querySelector('[data-testid="practice-dashboard"]');
+    var dashboardWidth = dashboard && dashboard.offsetParent ? dashboard.getBoundingClientRect().width + 16 : 0;
     if (state.orientation === 'horizontal') {
       return {
         width: Math.max(0, stageBox.width - topWidth - bottomWidth - 44),
-        height: Math.max(0, safeBottom - headerBox.bottom - 4)
+        height: Math.max(0, safeBottom - contentTop - 26)
       };
     }
     return {
-      width: Math.max(0, stageBox.width - 20),
-      height: Math.max(0, safeBottom - headerBox.bottom - topHeight - bottomHeight - 66)
+      width: Math.max(0, stageBox.width - 20 - dashboardWidth),
+      height: Math.max(0, safeBottom - contentTop - topHeight - bottomHeight - 66)
     };
   }
 
@@ -5318,7 +5329,8 @@
     var available = getKeyboardAvailableSpace();
     if (!available.width || !available.height) return 1;
     var minScale = state.orientation === 'vertical' ? 0.52 : 0.72;
-    return Math.max(minScale, Math.min(1.9, available.width / baseWidth, available.height / baseHeight));
+    var maxScale = state.workspace === 'practice' && state.orientation === 'horizontal' ? 2.5 : 1.9;
+    return Math.max(minScale, Math.min(maxScale, available.width / baseWidth, available.height / baseHeight));
   }
 
   function findCellsByMidi(cells, midi) {
@@ -6606,7 +6618,56 @@
     }
 
     clearChildren(els.keyboard);
-    if (els.appShell) els.appShell.setAttribute('data-mode', state.mode);
+    if (els.appShell) {
+      els.appShell.setAttribute('data-mode', state.mode);
+      els.appShell.setAttribute('data-workspace', state.workspace);
+    }
+    if (els.libraryWorkspace) els.libraryWorkspace.hidden = state.workspace !== 'library';
+    if (els.studioWorkspace) els.studioWorkspace.hidden = state.workspace !== 'studio';
+    if (els.setupWorkspace) els.setupWorkspace.hidden = state.workspace !== 'setup';
+    if (els.sidePanel) els.sidePanel.hidden = state.workspace !== 'practice' || !state.coachOpen;
+    if (els.coachToggle) {
+      els.coachToggle.hidden = state.workspace !== 'practice';
+      els.coachToggle.setAttribute('aria-expanded', state.coachOpen ? 'true' : 'false');
+      els.coachToggle.textContent = state.coachOpen ? 'Close coach' : 'Coach';
+    }
+    if (els.connectionGate) els.connectionGate.hidden = !state.launchGateOpen;
+    if (els.studioControlsSlot) {
+      els.studioControlsSlot.setAttribute('data-studio-tab', state.studioTab);
+      els.studioControlsSlot.setAttribute('data-sound-tab', state.soundTab);
+    }
+    if (els.studioTabs) {
+      var studioTabButtons = els.studioTabs.querySelectorAll('button[data-studio-tab]');
+      for (var studioTabIndex = 0; studioTabIndex < studioTabButtons.length; studioTabIndex++) {
+        var studioTabButton = studioTabButtons[studioTabIndex];
+        var studioTabActive = studioTabButton.dataset.studioTab === state.studioTab;
+        studioTabButton.classList.toggle('active', studioTabActive);
+        studioTabButton.setAttribute('aria-pressed', studioTabActive ? 'true' : 'false');
+      }
+    }
+    if (els.soundTabs) {
+      els.soundTabs.hidden = state.workspace !== 'studio' || state.studioTab !== 'sound';
+      var soundTabButtons = els.soundTabs.querySelectorAll('button[data-sound-tab]');
+      for (var soundTabIndex = 0; soundTabIndex < soundTabButtons.length; soundTabIndex++) {
+        var soundTabButton = soundTabButtons[soundTabIndex];
+        var soundTabActive = soundTabButton.dataset.soundTab === state.soundTab;
+        soundTabButton.classList.toggle('active', soundTabActive);
+        soundTabButton.setAttribute('aria-pressed', soundTabActive ? 'true' : 'false');
+      }
+    }
+    if (els.studioTitle) els.studioTitle.textContent = state.studioTab === 'sound' ? 'Shape your sound.' : 'Connect hardware.';
+    if (els.studioDescription) els.studioDescription.textContent = state.studioTab === 'sound'
+      ? 'Choose the voice, effects, and response curve that make the Exquis feel like your instrument.'
+      : 'MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.';
+    if (els.workspaceNav) {
+      var workspaceButtons = els.workspaceNav.querySelectorAll('button[data-workspace]');
+      for (var workspaceIndex = 0; workspaceIndex < workspaceButtons.length; workspaceIndex++) {
+        var workspaceButton = workspaceButtons[workspaceIndex];
+        var workspaceActive = workspaceButton.dataset.workspace === state.workspace;
+        workspaceButton.classList.toggle('active', workspaceActive);
+        workspaceButton.setAttribute('aria-pressed', workspaceActive ? 'true' : 'false');
+      }
+    }
     if (els.exquisDevice) {
       els.exquisDevice.setAttribute('data-orientation', state.orientation);
       els.exquisDevice.setAttribute('data-rotation', String(mod(state.rotation, 360)));
@@ -6616,8 +6677,9 @@
     els.keyboard.setAttribute('data-rotation', String(mod(state.rotation, 360)));
     renderEdgeControls();
     var baseFieldBounds = getFieldBounds(logicCells);
-    var baseKeyboardWidth = Math.round(baseFieldBounds.width + 130);
-    var baseKeyboardHeight = Math.round(baseFieldBounds.height + 48);
+    var compactPracticeSurface = state.workspace === 'practice' && state.orientation === 'horizontal';
+    var baseKeyboardWidth = Math.round(baseFieldBounds.width + (compactPracticeSurface ? 0 : 130));
+    var baseKeyboardHeight = Math.round(baseFieldBounds.height + (compactPracticeSurface ? 0 : 48));
     var layoutScale = getKeyboardScale(baseKeyboardWidth, baseKeyboardHeight);
     cells = makeGrid(layoutScale);
     var fieldBounds = getFieldBounds(cells, layoutScale);
@@ -6816,6 +6878,9 @@
       ? currentEvent.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ')
       : (isPracticeMode && current ? noteLabelFromMidi(current.midi) : 'Free play'));
     if (els.coachNowPlaying) els.coachNowPlaying.textContent = coachTarget;
+    if (els.dashboardNowPlaying) els.dashboardNowPlaying.textContent = coachTarget;
+    if (els.dashboardSessionTitle) els.dashboardSessionTitle.textContent = els.title.textContent;
+    if (els.dashboardSessionMeta) els.dashboardSessionMeta.textContent = (isPracticeMode ? 'Practice' : 'Play') + ' · ' + exercise.name;
     if (els.coachActionCue) els.coachActionCue.textContent = concealCoachTarget
       ? 'Hear the interval, then press the matching two-button shape together.'
       : (currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.progressionId
@@ -6842,6 +6907,7 @@
     if (els.progressionGenre) els.progressionGenre.value = state.progressionGenre;
     if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? 'Chord ' + displayedGripAssignments.map(function(assignment) { return String(assignment.finger); }).join(' / ') : (isPracticeMode && current ? 'Sequence ' + fingerDisplayName(currentFinger) : 'Finger --');
     if (els.targetStep) els.targetStep.textContent = isPracticeMode && currentEvent ? 'Step ' + String(state.step + 1) + ' of ' + String(currentExerciseEvents.length) : 'Step --';
+    if (els.dashboardTargetMeta) els.dashboardTargetMeta.textContent = els.currentDegree.textContent + ' · ' + els.targetFinger.textContent;
     if (els.buttonReason) els.buttonReason.textContent = isPracticeMode && current ? describeButtonChoice(cells, current, rootCell) : 'Free-play chooses any physical button.';
     if (els.fingerReason) els.fingerReason.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip'
       ? 'Chord positions ' + displayedGripAssignments.map(function(assignment) { return String(assignment.finger); }).join(', ') + ' identify slots in the current simultaneous shape, not single-note sequence fingers.'
@@ -6945,6 +7011,57 @@
   }
 
   function bindEvents() {
+    if (els.enableMidiGate) {
+      els.enableMidiGate.addEventListener('click', function() {
+        enableMidi();
+        state.launchGateOpen = false;
+        render();
+      });
+    }
+    if (els.continueWithoutMidi) {
+      els.continueWithoutMidi.addEventListener('click', function() {
+        state.launchGateOpen = false;
+        render();
+      });
+    }
+    if (els.coachToggle) {
+      els.coachToggle.addEventListener('click', function() {
+        state.coachOpen = !state.coachOpen;
+        render();
+      });
+    }
+    if (els.studioTabs) {
+      els.studioTabs.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-studio-tab]');
+        if (!button) return;
+        state.studioTab = button.dataset.studioTab;
+        render();
+      });
+    }
+    if (els.soundTabs) {
+      els.soundTabs.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-sound-tab]');
+        if (!button) return;
+        state.soundTab = button.dataset.soundTab;
+        render();
+      });
+    }
+    if (els.workspaceNav) {
+      els.workspaceNav.addEventListener('click', function(event) {
+        var button = event.target.closest('button[data-workspace]');
+        if (!button) return;
+        state.workspace = button.dataset.workspace;
+        placeWorkspaceControls();
+        render();
+      });
+    }
+    if (els.startLibrarySession) {
+      els.startLibrarySession.addEventListener('click', function() {
+        state.workspace = 'practice';
+        placeWorkspaceControls();
+        render();
+      });
+    }
     els.tonic.addEventListener('change', function() {
       state.tonicPc = parseInt(els.tonic.value, 10) || 0;
       state.rootCellId = '';
@@ -7044,6 +7161,11 @@
       els.exerciseFamily.addEventListener('change', function() {
         state.exerciseFamily = els.exerciseFamily.value;
         state.repertoireSectionId = '';
+        if (state.exerciseFamily === 'progressions') {
+          state.progressionGenre = 'starter';
+          state.exerciseId = 'major_i_iv_vi_v';
+          applyCanonicalProgressionScale();
+        }
         state.step = 0;
         renderExerciseOptions();
         render();
@@ -7224,6 +7346,12 @@
       render();
     });
     els.playStep.addEventListener('click', playCurrent);
+    if (els.dashboardHearTarget) els.dashboardHearTarget.addEventListener('click', playCurrent);
+    if (els.dashboardOpenSetup) els.dashboardOpenSetup.addEventListener('click', function() {
+      state.workspace = 'setup';
+      placeWorkspaceControls();
+      render();
+    });
     els.coachNextAction.addEventListener('click', function() {
       if (state.feedbackKind === 'good' && state.mode === 'practice') {
         state.step += 1;
@@ -7278,6 +7406,50 @@
     });
   }
 
+  function rememberWorkspaceHome(name, element) {
+    if (!element || workspaceHomes[name]) return;
+    var anchor = document.createComment('workspace-' + name + '-home');
+    element.parentNode.insertBefore(anchor, element);
+    workspaceHomes[name] = anchor;
+  }
+
+  function restoreWorkspaceControl(name, element) {
+    var anchor = workspaceHomes[name];
+    if (!anchor || !anchor.parentNode || !element) return;
+    anchor.parentNode.insertBefore(element, anchor.nextSibling);
+  }
+
+  function placeWorkspaceControls() {
+    if (!els.libraryControlsSlot || !els.studioControlsSlot || !els.setupControlsSlot) return;
+    if (state.workspace === 'setup') {
+      els.setupControlsSlot.appendChild(els.sessionSetup);
+    } else {
+      restoreWorkspaceControl('sessionSetup', els.sessionSetup);
+    }
+    if (state.workspace === 'library') {
+      els.libraryControlsSlot.appendChild(els.practiceWorkflowControls);
+      if (els.progressionVoicingPanel) els.libraryControlsSlot.appendChild(els.progressionVoicingPanel);
+      if (els.repertoireSectionPanel) els.libraryControlsSlot.appendChild(els.repertoireSectionPanel);
+    } else {
+      restoreWorkspaceControl('workflow', els.practiceWorkflowControls);
+      restoreWorkspaceControl('progressionVoicing', els.progressionVoicingPanel);
+      restoreWorkspaceControl('repertoireSection', els.repertoireSectionPanel);
+    }
+    if (state.workspace === 'studio') {
+      if (els.hardwareTools) {
+        els.hardwareTools.open = true;
+        els.studioControlsSlot.appendChild(els.hardwareTools);
+      }
+      if (els.practiceTools) {
+        els.practiceTools.open = true;
+        els.studioControlsSlot.appendChild(els.practiceTools);
+      }
+    } else {
+      restoreWorkspaceControl('hardwareTools', els.hardwareTools);
+      restoreWorkspaceControl('practiceTools', els.practiceTools);
+    }
+  }
+
   function init() {
     els = {
       tonic: document.getElementById('tonicSelect'),
@@ -7297,7 +7469,27 @@
       progressionGenre: document.getElementById('progressionGenreSelect'),
       progressionGenreControl: document.getElementById('progressionGenreControl'),
       practiceWorkflowControls: document.getElementById('practiceWorkflowControls'),
+      workspaceNav: document.querySelector('[data-testid="workspace-nav"]'),
+      studioTabs: document.querySelector('[data-testid="studio-tabs"]'),
+      soundTabs: document.querySelector('[data-testid="sound-tabs"]'),
+      studioTitle: document.getElementById('studioTitle'),
+      studioDescription: document.querySelector('.studio-workspace .workspace-screen-header p:last-child'),
+      connectionGate: document.getElementById('connectionGate'),
+      enableMidiGate: document.getElementById('enableMidiGate'),
+      continueWithoutMidi: document.getElementById('continueWithoutMidi'),
+      coachToggle: document.getElementById('coachToggle'),
+      sidePanel: document.querySelector('.side-panel'),
+      libraryWorkspace: document.getElementById('libraryWorkspace'),
+      studioWorkspace: document.getElementById('studioWorkspace'),
+      setupWorkspace: document.querySelector('[data-testid="setup-workspace"]'),
+      libraryControlsSlot: document.getElementById('libraryControlsSlot'),
+      studioControlsSlot: document.getElementById('studioControlsSlot'),
+      setupControlsSlot: document.getElementById('setupControlsSlot'),
+      sessionSetup: document.querySelector('[data-testid="session-setup"]'),
+      startLibrarySession: document.getElementById('startLibrarySession'),
+      setupDrawerBody: document.querySelector('.setup-drawer-body'),
       practiceTools: document.querySelector('[data-testid="practice-tools"]'),
+      hardwareTools: document.querySelector('[data-testid="hardware-tools"]'),
       progressionVoicingPanel: document.getElementById('progressionVoicingPanel'),
       progressionGlobalNoteCount: document.getElementById('progressionGlobalNoteCount'),
       progressionGlobalInversion: document.getElementById('progressionGlobalInversion'),
@@ -7341,6 +7533,12 @@
       edgeTopControls: document.getElementById('edgeTopControls'),
       edgeBottomControls: document.getElementById('edgeBottomControls'),
       edgeControlStatus: document.getElementById('edgeControlStatus'),
+      dashboardNowPlaying: document.getElementById('dashboardNowPlaying'),
+      dashboardTargetMeta: document.getElementById('dashboardTargetMeta'),
+      dashboardSessionTitle: document.getElementById('dashboardSessionTitle'),
+      dashboardSessionMeta: document.getElementById('dashboardSessionMeta'),
+      dashboardHearTarget: document.getElementById('dashboardHearTarget'),
+      dashboardOpenSetup: document.getElementById('dashboardOpenSetup'),
       title: document.getElementById('stateTitle'),
       subtitle: document.getElementById('stateSubtitle'),
       fingerRule: document.getElementById('fingerRule'),
@@ -7391,6 +7589,16 @@
       copyConsole: document.getElementById('copyConsole'),
       exitConsole: document.getElementById('exitConsole')
     };
+    els.libraryWorkspace = document.querySelector('[data-testid="library-workspace"]');
+    els.studioWorkspace = document.querySelector('[data-testid="studio-workspace"]');
+    els.setupWorkspace = document.querySelector('[data-testid="setup-workspace"]');
+    rememberWorkspaceHome('sessionSetup', els.sessionSetup);
+    rememberWorkspaceHome('workflow', els.practiceWorkflowControls);
+    rememberWorkspaceHome('progressionVoicing', els.progressionVoicingPanel);
+    rememberWorkspaceHome('repertoireSection', els.repertoireSectionPanel);
+    rememberWorkspaceHome('hardwareTools', els.hardwareTools);
+    rememberWorkspaceHome('practiceTools', els.practiceTools);
+    placeWorkspaceControls();
     renderOptions();
     els.appShell = document.querySelector('[data-testid="app-shell"]');
     els.tonic.value = String(state.tonicPc);
@@ -7430,6 +7638,12 @@
       });
     }
     render();
+    window.requestAnimationFrame(function() {
+      render();
+    });
+    window.addEventListener('resize', function() {
+      window.requestAnimationFrame(render);
+    });
     drawAudioScope();
   }
 

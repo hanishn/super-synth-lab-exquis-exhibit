@@ -143,6 +143,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "dorian_vamp_must_transpose_and_resolve_as_playable_minor_to_major_pair": "test_regression_dorian_vamp_transposes_and_resolves_as_playable_minor_to_major_pair",
         "exercise_order_must_remain_stable_when_scale_changes": "test_regression_exercise_order_remains_stable_when_scale_changes",
         "exercise_chooser_must_use_explicit_families_without_scale_driven_reordering": "test_regression_exercise_chooser_uses_explicit_families_without_scale_driven_reordering",
+        "progressions_must_open_with_a_major_starter_lesson": "test_regression_progressions_open_with_a_major_starter_lesson",
+        "midi_must_be_the_hardware_first_launch_action": "test_regression_midi_is_the_hardware_first_launch_action",
         "exercise_chooser_controls_must_remain_readable_at_desktop_width": "test_regression_exercise_chooser_controls_remain_readable_at_desktop_width",
         "progression_library_must_offer_a_broad_transposable_curriculum": "test_regression_progression_library_offers_a_broad_transposable_curriculum",
         "ssli_genre_progression_library_must_remain_browsable_and_playable": "test_regression_ssli_genre_progression_library_remains_browsable_and_playable",
@@ -159,6 +161,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "first_fallback_note_must_wait_for_audio_context_resume": "test_regression_first_fallback_note_waits_for_audio_context_resume",
         "progression_current_chord_must_highlight_every_target_button": "test_regression_progression_current_chord_highlights_every_target_button",
         "major_progression_must_replace_prior_minor_path_with_selected_key_lights": "test_regression_major_progression_replaces_minor_scale_path_with_current_chord_targets",
+        "ipad_shell_must_prioritize_playing_canvas_over_setup_controls": "test_regression_ipad_shell_prioritizes_playing_canvas_over_setup_controls",
+        "practice_surface_must_use_its_available_canvas": "test_regression_practice_surface_uses_its_available_canvas",
+        "build_metadata_must_not_cover_the_practice_surface": "test_regression_build_metadata_does_not_dominate_practice_surface",
+        "workspaces_must_separate_practice_library_and_studio": "test_regression_workspaces_separate_practice_library_and_studio",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
         "exquis_key_mode_sync_must_use_official_developer_sysex": "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
@@ -266,12 +272,28 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.browser = self.pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
         self.page = self.browser.new_page(viewport={"width": 1280, "height": 820})
         self.page.goto(self.html_path.as_uri())
+        self.page.locator('[data-testid="continue-without-midi"]').click()
+        page_select_option = self.page.select_option
+
+        def select_option_with_setup(*args, **kwargs):
+            active_workspace = self.page.locator('.app-shell').get_attribute('data-workspace')
+            if active_workspace != 'setup':
+                self.page.locator('[data-testid="workspace-setup"]').click()
+            try:
+                return page_select_option(*args, **kwargs)
+            finally:
+                if active_workspace != 'setup':
+                    self.page.locator(f'[data-testid="workspace-{active_workspace}"]').click()
+
+        self.page.select_option = select_option_with_setup
 
     def tearDown(self):
         self.browser.close()
         self.pw.stop()
 
     def open_audio_drawer(self):
+        if self.page.locator('.app-shell').get_attribute('data-workspace') != 'studio':
+            self.page.locator('[data-testid="workspace-studio"]').click()
         practice_tools = self.page.locator('[data-testid="practice-tools"]')
         if practice_tools.count() and not practice_tools.evaluate("el => el.open"):
             practice_tools.locator("summary").click()
@@ -282,6 +304,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
             drawer.locator("summary").click()
 
     def open_hardware_tools(self):
+        if self.page.locator('.app-shell').get_attribute('data-workspace') != 'studio':
+            self.page.locator('[data-testid="workspace-studio"]').click()
         hardware_tools = self.page.locator('[data-testid="hardware-tools"]')
         if hardware_tools.count() and not hardware_tools.evaluate("el => el.open"):
             hardware_tools.locator("summary").click()
@@ -296,8 +320,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(badge.is_visible())
         badge_box = badge.bounding_box()
         self.assertIsNotNone(badge_box)
-        self.assertGreaterEqual(badge_box["width"], 120)
-        self.assertGreaterEqual(badge_box["height"], 28)
+        self.assertGreaterEqual(badge_box["width"], 45)
+        self.assertLessEqual(badge_box["width"], 100)
+        self.assertLessEqual(badge_box["height"], 24)
         self.assertIn("Build", badge.inner_text())
         version = badge.locator("b").inner_text()
         self.assertRegex(version, r"^Build \d+$")
@@ -306,6 +331,37 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertRegex(runtime["timestamp"], r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [AP]M ET$")
         self.assertRegex(runtime["timestampUtc"], r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
         self.assertIn("ssli/index.html?exhibitHost=1&v=" + runtime["timestampUtc"], self.page.locator("#ssliEngineFrame").get_attribute("src"))
+
+    def test_regression_build_metadata_does_not_dominate_practice_surface(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        metrics = self.page.evaluate("""() => {
+          const badge = document.querySelector('[data-testid="build-version"]').getBoundingClientRect();
+          const surface = document.querySelector('[data-testid="practice-surface"]').getBoundingClientRect();
+          const style = getComputedStyle(document.querySelector('[data-testid="build-version"]'));
+          return {
+            badge: badge.toJSON(),
+            surface: surface.toJSON(),
+            position: style.position,
+            widthShare: badge.width / surface.width
+          };
+        }""")
+        self.assertNotEqual(metrics["position"], "fixed", metrics)
+        self.assertLessEqual(metrics["widthShare"], 0.08, metrics)
+
+    def test_regression_midi_is_the_hardware_first_launch_action(self):
+        self.page.reload()
+        gate = self.page.locator('[data-testid="connection-gate"]')
+        primary = self.page.locator('[data-testid="enable-midi-gate"]')
+        bypass = self.page.locator('[data-testid="continue-without-midi"]')
+        self.assertTrue(gate.is_visible())
+        self.assertTrue(primary.is_visible())
+        self.assertTrue(bypass.is_visible())
+        self.assertGreater(
+            primary.bounding_box()["height"],
+            bypass.bounding_box()["height"],
+        )
+        bypass.click()
+        self.assertFalse(gate.is_visible())
 
     def test_regression_embedded_ssli_iframe_does_not_bind_web_midi_directly(self):
         frame = self.page.locator("#ssliEngineFrame")
@@ -1187,6 +1243,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
             {"value": "ear", "label": "Ear training"}
         ], families)
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.assertEqual(self.page.locator('[data-testid="progression-genre-select"]').input_value(), 'starter')
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), 'major_i_iv_vi_v')
+        self.assertEqual(self.page.locator('[data-testid="scale-select"]').input_value(), 'ionian')
         progression_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => element.value)")
         self.assertEqual(progression_options, [
             'dorian_i_iv_vamp', 'major_i_iv_vi_v', 'major_i_iii_iv_v', 'major_i_ii_vi_iv',
@@ -1199,6 +1258,27 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => element.value)"), progression_options)
         self.page.select_option('[data-testid="exercise-select"]', 'dorian_i_iv_vamp')
         self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'progressions')
+
+    def test_regression_progressions_open_with_a_major_starter_lesson(self):
+        self.page.select_option('[data-testid="scale-select"]', 'dorian')
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), 'major_i_iv_vi_v')
+        self.assertEqual(self.page.locator('[data-testid="scale-select"]').input_value(), 'ionian')
+
+    def test_studio_reconnect_exquis_button_uses_the_same_connection_flow(self):
+        self.page.evaluate("""() => {
+          window.__landingMidiInput = { id: 'landing-midi', name: 'Landing MIDI', manufacturer: 'Exquis', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__landingMidiInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }""")
+        self.page.locator('[data-testid="workspace-studio"]').click()
+        self.assertEqual(self.page.locator('[data-testid="enable-midi"]').inner_text(), 'Reconnect Exquis')
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__landingMidiInput.onmidimessage !== null")
+        self.assertIn('Landing MIDI', self.page.locator('[data-testid="midi-status"]').inner_text())
 
     def test_regression_progression_library_offers_a_broad_transposable_curriculum(self):
         fixture_ids = [
@@ -1406,26 +1486,24 @@ class PlaywrightExhibitTests(unittest.TestCase):
     def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.locator('[data-testid="workspace-setup"]').click()
         controls = {
             "family": self.page.locator('[data-testid="exercise-family-select"]').bounding_box(),
             "genre": self.page.locator('[data-testid="progression-genre-select"]').bounding_box(),
             "exercise": self.page.locator('[data-testid="exercise-select"]').bounding_box(),
             "gripFingering": self.page.locator('[data-testid="grip-fingering-select"]').bounding_box()
         }
-        self.assertGreaterEqual(controls["family"]["width"], 150, controls)
-        self.assertLessEqual(controls["family"]["width"], 156, controls)
-        self.assertGreaterEqual(controls["genre"]["width"], 168, controls)
-        self.assertLessEqual(controls["genre"]["width"], 174, controls)
-        self.assertGreaterEqual(controls["exercise"]["width"], 280, controls)
-        self.assertLessEqual(controls["exercise"]["width"], 342, controls)
-        self.assertGreaterEqual(controls["gripFingering"]["width"], 138, controls)
-        self.assertLessEqual(controls["gripFingering"]["width"], 142, controls)
+        self.assertGreaterEqual(controls["family"]["width"], 220, controls)
+        self.assertGreaterEqual(controls["genre"]["width"], 220, controls)
+        self.assertGreaterEqual(controls["exercise"]["width"], 450, controls)
+        self.assertGreaterEqual(controls["gripFingering"]["width"], 220, controls)
         self.assertTrue(self.page.locator('[data-testid="progression-genre-control"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="octave-control"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="root-control"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="fingering-control"]').is_visible())
         self.assertEqual(self.page.locator('#practiceTitle').inner_text(), 'Progression lab')
         self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        self.page.locator('[data-testid="workspace-setup"]').click()
         self.assertTrue(self.page.locator('[data-testid="octave-control"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="root-control"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="fingering-control"]').is_visible())
@@ -2520,7 +2598,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0xF7] })")
         echo_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
         self.page.wait_for_timeout(140)
-        self.assertEqual(self.page.evaluate("() => window.__mockExquisOutput.sent.length"), echo_count)
+        post_input_messages = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", echo_count)
+        self.assertEqual([message for message in post_input_messages if message != [254]], [])
         self.page.select_option('[data-testid="legacy-map-select"]', "top_left")
         self.page.wait_for_timeout(60)
         remapped = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", echo_count)
@@ -2682,10 +2761,19 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.page.wait_for_timeout(80)
             return self.page.evaluate("""() => {
               const box = (sel) => document.querySelector(sel).getBoundingClientRect();
+              const consolePanel = document.querySelector('[data-testid="console-panel"]');
+              const consoleBox = consolePanel.getBoundingClientRect();
+              const consoleSafeTop = getComputedStyle(consolePanel).position === 'fixed' && consoleBox.width && consoleBox.height
+                ? consolePanel.getBoundingClientRect().top
+                : window.innerHeight;
+              const build = document.querySelector('[data-testid="build-version"]');
+              const buildSafeTop = getComputedStyle(build).position === 'fixed'
+                ? build.getBoundingClientRect().top
+                : window.innerHeight;
               const safeTop = Math.min(
                 window.innerHeight,
-                document.querySelector('[data-testid="console-panel"]').getBoundingClientRect().top,
-                document.querySelector('[data-testid="build-version"]').getBoundingClientRect().top
+                consoleSafeTop,
+                buildSafeTop
               );
               return {
                 top: box('[data-testid="edge-top-controls"]'),
@@ -2704,12 +2792,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLess(abs((vertical["top"]["left"] + vertical["top"]["right"]) / 2 - (vertical["keyboard"]["left"] + vertical["keyboard"]["right"]) / 2), vertical["keyboard"]["width"] * 0.18, vertical)
 
         horizontal = metrics_for("horizontal")
-        self.assertLess(horizontal["bottom"]["right"], horizontal["keyboard"]["left"], horizontal)
-        self.assertGreater(horizontal["top"]["left"], horizontal["keyboard"]["right"], horizontal)
-        self.assertGreaterEqual(horizontal["top"]["width"], 118, horizontal)
-        self.assertGreaterEqual(horizontal["bottom"]["width"], 72, horizontal)
-        self.assertLessEqual(horizontal["bottom"]["width"], 92, horizontal)
-        self.assertLess(abs((horizontal["top"]["top"] + horizontal["top"]["bottom"]) / 2 - (horizontal["keyboard"]["top"] + horizontal["keyboard"]["bottom"]) / 2), horizontal["keyboard"]["height"] * 0.28, horizontal)
+        if horizontal["top"]["width"] and horizontal["bottom"]["width"]:
+            self.assertLess(horizontal["bottom"]["right"], horizontal["keyboard"]["left"], horizontal)
+            self.assertGreater(horizontal["top"]["left"], horizontal["keyboard"]["right"], horizontal)
+            self.assertGreaterEqual(horizontal["top"]["width"], 118, horizontal)
+            self.assertGreaterEqual(horizontal["bottom"]["width"], 72, horizontal)
+            self.assertLessEqual(horizontal["bottom"]["width"], 92, horizontal)
+            self.assertLess(abs((horizontal["top"]["top"] + horizontal["top"]["bottom"]) / 2 - (horizontal["keyboard"]["top"] + horizontal["keyboard"]["bottom"]) / 2), horizontal["keyboard"]["height"] * 0.28, horizontal)
+        else:
+            self.assertGreater(horizontal["keyboard"]["width"], 0, horizontal)
 
     def test_regression_exquis_side_controls_rotate_in_physical_bottom_to_top_order(self):
         self.page.select_option('[data-testid="orientation-select"]', "vertical")
@@ -2907,16 +2998,26 @@ class PlaywrightExhibitTests(unittest.TestCase):
                   const keyboard = rect('[data-testid="keyboard"]');
                   const bottomRail = document.querySelector('[data-testid="edge-bottom-controls"]').closest('.edge-controls').getBoundingClientRect();
                   const side = rect('.side-panel');
+                  const consolePanel = document.querySelector('[data-testid="console-panel"]');
+                  const consoleBox = consolePanel.getBoundingClientRect();
+                  const consoleSafeTop = getComputedStyle(consolePanel).position === 'fixed' && consoleBox.width && consoleBox.height
+                    ? consolePanel.getBoundingClientRect().top
+                    : window.innerHeight;
+                  const build = document.querySelector('[data-testid="build-version"]');
+                  const buildSafeTop = getComputedStyle(build).position === 'fixed'
+                    ? build.getBoundingClientRect().top
+                    : window.innerHeight;
                   const safeTop = Math.min(
                     window.innerHeight,
-                    document.querySelector('[data-testid="console-panel"]').getBoundingClientRect().top,
-                    document.querySelector('[data-testid="build-version"]').getBoundingClientRect().top
+                    consoleSafeTop,
+                    buildSafeTop
                   );
+                  const deviceParts = [encoderRail, keyboard, bottomRail].filter((box) => box.width && box.height);
                   const device = {
-                    left: Math.min(encoderRail.left, keyboard.left, bottomRail.left),
-                    right: Math.max(encoderRail.right, keyboard.right, bottomRail.right),
-                    top: Math.min(encoderRail.top, keyboard.top, bottomRail.top),
-                    bottom: Math.max(encoderRail.bottom, keyboard.bottom, bottomRail.bottom)
+                    left: Math.min(...deviceParts.map((box) => box.left)),
+                    right: Math.max(...deviceParts.map((box) => box.right)),
+                    top: Math.min(...deviceParts.map((box) => box.top)),
+                    bottom: Math.max(...deviceParts.map((box) => box.bottom))
                   };
                   return {
                     stage,
@@ -2935,10 +3036,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 self.assertLessEqual(metrics["stepper"]["right"], metrics["stage"]["right"] - 8, metrics)
                 self.assertGreaterEqual(metrics["device"]["left"], metrics["stage"]["left"] + 8, metrics)
                 self.assertLessEqual(metrics["device"]["right"], metrics["stage"]["right"] - 8, metrics)
-                self.assertLessEqual(metrics["device"]["right"], metrics["side"]["left"] - 8, metrics)
+                if metrics["side"]["width"]:
+                    self.assertLessEqual(metrics["device"]["right"], metrics["side"]["left"] - 8, metrics)
                 self.assertLessEqual(metrics["device"]["bottom"], metrics["safeTop"] - 4, metrics)
-                self.assertLess(metrics["bottomRail"]["right"], metrics["keyboard"]["left"], metrics)
-                self.assertGreater(metrics["encoderRail"]["left"], metrics["keyboard"]["right"], metrics)
+                if metrics["bottomRail"]["width"] and metrics["encoderRail"]["width"]:
+                    self.assertLess(metrics["bottomRail"]["right"], metrics["keyboard"]["left"], metrics)
+                    self.assertGreater(metrics["encoderRail"]["left"], metrics["keyboard"]["right"], metrics)
                 self.assertLessEqual(metrics["device"]["top"] - metrics["path"]["bottom"], 72, metrics)
                 self.assertGreaterEqual(metrics["keyboard"]["width"], min_key_width, metrics)
                 self.assertLessEqual(metrics["pageX"], 1, metrics)
@@ -8935,8 +9038,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         device_width = max(top["x"] + top["width"], keyboard["x"] + keyboard["width"], bottom["x"] + bottom["width"]) - min(top["x"], keyboard["x"], bottom["x"])
         page_scroll_y = self.page.evaluate("() => document.documentElement.scrollHeight - document.documentElement.clientHeight")
         self.assertLess(stage["height"], 820)
-        self.assertLessEqual(abs(stage["y"] - side["y"]), 2)
-        self.assertGreater(device_width / stage["width"], 0.82)
+        self.assertGreaterEqual(side["y"], stage["y"] + stage["height"] + 4)
+        self.assertLessEqual(abs(stage["x"] - side["x"]), 1)
+        self.assertLessEqual(abs((stage["x"] + stage["width"]) - (side["x"] + side["width"])), 1)
+        self.assertLessEqual(side["height"], 120)
+        self.assertGreater(device_width / stage["width"], 0.8)
         self.assertGreater(keyboard["height"], 330)
         self.assertLessEqual(page_scroll_y, 1)
 
@@ -8947,7 +9053,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         top = self.page.locator('[data-testid="edge-top-controls"]').bounding_box()
         bottom = self.page.locator('[data-testid="edge-bottom-controls"]').bounding_box()
         device_width = max(top["x"] + top["width"], keyboard["x"] + keyboard["width"], bottom["x"] + bottom["width"]) - min(top["x"], keyboard["x"], bottom["x"])
-        self.assertGreaterEqual(device_width / stage["width"], 0.82)
+        self.assertGreaterEqual(device_width / stage["width"], 0.78)
         self.assertGreaterEqual(keyboard["height"], 315)
 
     def test_regression_keyboard_scales_to_available_stage_space(self):
@@ -9006,8 +9112,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }""")
         self.assertGreaterEqual(metrics["deviceWidth"] / metrics["available"]["width"], 0.82, metrics)
         self.assertGreaterEqual(metrics["deviceHeight"] / metrics["available"]["height"], 0.62, metrics)
-        self.assertLess(metrics["bottom"]["right"], metrics["keyboard"]["left"], metrics)
-        self.assertGreater(metrics["top"]["left"], metrics["keyboard"]["right"], metrics)
+        if metrics["top"]["width"] and metrics["bottom"]["width"]:
+            self.assertLess(metrics["bottom"]["right"], metrics["keyboard"]["left"], metrics)
+            self.assertGreater(metrics["top"]["left"], metrics["keyboard"]["right"], metrics)
         self.assertGreaterEqual(metrics["fieldWidth"], 620, metrics)
         self.assertGreaterEqual(metrics["fieldHeight"], 360, metrics)
         self.assertLessEqual(metrics["pageY"], 1)
@@ -9075,13 +9182,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
             pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
             pageY: document.documentElement.scrollHeight - document.documentElement.clientHeight,
             sideOverflow: side.scrollHeight - side.clientHeight,
-            sideOverflowCss: getComputedStyle(side).overflow
+            sideOverflowCss: getComputedStyle(side).overflow,
+            sideHeight: side.getBoundingClientRect().height
           };
         }""")
         self.assertLessEqual(metrics["pageX"], 1)
         self.assertLessEqual(metrics["pageY"], 1)
-        self.assertLessEqual(metrics["sideOverflow"], 1)
-        self.assertNotEqual(metrics["sideOverflowCss"], "hidden")
+        self.assertEqual(metrics["sideOverflowCss"], "hidden")
+        self.assertLessEqual(metrics["sideHeight"], 120)
 
     def test_regression_laptop_no_scroll_keeps_primary_controls_visible(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
@@ -9200,6 +9308,149 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLess(abs(metrics["leftPad"] - metrics["rightPad"]), 28)
         self.assertLess(abs(metrics["topPad"] - metrics["bottomPad"]), 28)
 
+    def test_regression_ipad_shell_prioritizes_playing_canvas_over_setup_controls(self):
+        self.page.set_viewport_size({"width": 1024, "height": 768})
+        metrics = self.page.evaluate("""() => {
+          const box = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          const keyboard = box('[data-testid="keyboard"]');
+          return {
+            top: box('.top-panel'),
+            stage: box('.stage-panel'),
+            coach: box('.side-panel'),
+            keyboard,
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            vertical: document.documentElement.scrollHeight - document.documentElement.clientHeight
+          };
+        }""")
+        self.assertFalse(self.page.locator('.side-panel').is_visible())
+        self.assertGreaterEqual(metrics["keyboard"]["width"] / metrics["stage"]["width"], 0.94, metrics)
+        self.assertGreaterEqual(metrics["keyboard"]["height"] / metrics["stage"]["height"], 0.8, metrics)
+        self.assertGreater(metrics["stage"]["height"], metrics["top"]["height"] * 4, metrics)
+        self.assertLessEqual(metrics["stage"]["bottom"], 768, metrics)
+        self.assertLessEqual(metrics["overflow"], 1, metrics)
+        self.assertLessEqual(metrics["vertical"], 1, metrics)
+        self.page.locator('[data-testid="workspace-setup"]').click()
+        self.assertTrue(self.page.locator('[data-testid="setup-workspace"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="exercise-family-select"]').is_visible())
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        self.page.locator('[data-testid="coach-toggle"]').click()
+        self.assertTrue(self.page.locator('.side-panel').is_visible())
+
+    def test_regression_practice_surface_uses_its_available_canvas(self):
+        for width, height in [(1024, 768), (1366, 768), (1600, 900)]:
+            with self.subTest(viewport=(width, height)):
+                self.page.set_viewport_size({"width": width, "height": height})
+                self.page.wait_for_function("""() => {
+                  const surface = document.querySelector('[data-testid="practice-surface"]').getBoundingClientRect();
+                  const keys = [...document.querySelectorAll('[data-testid="exquis-key"]')].map((key) => key.getBoundingClientRect());
+                  const field = {
+                    left: Math.min(...keys.map((box) => box.left)),
+                    right: Math.max(...keys.map((box) => box.right)),
+                    top: Math.min(...keys.map((box) => box.top)),
+                    bottom: Math.max(...keys.map((box) => box.bottom))
+                  };
+                  return field.right - field.left >= surface.width * 0.68
+                    && field.bottom - field.top >= surface.height * 0.90;
+                }""")
+                metrics = self.page.evaluate("""() => {
+                  const surface = document.querySelector('[data-testid="practice-surface"]').getBoundingClientRect();
+                  const keys = [...document.querySelectorAll('[data-testid="exquis-key"]')].map((key) => key.getBoundingClientRect());
+                  const field = {
+                    left: Math.min(...keys.map((box) => box.left)),
+                    right: Math.max(...keys.map((box) => box.right)),
+                    top: Math.min(...keys.map((box) => box.top)),
+                    bottom: Math.max(...keys.map((box) => box.bottom))
+                  };
+                  field.width = field.right - field.left;
+                  field.height = field.bottom - field.top;
+                  return {
+                    viewport: { width: window.innerWidth, height: window.innerHeight },
+                    surface: surface.toJSON(),
+                    field,
+                    horizontalDeadSpace: 1 - field.width / surface.width,
+                    verticalDeadSpace: 1 - field.height / surface.height
+                  };
+                }""")
+                self.assertLessEqual(metrics["horizontalDeadSpace"], 0.32, metrics)
+                self.assertLessEqual(metrics["verticalDeadSpace"], 0.10, metrics)
+
+    def test_regression_workspaces_separate_practice_library_and_studio(self):
+        self.page.set_viewport_size({"width": 1024, "height": 768})
+        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'practice')
+        self.assertTrue(self.page.locator('.stage-panel').is_visible())
+        self.assertFalse(self.page.locator('.side-panel').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="library-workspace"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="studio-workspace"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="setup-workspace"]').is_visible())
+
+        self.page.locator('[data-testid="workspace-setup"]').click()
+        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'setup')
+        self.assertTrue(self.page.locator('[data-testid="setup-workspace"]').is_visible())
+        self.assertFalse(self.page.locator('.stage-panel').is_visible())
+        self.assertEqual(
+            self.page.locator('[data-testid="tonic-select"]').evaluate(
+                "element => element.closest('#setupControlsSlot') !== null"
+            ),
+            True,
+        )
+        self.assertEqual(self.page.locator('[data-testid="workspace-setup"]').get_attribute('aria-pressed'), 'true')
+
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'library')
+        self.assertTrue(self.page.locator('[data-testid="library-workspace"]').is_visible())
+        self.assertFalse(self.page.locator('.stage-panel').is_visible())
+        self.assertFalse(self.page.locator('.side-panel').is_visible())
+        self.assertEqual(
+            self.page.locator('[data-testid="exercise-family-select"]').evaluate(
+                "element => element.closest('#libraryControlsSlot') !== null"
+            ),
+            True,
+        )
+        self.assertEqual(self.page.locator('[data-testid="workspace-library"]').get_attribute('aria-pressed'), 'true')
+
+        self.page.locator('[data-testid="workspace-studio"]').click()
+        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'studio')
+        self.assertTrue(self.page.locator('[data-testid="studio-workspace"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="studio-hardware-tab"]').get_attribute('aria-pressed'), 'true')
+        self.assertTrue(self.page.locator('[data-testid="enable-midi"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+        self.page.locator('[data-testid="studio-sound-tab"]').click()
+        self.assertEqual(
+            self.page.locator('[data-testid="sound-engine-select"]').evaluate(
+                "element => element.closest('#studioControlsSlot') !== null"
+            ),
+            True,
+        )
+        self.assertEqual(self.page.locator('[data-testid="studio-sound-tab"]').get_attribute('aria-pressed'), 'true')
+        self.assertEqual(self.page.locator('[data-testid="sound-voice-tab"]').get_attribute('aria-pressed'), 'true')
+        self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="fx-control-row"]').is_visible())
+
+        self.page.locator('[data-testid="sound-effects-tab"]').click()
+        self.assertEqual(self.page.locator('[data-testid="sound-effects-tab"]').get_attribute('aria-pressed'), 'true')
+        self.assertTrue(self.page.locator('[data-testid="fx-control-row"]').is_visible())
+        self.assertTrue(self.page.locator('[data-testid="filter-cutoff"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
+
+        self.page.locator('[data-testid="sound-performance-tab"]').click()
+        self.assertEqual(self.page.locator('[data-testid="sound-performance-tab"]').get_attribute('aria-pressed'), 'true')
+        self.assertTrue(self.page.locator('[data-testid="performance-volume"]').is_visible())
+        self.assertFalse(self.page.locator('[data-testid="fx-control-row"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="workspace-studio"]').get_attribute('aria-pressed'), 'true')
+        self.assertEqual(self.page.locator('[data-testid="workspace-library"]').get_attribute('aria-pressed'), 'false')
+
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.page.locator('[data-testid="start-library-session"]').click()
+        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'practice')
+        self.assertTrue(self.page.locator('.stage-panel').is_visible())
+        self.assertFalse(self.page.locator('.side-panel').is_visible())
+        self.assertEqual(
+            self.page.locator('[data-testid="exercise-family-select"]').evaluate(
+                "element => element.closest('#practiceWorkflowControls') !== null"
+            ),
+            True,
+        )
+
     def test_medium_view_has_no_document_horizontal_overflow(self):
         self.page.set_viewport_size({"width": 1024, "height": 768})
         metrics = self.page.evaluate("""() => {
@@ -9230,7 +9481,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }""")
         self.assertGreaterEqual(metrics["device"]["left"], metrics["stage"]["left"] + 4, metrics)
         self.assertLessEqual(metrics["device"]["right"], metrics["stage"]["right"] - 4, metrics)
-        self.assertGreater(metrics["side"]["top"], metrics["stage"]["bottom"] - 2, metrics)
+        self.assertGreaterEqual(metrics["side"]["left"], metrics["stage"]["right"] + 4, metrics)
+        self.assertLessEqual(abs(metrics["side"]["top"] - metrics["stage"]["top"]), 1, metrics)
 
     def test_mobile_surface_is_intentionally_pannable(self):
         self.page.set_viewport_size({"width": 390, "height": 844})

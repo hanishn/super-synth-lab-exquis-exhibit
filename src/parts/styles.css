@@ -164,6 +164,30 @@ input {
   align-items: end;
 }
 
+.progression-voicing-panel {
+  padding: 7px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.progression-voicing-heading,
+.progression-chord-row {
+  display: flex;
+  align-items: end;
+  gap: 6px;
+}
+
+.progression-voicing-heading { flex-wrap: wrap; }
+.progression-voicing-heading h2 { margin: 0 auto 4px 0; font-size: 13px; }
+.progression-voicing-heading label,
+.progression-chord-row label { min-width: 0; }
+.progression-voicing-heading label span,
+.progression-chord-row label span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 700; }
+.progression-chord-rows { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.progression-chord-row { padding: 3px 5px; border: 1px solid var(--line-soft); border-radius: 5px; background: var(--panel-3); }
+.progression-chord-degree { min-width: 24px; color: var(--accent); font-weight: 700; font-size: 12px; }
+.progression-chord-quality { color: var(--muted); font-size: 10px; }
+.progression-chord-row select { min-width: 70px; }
+
 .practice-workflow-controls.progression-layout .exercise-family-control,
 .practice-workflow-controls.progression-layout .progression-genre-control,
 .practice-workflow-controls.progression-layout .exercise-switch,
@@ -1313,6 +1337,19 @@ input[type="range"]:focus-visible {
   font-weight: 900;
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+.chord-finger {
+  min-width: 16px;
+  padding: 0 4px;
+  background: #35b9d6;
+  color: #07111b;
+  font-size: 10px;
+}
+
+.sequence-finger {
+  background: var(--warn);
+  color: #111;
 }
 
 .degree-badge {

@@ -146,6 +146,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "exercise_chooser_controls_must_remain_readable_at_desktop_width": "test_regression_exercise_chooser_controls_remain_readable_at_desktop_width",
         "progression_library_must_offer_a_broad_transposable_curriculum": "test_regression_progression_library_offers_a_broad_transposable_curriculum",
         "ssli_genre_progression_library_must_remain_browsable_and_playable": "test_regression_ssli_genre_progression_library_remains_browsable_and_playable",
+        "imported_progression_catalog_must_use_learner_facing_labels": "test_regression_imported_progression_catalog_uses_learner_facing_labels",
+        "progressions_must_offer_global_and_per_chord_voicing_controls": "test_regression_progressions_offer_global_and_per_chord_voicing_controls",
+        "chord_fingering_must_not_reuse_single_note_sequence_labels": "test_regression_chord_fingering_uses_distinct_labels_from_sequence_fingering",
+        "exquis_chords_must_use_adjacent_finger_positions_not_piano_spacing": "test_regression_exquis_chord_fingers_follow_adjacent_button_order",
+        "exquis_chord_fingers_must_use_contiguous_positions_for_every_voicing_size": "test_regression_exquis_chord_fingers_use_contiguous_span_for_every_voicing_size",
         "progression_library_templates_must_resolve_playable_chords_across_major_keys": "test_regression_progression_library_templates_resolve_playable_chords_across_major_keys",
         "progression_prompt_must_include_every_current_chord_member": "test_regression_progression_prompt_includes_every_current_chord_member",
         "exercise_control_must_not_overflow_header_at_desktop_viewport": "test_regression_exercise_control_does_not_overflow_header_at_desktop_viewport",
@@ -1210,7 +1215,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-1')
         jazz_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
         self.assertEqual(len(jazz_options), 31, jazz_options)
-        self.assertEqual(jazz_options[0], {"value": "ssli_progression_1_0", "label": "ii-V-I"}, jazz_options)
+        self.assertEqual(jazz_options[0], {"value": "ssli_progression_1_0", "label": "ii-V-I - Jazz cadence foundation"}, jazz_options)
         self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_1_0')
         events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
         self.assertEqual([event["musicalIntent"]["degree"] for event in events], ['ii', 'V', 'I'], events)
@@ -1228,6 +1233,106 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(result["genres"], 15, result)
         self.assertEqual(result["progressions"], 466, result)
         self.assertEqual(result["invalid"], [], result)
+
+    def test_regression_imported_progression_catalog_uses_learner_facing_labels(self):
+        source_metadata = self.page.evaluate("""() => window.SSLI_VENDOR.progressionGroups.flatMap((group) => (
+          group.progressions.map((progression) => ({ name: progression.name, usage: progression.usage }))
+        ))""")
+        self.assertEqual(len(source_metadata), 466, source_metadata)
+        self.assertTrue(all(item["name"] and item["usage"] for item in source_metadata), source_metadata)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-0')
+        labels = self.page.locator('[data-testid="exercise-select"] option').all_text_contents()
+        self.assertTrue(all(' - ' in label for label in labels), labels)
+        self.assertEqual(labels[0], 'I-V-vi-IV - Most popular modern pop', labels)
+        self.assertEqual(self.page.locator('[data-testid="exercise-control"] legend').inner_text(), 'Progression')
+
+    def test_regression_progressions_offer_global_and_per_chord_voicing_controls(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-0')
+        self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_0_0')
+        self.assertTrue(self.page.locator('[data-testid="progression-voicing-panel"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="progression-voicing-title"]').inner_text(), 'Chord progression')
+        self.assertEqual(self.page.locator('[data-testid="progression-global-note-count"]').input_value(), '3')
+        rows = self.page.locator('[data-testid="progression-chord-row"]')
+        self.assertEqual(rows.count(), 4)
+        self.page.select_option('[data-testid="progression-global-note-count"]', '4')
+        self.page.select_option('[data-testid="progression-global-inversion"]', '1')
+        first_targets = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0].targets")
+        self.assertEqual(len(first_targets), 4, first_targets)
+        self.assertTrue(all(3 <= int(target["cellId"].split("c")[0][1:]) <= 7 for target in first_targets), first_targets)
+        first_row = rows.nth(0)
+        self.assertEqual(first_row.locator('[data-testid="progression-chord-degree"]').inner_text(), 'I')
+        first_row.locator('[data-testid="progression-chord-note-count"]').select_option('2')
+        self.assertEqual(first_row.locator('[data-testid="progression-chord-note-count"]').input_value(), '2')
+        per_chord_targets = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0].targets.map((target) => target.midi)")
+        self.assertEqual(len(per_chord_targets), 2, per_chord_targets)
+        first_row = self.page.locator('[data-testid="progression-chord-row"]').nth(0)
+        first_row.locator('[data-testid="progression-chord-inversion"]').select_option('0')
+        inverted_targets = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0].targets.map((target) => target.midi)")
+        self.assertNotEqual(inverted_targets, per_chord_targets, {"before": per_chord_targets, "after": inverted_targets})
+        for note_count in ['2', '3', '4', '5']:
+            self.page.select_option('[data-testid="progression-global-note-count"]', note_count)
+            self.page.select_option('[data-testid="progression-global-inversion"]', str(int(note_count) - 1))
+            target_lengths = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents.map((event) => event.targets.length)")
+            self.assertEqual(target_lengths, [int(note_count)] * 4, {"noteCount": note_count, "lengths": target_lengths})
+
+    def test_regression_chord_fingering_uses_distinct_labels_from_sequence_fingering(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-0')
+        self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_0_0')
+        self.page.select_option('[data-testid="progression-global-note-count"]', '5')
+        chord_fingers = self.page.locator('.key.current-grip-target .finger')
+        self.assertEqual(chord_fingers.count(), 5)
+        self.assertEqual(sorted(chord_fingers.all_text_contents()), ['1', '2', '3', '4', '5'])
+        self.assertTrue(all(
+            label.startswith('Chord finger ')
+            for label in chord_fingers.evaluate_all("els => els.map(el => el.getAttribute('aria-label'))")
+        ))
+        self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        sequence_fingers = self.page.locator('.key.current .finger')
+        self.assertGreater(sequence_fingers.count(), 0)
+        self.assertTrue(all(
+            label.startswith('Sequence finger ')
+            for label in sequence_fingers.evaluate_all("els => els.map(el => el.getAttribute('aria-label'))")
+        ))
+
+    def test_regression_exquis_chord_fingers_follow_adjacent_button_order(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-0')
+        self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_0_0')
+        self.page.select_option('[data-testid="progression-global-note-count"]', '3')
+        ordered_fingers = self.page.evaluate("""() => {
+          const targets = window.__exquisDebugSnapshot().exerciseEvents[0].targets
+            .slice().sort((a, b) => a.midi - b.midi);
+          return targets.map(target => {
+            const key = document.querySelector(`.key.current-grip-target[data-cell-id="${target.cellId}"][data-midi="${target.midi}"]`);
+            return key && key.querySelector('.chord-finger').textContent;
+          });
+        }""")
+        self.assertEqual(ordered_fingers, ['2', '3', '4'], ordered_fingers)
+
+    def test_regression_exquis_chord_fingers_use_contiguous_span_for_every_voicing_size(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'ssli-0')
+        self.page.select_option('[data-testid="exercise-select"]', 'ssli_progression_0_0')
+        expected = {
+            '2': ['2', '3'],
+            '3': ['2', '3', '4'],
+            '4': ['1', '2', '3', '4'],
+            '5': ['1', '2', '3', '4', '5'],
+        }
+        for note_count, expected_fingers in expected.items():
+            self.page.select_option('[data-testid="progression-global-note-count"]', note_count)
+            ordered_fingers = self.page.evaluate("""() => {
+              const targets = window.__exquisDebugSnapshot().exerciseEvents[0].targets
+                .slice().sort((a, b) => a.midi - b.midi);
+              return targets.map(target => {
+                const key = document.querySelector(`.key.current-grip-target[data-cell-id="${target.cellId}"][data-midi="${target.midi}"]`);
+                return key && key.querySelector('.chord-finger').textContent;
+              });
+            }""")
+            self.assertEqual(ordered_fingers, expected_fingers, {"noteCount": note_count, "fingers": ordered_fingers})
 
     def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})

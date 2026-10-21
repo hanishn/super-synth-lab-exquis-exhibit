@@ -66,7 +66,7 @@
         <select id="progressionGenreSelect" data-testid="progression-genre-select"></select>
       </label>
       <fieldset class="practice-control choice-switch exercise-switch" data-testid="exercise-control">
-        <legend>Exercise</legend>
+        <legend id="exerciseControlLegend">Exercise</legend>
         <div class="exercise-buttons" id="exerciseButtons" data-testid="exercise-buttons"></div>
         <select id="exerciseSelect" data-testid="exercise-select"></select>
       </fieldset>
@@ -154,6 +154,14 @@
       <div class="coach-progress" data-testid="coach-progress">
         <p id="drillScore" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
       </div>
+    </section>
+    <section class="progression-voicing-panel" id="progressionVoicingPanel" data-testid="progression-voicing-panel" hidden>
+      <div class="progression-voicing-heading">
+        <h2 id="progressionVoicingTitle" data-testid="progression-voicing-title">Chord progression</h2>
+        <label><span>All notes</span><select id="progressionGlobalNoteCount" data-testid="progression-global-note-count"><option value="2">2 notes</option><option value="3">3 notes</option><option value="4">4 notes</option><option value="5">5 notes</option></select></label>
+        <label><span>All inversions</span><select id="progressionGlobalInversion" data-testid="progression-global-inversion"></select></label>
+      </div>
+      <div id="progressionChordRows" class="progression-chord-rows"></div>
     </section>
     <details class="practice-tools" data-testid="hardware-tools">
       <summary>Hardware tools</summary>

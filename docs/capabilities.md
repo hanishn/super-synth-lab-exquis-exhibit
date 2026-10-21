@@ -322,9 +322,23 @@ Ear-to-gesture lessons separate the audible prompt from the physical answer fixt
 Repertoire lessons are named, ordered collections of existing exact harmony fixtures. A progression fixture declares a stable identifier, functional label, base tonic, tempo, ordered chord specifications, and a per-step recovery policy.
 
 - Each chord specification resolves through the triad fixture builder; a progression cannot introduce a separate chord or target resolver.
-- The Progressions family begins with fourteen Exquis-specific starter paths, then exposes SSLI's imported genre library: 466 named degree progressions across Pop & Rock, Jazz, Blues, Classical, R&B / Soul, EDM / Electronic, Folk / Country, Film / Cinematic, theory, Latin, Gospel, Bossa Nova, Prog Rock, and Ambient groups. `Progression genre` is an explicit learner choice, never a side effect of key or scale changes. The selected key and mode resolve each imported degree pattern through the same compact, exact physical-triad builder. Every imported template must resolve to playable cells in C, F, and Bb without a copied fixture.
+- The Progressions family begins with fourteen Exquis-specific starter paths, then exposes SSLI's imported genre library: 466 named degree progressions across Pop & Rock, Jazz, Blues, Classical, R&B / Soul, EDM / Electronic, Folk / Country, Film / Cinematic, theory, Latin, Gospel, Bossa Nova, Prog Rock, and Ambient groups. Every imported progression has a required learner-facing usage label; the chooser and active lesson display `degree pattern - usage`, never a wall of bare Roman numerals. `Progression genre` is an explicit learner choice, never a side effect of key or scale changes. The selected key and mode resolve each imported degree pattern through the same compact, exact physical-triad builder. Every imported template must resolve to playable cells in C, F, and Bb without a copied fixture.
 - A correct chord advances to the next ordered progression event. A wrong or partial chord retains the current event, increments the miss count, and provides a repair message.
 - Prompt playback may demonstrate the current chord but never changes score or progression position.
+
+### Progression Voicing Controls
+
+Selecting a progression exposes a `Chord progression` control surface with global defaults and per-chord overrides. The control surface follows SSLI chord-pad semantics while remaining an Exquis practice feature, not a second sound engine.
+
+- Global `Notes` selects 2, 3, 4, or 5 chord tones for every progression step. Two-note voicings retain root and third; three-note voicings use the complete triad; four- and five-note voicings add octave doublings from the chord root upward.
+- Global `Inversion` rotates the selected number of lowest voices upward by octaves. Available inversion choices are root through one fewer than the chosen note count.
+- Every rendered chord row shows the progression degree, resolved chord quality, and its own `Notes` and `Inversion` controls. A per-chord selection overrides the global choice for that step only. Changing either global control reapplies the new setting to every step and clears prior per-chord overrides.
+- A voicing resolves only when every generated MIDI pitch maps to an exact physical Exquis button. The resolver selects the most compact playable grip; unavailable voicings are reported rather than approximated, truncated, or mapped to neighboring pitches.
+- Every applied voicing rebuilds the current progression at step one, updates highlighted targets and fingers, and uses the existing simultaneous-grip scorer.
+
+### Fingering Contexts
+
+Finger guidance has two deliberately distinct meanings. Sequential exercises teach the next physical finger for one note at a time and may use descriptive names such as `Index (2)` or `Ring (4)`. Simultaneous grips, including progression voicings, teach the finger's position within the chord shape instead: every current chord target displays one unique numeric `Chord finger` value from 1 through 5. The assignment is derived from the active physical grip size: a two-note grip receives the centered contiguous span `2-3`, a three-note `C-E-G` grip receives `2-3-4`, four notes receive `1-2-3-4`, and five notes receive `1-2-3-4-5`. Successive chord voices use successive finger positions, regardless of hand-side preference; no piano-interval tables or hand reversal participate in simultaneous-grip guidance. A chord view never overlays sequence-finger labels on the same target surface, and assistive text identifies the active context as either `Sequence finger` or `Chord finger`.
 
 ## Test Expectations
 

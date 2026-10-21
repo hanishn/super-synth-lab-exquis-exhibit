@@ -1049,6 +1049,7 @@
     gripFingeringOption: 'primary',
     harmonyQuality: 'major',
     harmonyInversion: 0,
+    progressionVoicing: { noteCount: 3, inversion: 0, overrides: {} },
     heldNotes: {},
     channelNotes: {},
     correctCount: 0,
@@ -1460,6 +1461,12 @@
     return 'ssli_progression_' + genreIndex + '_' + progressionIndex;
   }
 
+  function ssliProgressionDisplayName(progression) {
+    var name = progression && progression.name ? progression.name : 'Untitled progression';
+    var usage = progression && progression.usage ? progression.usage : '';
+    return usage ? name + ' - ' + usage : name;
+  }
+
   function getSsliProgressionByExerciseId(exerciseId) {
     var match = /^ssli_progression_(\d+)_(\d+)$/.exec(exerciseId || '');
     if (!match) return null;
@@ -1475,7 +1482,7 @@
       progression: progression,
       exercise: {
         id: exerciseId,
-        name: progression.name,
+        name: ssliProgressionDisplayName(progression),
         family: 'progressions',
         prompt: group.genre + ': ' + (progression.usage || 'SSLI progression library')
       }
@@ -4514,6 +4521,36 @@
     diminished: [0, 3, 6],
     augmented: [0, 4, 8]
   };
+
+  function chordVoicingOffsets(quality, noteCount, inversion) {
+    var intervals = HARMONY_TRIAD_INTERVALS[quality];
+    var count = Math.max(2, Math.min(5, parseInt(noteCount, 10) || 3));
+    var offsets = intervals ? intervals.slice() : [];
+    if (!offsets.length) return null;
+    while (offsets.length < count) offsets.push(intervals[(offsets.length - intervals.length) % intervals.length] + 12);
+    offsets = offsets.slice(0, count);
+    var turns = Math.max(0, Math.min(count - 1, parseInt(inversion, 10) || 0));
+    for (var i = 0; i < turns; i++) offsets.push(offsets.shift() + 12);
+    offsets.sort(function(a, b) { return a - b; });
+    // A physical pad cannot represent the same doubled MIDI pitch twice.
+    // Continue the chord-tone cycle upward when inversion creates a collision.
+    for (var oi = 1; oi < offsets.length; oi++) {
+      if (offsets[oi] <= offsets[oi - 1]) {
+        var nextOffset = intervals[(oi + turns) % intervals.length];
+        while (nextOffset <= offsets[oi - 1]) nextOffset += 12;
+        offsets[oi] = nextOffset;
+      }
+    }
+    return offsets;
+  }
+
+  function progressionVoicingForStep(step) {
+    var override = state.progressionVoicing.overrides[step] || {};
+    var count = override.noteCount || state.progressionVoicing.noteCount;
+    var inversion = override.inversion;
+    if (typeof inversion !== 'number') inversion = state.progressionVoicing.inversion;
+    return { noteCount: count, inversion: Math.min(count - 1, inversion) };
+  }
   var PROGRESSION_FIXTURES = {
     'c-major-i-iv-v-i': {
       label: 'I-IV-V-I',
@@ -4681,6 +4718,12 @@
     return cells.filter(function(cell) { return cell.midi === midi; });
   }
 
+  function innerRowPenalty(cell) {
+    // Rows 3 through 7 are the practical center of the Exquis surface.
+    // Outer rows remain available only when a pitch has no inner placement.
+    return Math.max(0, Math.abs(cell.row - 5) - 2);
+  }
+
   function ergonomicGripScore(gripCells) {
     var minX = Infinity;
     var maxX = -Infinity;
@@ -4693,6 +4736,7 @@
       minY = Math.min(minY, cell.y);
       maxY = Math.max(maxY, cell.y);
       centerCost += centerScore(cell);
+      centerCost += innerRowPenalty(cell) * 16;
     });
     // Keep simultaneous grips compact in the physical vertical direction;
     // edge-spanning voicings are harder to land together than close clusters.
@@ -4724,16 +4768,33 @@
   }
 
   function resolvePlayableTriadRootMidi(desiredRootMidi, quality) {
-    var intervals = HARMONY_TRIAD_INTERVALS[quality];
+    return resolvePlayableChordRootMidi(desiredRootMidi, quality, 3, 0);
+  }
+
+  function exquisChordFingerPattern(noteCount) {
+    var count = Math.max(2, Math.min(5, parseInt(noteCount, 10) || 3));
+    // Compact Exquis grips use consecutive physical fingers. Center short
+    // spans in the hand; chord voice order, not piano keyboard direction,
+    // determines which target receives each successive position.
+    var firstFinger = Math.max(1, Math.ceil((6 - count) / 2));
+    var fingers = [];
+    for (var finger = firstFinger; finger < firstFinger + count; finger++) {
+      fingers.push(finger);
+    }
+    return fingers;
+  }
+
+  function resolvePlayableChordRootMidi(desiredRootMidi, quality, noteCount, inversion) {
+    var offsets = chordVoicingOffsets(quality, noteCount, inversion);
     var cells = makeGrid();
-    if (!intervals) return null;
+    if (!offsets) return null;
     var seenMidis = {};
     var best = null;
     var bestScore = Infinity;
     cells.forEach(function(cell) {
       if (cell.pc !== mod(desiredRootMidi, 12) || seenMidis[cell.midi]) return;
       seenMidis[cell.midi] = true;
-      var targetMidis = intervals.map(function(interval) { return cell.midi + interval; });
+      var targetMidis = offsets.map(function(offset) { return cell.midi + offset; });
       var gripCells = selectErgonomicGripCells(cells, targetMidis);
       if (!gripCells) return;
       var score = Math.abs(cell.midi - desiredRootMidi) * 32 + ergonomicGripScore(gripCells);
@@ -4747,12 +4808,10 @@
 
   function buildHarmonyGripFixture(spec) {
     spec = spec || {};
-    var intervals = HARMONY_TRIAD_INTERVALS[spec.quality];
-    var inversion = Math.max(0, Math.min(2, parseInt(spec.inversion, 10) || 0));
-    if (!intervals || typeof spec.rootMidi !== 'number') return null;
-    var offsets = intervals.map(function(interval, index) {
-      return interval + (index < inversion ? 12 : 0);
-    }).sort(function(a, b) { return a - b; });
+    var noteCount = Math.max(2, Math.min(5, parseInt(spec.noteCount, 10) || 3));
+    var inversion = Math.max(0, Math.min(noteCount - 1, parseInt(spec.inversion, 10) || 0));
+    var offsets = chordVoicingOffsets(spec.quality, noteCount, inversion);
+    if (!offsets || typeof spec.rootMidi !== 'number') return null;
     var cells = makeGrid();
     var root;
     var gripCells;
@@ -4770,8 +4829,9 @@
       });
       if (gripCells.some(function(cell) { return !cell; })) return null;
     }
-    var inversionName = ['root', 'first', 'second'][inversion];
-    var fingers = state.hand === 'right' ? [1, 3, 5] : [5, 3, 1];
+    var inversionName = inversion === 0 ? 'root' : String(inversion) + (inversion === 1 ? 'st' : inversion === 2 ? 'nd' : inversion === 3 ? 'rd' : 'th');
+    // Chord positions follow neighboring Exquis buttons, not piano interval spacing.
+    var fingers = exquisChordFingerPattern(noteCount);
     return createGripExerciseEvent({
       id: spec.id || spec.quality + ':' + inversionName,
       musicalIntent: { type: 'triad', quality: spec.quality, inversion: inversionName },
@@ -4789,11 +4849,14 @@
     var tonicPc = mod(requestedTonicPc, 12);
     var transposition = mod(tonicPc - (fixture.tonicPc || 0), 12);
     var events = fixture.chords.map(function(chord, index) {
+      var voicing = progressionVoicingForStep(index);
+      var playableRootMidi = resolvePlayableChordRootMidi(chord.rootMidi + transposition, chord.quality, voicing.noteCount, voicing.inversion);
       var event = buildHarmonyGripFixture({
         id: id + ':' + index + ':' + chord.degree,
         quality: chord.quality,
-        rootMidi: chord.rootMidi + transposition,
-        inversion: chord.inversion,
+        rootMidi: playableRootMidi,
+        inversion: voicing.inversion,
+        noteCount: voicing.noteCount,
         compactVoicing: true
       });
       if (event) {
@@ -4829,13 +4892,15 @@
       if (typeof interval !== 'number' || !quality) return null;
       var rootMidi = 48 + interval;
       if (rootMidi > 52) rootMidi -= 12;
-      var playableRootMidi = resolvePlayableTriadRootMidi(rootMidi + resolvedTonicPc, quality);
+      var voicing = progressionVoicingForStep(index);
+      var playableRootMidi = resolvePlayableChordRootMidi(rootMidi + resolvedTonicPc, quality, voicing.noteCount, voicing.inversion);
       if (playableRootMidi === null) return null;
       var event = buildHarmonyGripFixture({
         id: ssliProgressionExerciseId(genreIndex, progressionIndex) + ':' + index,
         quality: quality,
         rootMidi: playableRootMidi,
-        inversion: 0,
+        inversion: voicing.inversion,
+        noteCount: voicing.noteCount,
         compactVoicing: true
       });
       if (event) {
@@ -4970,7 +5035,7 @@
         id: state.exerciseId,
         musicalIntent: { type: 'heard-interval', quality: heardInterval.quality, promptMidis: heardCells.map(function(cell) { return cell.midi; }), concealTargets: true },
         targets: heardCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
-        fingerAssignments: heardCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: state.hand === 'right' ? [1, 3][index] : [5, 3][index] }; }),
+        fingerAssignments: heardCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: exquisChordFingerPattern(heardCells.length)[index] }; }),
         sourceCell: clonePathCell(heardCells[0]),
         sourceCells: heardCells.map(clonePathCell)
       })];
@@ -5011,8 +5076,7 @@
         id: state.exerciseId + ':root-position',
         musicalIntent: state.exerciseId === 'major_third' ? { type: 'interval', quality: 'major-third' } : { type: 'triad', quality: 'major', inversion: 'root' },
         targets: gripCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
-        fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: fingers[index % fingers.length] }; }),
-        fingeringAlternatives: [{ id: 'compact', label: 'Compact 5-3-1', assignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: state.hand === 'right' ? [1, 3, 5][index] : [5, 3, 1][index] }; }) }],
+        fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: exquisChordFingerPattern(gripCells.length)[index] }; }),
         sourceCell: clonePathCell(gripCells[0]),
         sourceCells: gripCells.map(clonePathCell)
       })];
@@ -5204,12 +5268,20 @@
     if (state.mode !== 'practice') return 'Play freely across the full Exquis surface.';
     if (event && event.type === 'grip') {
       var gripFingers = (gripAssignments || []).map(function(assignment) {
-        return fingerDisplayName(assignment.finger);
+        return String(assignment.finger);
       }).join(', ');
-      return 'Press every highlighted button together' + (gripFingers ? '. Suggested fingers: ' + gripFingers + '.' : '.');
+      return 'Press every highlighted button together' + (gripFingers ? '. Chord positions: ' + gripFingers + '.' : '.');
     }
     if (!current) return 'Choose a lesson target to begin.';
     return 'Press the highlighted ' + noteLabelFromMidi(current.midi) + ' with ' + fingerDisplayName(finger) + '.';
+  }
+
+  function gripFingerAssignments(event) {
+    if (!event || !event.fingering) return [];
+    var selected = (event.fingering.alternatives || []).filter(function(option) {
+      return option.id === state.gripFingeringOption;
+    })[0];
+    return selected ? selected.assignments : (event.fingering.assignments || []);
   }
 
   function setMode(mode) {
@@ -6161,7 +6233,7 @@
     return group.progressions.map(function(progression, progressionIndex) {
       return {
         id: ssliProgressionExerciseId(genreIndex, progressionIndex),
-        name: progression.name,
+        name: ssliProgressionDisplayName(progression),
         family: 'progressions',
         prompt: group.genre + ': ' + (progression.usage || 'SSLI progression library')
       };
@@ -6196,6 +6268,42 @@
     syncFxSelectorsFromPreset();
     renderSoundSelectorOptions();
     renderFxSelectorOptions();
+  }
+
+  function appendInversionOptions(select, noteCount, selected) {
+    clearChildren(select);
+    for (var inversion = 0; inversion < noteCount; inversion++) {
+      var option = document.createElement('option');
+      option.value = String(inversion);
+      option.textContent = inversion === 0 ? 'Root' : String(inversion) + (inversion === 1 ? 'st' : inversion === 2 ? 'nd' : inversion === 3 ? 'rd' : 'th');
+      select.appendChild(option);
+    }
+    select.value = String(Math.min(noteCount - 1, selected));
+  }
+
+  function renderProgressionVoicingControls(events, active) {
+    if (!els.progressionVoicingPanel) return;
+    els.progressionVoicingPanel.hidden = !active;
+    if (!active) return;
+    els.progressionGlobalNoteCount.value = String(state.progressionVoicing.noteCount);
+    appendInversionOptions(els.progressionGlobalInversion, state.progressionVoicing.noteCount, state.progressionVoicing.inversion);
+    clearChildren(els.progressionChordRows);
+    events.forEach(function(event, index) {
+      var voicing = progressionVoicingForStep(index);
+      var row = document.createElement('div');
+      row.className = 'progression-chord-row';
+      row.setAttribute('data-testid', 'progression-chord-row');
+      row.dataset.step = String(index);
+      var degree = document.createElement('span'); degree.className = 'progression-chord-degree'; degree.setAttribute('data-testid', 'progression-chord-degree'); degree.textContent = event.musicalIntent.degree;
+      var quality = document.createElement('span'); quality.className = 'progression-chord-quality'; quality.textContent = event.musicalIntent.quality;
+      var noteLabel = document.createElement('label'); noteLabel.innerHTML = '<span>Notes</span>';
+      var noteSelect = document.createElement('select'); noteSelect.setAttribute('data-testid', 'progression-chord-note-count');
+      [2, 3, 4, 5].forEach(function(count) { var option = document.createElement('option'); option.value = String(count); option.textContent = String(count); noteSelect.appendChild(option); });
+      noteSelect.value = String(voicing.noteCount); noteLabel.appendChild(noteSelect);
+      var inversionLabel = document.createElement('label'); inversionLabel.innerHTML = '<span>Inversion</span>';
+      var inversionSelect = document.createElement('select'); inversionSelect.setAttribute('data-testid', 'progression-chord-inversion'); appendInversionOptions(inversionSelect, voicing.noteCount, voicing.inversion); inversionLabel.appendChild(inversionSelect);
+      row.appendChild(degree); row.appendChild(quality); row.appendChild(noteLabel); row.appendChild(inversionLabel); els.progressionChordRows.appendChild(row);
+    });
   }
 
   function render() {
@@ -6242,11 +6350,15 @@
     var currentStepIndex = state.step;
     currentEvent = expectedExerciseEvent();
     var currentGripTargetsByKey = {};
+    var currentGripFingerByCell = {};
     var currentGripTargetNotes = [];
     if (isPracticeMode && currentEvent && currentEvent.type === 'grip') {
       currentEvent.targets.forEach(function(target, index) {
         currentGripTargetsByKey[target.cellId + ':' + target.midi] = index + 1;
         currentGripTargetNotes.push(noteLabelFromMidi(target.midi));
+      });
+      gripFingerAssignments(currentEvent).forEach(function(assignment) {
+        currentGripFingerByCell[assignment.cellId] = assignment.finger;
       });
     }
     var currentFinger = path.length ? fingers[mod(state.step, fingers.length)] : '';
@@ -6387,16 +6499,22 @@
       if (isCurrentGripTarget) {
         key.insertAdjacentHTML('beforeend', '<svg class="chord-target-hex-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon class="chord-target-hex-underlay" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon><polygon class="chord-target-hex-stroke" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon></svg>');
       }
-      if (isPracticeMode && inPath && state.view === 'practice') {
+      if (isPracticeMode && isCurrentGripTarget && state.view === 'practice') {
+        var chordFinger = document.createElement('span');
+        chordFinger.className = 'finger chord-finger';
+        chordFinger.textContent = String(currentGripFingerByCell[cell.id] || currentGripTargetIndex);
+        chordFinger.setAttribute('aria-label', 'Chord finger ' + String(currentGripFingerByCell[cell.id] || currentGripTargetIndex));
+        key.appendChild(chordFinger);
+      } else if (isPracticeMode && inPath && state.view === 'practice' && !(currentEvent && currentEvent.type === 'grip')) {
         var degree = document.createElement('span');
         degree.className = 'degree-badge';
         degree.textContent = String((pathIndexById[cell.id] || 0) + 1);
         degree.setAttribute('aria-label', 'Step ' + String((pathIndexById[cell.id] || 0) + 1));
         key.appendChild(degree);
         var finger = document.createElement('span');
-        finger.className = 'finger';
+        finger.className = 'finger sequence-finger';
         finger.textContent = fingerShortName(fingerById[cell.id]);
-        finger.setAttribute('aria-label', fingerDisplayName(fingerById[cell.id]));
+        finger.setAttribute('aria-label', 'Sequence finger ' + fingerDisplayName(fingerById[cell.id]));
         key.appendChild(finger);
       }
       els.keyboard.appendChild(key);
@@ -6456,8 +6574,7 @@
     els.currentDegree.textContent = isPracticeMode && currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.progressionId
       ? 'Progression ' + currentEvent.musicalIntent.degree
       : (isPracticeMode && currentEvent && currentEvent.type === 'grip' ? 'Simultaneous ' + (currentEvent.musicalIntent.quality || 'multi-note') + ' grip' : (isPracticeMode && current ? 'Scale degree ' + getScaleDegree(current, scale) : 'No target in play mode'));
-    var selectedGripFingering = currentEvent && currentEvent.fingering && currentEvent.fingering.alternatives.filter(function(option) { return option.id === state.gripFingeringOption; })[0];
-    var displayedGripAssignments = selectedGripFingering ? selectedGripFingering.assignments : (currentEvent && currentEvent.fingering ? currentEvent.fingering.assignments : []);
+    var displayedGripAssignments = gripFingerAssignments(currentEvent);
     var concealCoachTarget = !!(currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets);
     var coachTarget = concealCoachTarget ? 'Listen, then answer' : (isPracticeMode && currentEvent && currentEvent.type === 'grip'
       ? currentEvent.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ')
@@ -6476,16 +6593,20 @@
     if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
     var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
     if (els.practiceTitle) els.practiceTitle.textContent = progressionPractice ? 'Progression lab' : 'Scale map';
+    if (els.exerciseLegend) els.exerciseLegend.textContent = progressionPractice ? 'Progression' : 'Exercise';
     if (els.practiceWorkflowControls) els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
+    renderProgressionVoicingControls(currentExerciseEvents, progressionPractice);
     if (els.progressionGenreControl) els.progressionGenreControl.hidden = state.exerciseFamily !== 'progressions';
     if (els.octaveControl) els.octaveControl.hidden = progressionPractice;
     if (els.rootControl) els.rootControl.hidden = progressionPractice;
     if (els.fingeringControl) els.fingeringControl.hidden = progressionPractice;
     if (els.progressionGenre) els.progressionGenre.value = state.progressionGenre;
-    if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? displayedGripAssignments.map(function(assignment) { return fingerDisplayName(assignment.finger); }).join(' / ') : (isPracticeMode && current ? fingerDisplayName(currentFinger) : 'Finger --');
+    if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? 'Chord ' + displayedGripAssignments.map(function(assignment) { return String(assignment.finger); }).join(' / ') : (isPracticeMode && current ? 'Sequence ' + fingerDisplayName(currentFinger) : 'Finger --');
     if (els.targetStep) els.targetStep.textContent = isPracticeMode && currentEvent ? 'Step ' + String(state.step + 1) + ' of ' + String(currentExerciseEvents.length) : 'Step --';
     if (els.buttonReason) els.buttonReason.textContent = isPracticeMode && current ? describeButtonChoice(cells, current, rootCell) : 'Free-play chooses any physical button.';
-    if (els.fingerReason) els.fingerReason.textContent = isPracticeMode && current ? describeFingerChoice(strategy, currentStepIndex, currentFinger, fingers) : 'No fingering scaffold in play mode.';
+    if (els.fingerReason) els.fingerReason.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip'
+      ? 'Chord positions ' + displayedGripAssignments.map(function(assignment) { return String(assignment.finger); }).join(', ') + ' identify slots in the current simultaneous shape, not single-note sequence fingers.'
+      : (isPracticeMode && current ? describeFingerChoice(strategy, currentStepIndex, currentFinger, fingers) : 'No fingering scaffold in play mode.');
     if (els.motionReason) els.motionReason.textContent = isPracticeMode && current ? describeMotionChoice(strategy, currentStepIndex, fingers) : 'Move freely in play mode.';
     if (els.ergonomicReason) {
       els.ergonomicReason.textContent = isPracticeMode && current ? ergonomicStep.text : 'Movement load: not scored in play mode.';
@@ -6701,6 +6822,31 @@
         render();
       });
     }
+    if (els.progressionGlobalNoteCount) {
+      els.progressionGlobalNoteCount.addEventListener('change', function() {
+        state.progressionVoicing.noteCount = parseInt(els.progressionGlobalNoteCount.value, 10) || 3;
+        state.progressionVoicing.inversion = Math.min(state.progressionVoicing.noteCount - 1, state.progressionVoicing.inversion);
+        state.progressionVoicing.overrides = {};
+        state.step = 0;
+        render();
+      });
+      els.progressionGlobalInversion.addEventListener('change', function() {
+        state.progressionVoicing.inversion = parseInt(els.progressionGlobalInversion.value, 10) || 0;
+        state.progressionVoicing.overrides = {};
+        state.step = 0;
+        render();
+      });
+      els.progressionChordRows.addEventListener('change', function(event) {
+        var row = event.target.closest('[data-testid="progression-chord-row"]');
+        if (!row) return;
+        var step = parseInt(row.dataset.step, 10);
+        var noteCount = parseInt(row.querySelector('[data-testid="progression-chord-note-count"]').value, 10) || state.progressionVoicing.noteCount;
+        var inversion = parseInt(row.querySelector('[data-testid="progression-chord-inversion"]').value, 10) || 0;
+        state.progressionVoicing.overrides[step] = { noteCount: noteCount, inversion: Math.min(noteCount - 1, inversion) };
+        state.step = 0;
+        render();
+      });
+    }
     els.strategy.addEventListener('change', function() {
       state.strategyId = els.strategy.value;
       render();
@@ -6891,11 +7037,16 @@
       hand: document.getElementById('handSelect'),
       handButtons: document.getElementById('handButtons'),
       exercise: document.getElementById('exerciseSelect'),
+      exerciseLegend: document.getElementById('exerciseControlLegend'),
       exerciseButtons: document.getElementById('exerciseButtons'),
       exerciseFamily: document.getElementById('exerciseFamilySelect'),
       progressionGenre: document.getElementById('progressionGenreSelect'),
       progressionGenreControl: document.getElementById('progressionGenreControl'),
       practiceWorkflowControls: document.getElementById('practiceWorkflowControls'),
+      progressionVoicingPanel: document.getElementById('progressionVoicingPanel'),
+      progressionGlobalNoteCount: document.getElementById('progressionGlobalNoteCount'),
+      progressionGlobalInversion: document.getElementById('progressionGlobalInversion'),
+      progressionChordRows: document.getElementById('progressionChordRows'),
       practiceTitle: document.getElementById('practiceTitle'),
       octaveControl: document.getElementById('octaveControl'),
       rootControl: document.getElementById('rootControl'),

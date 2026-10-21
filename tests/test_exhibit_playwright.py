@@ -158,6 +158,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "first_ssli_prompt_must_fall_back_until_preset_output_is_ready": "test_regression_first_ssli_prompt_falls_back_until_preset_output_is_ready",
         "first_fallback_note_must_wait_for_audio_context_resume": "test_regression_first_fallback_note_waits_for_audio_context_resume",
         "progression_current_chord_must_highlight_every_target_button": "test_regression_progression_current_chord_highlights_every_target_button",
+        "major_progression_must_replace_prior_minor_path_with_selected_key_lights": "test_regression_major_progression_replaces_minor_scale_path_with_current_chord_targets",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
         "exquis_key_mode_sync_must_use_official_developer_sysex": "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
@@ -1245,6 +1246,21 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(result["progressions"], 466, result)
         self.assertEqual(result["invalid"], [], result)
 
+    def test_regression_major_progression_replaces_minor_scale_path_with_current_chord_targets(self):
+        self.page.select_option('[data-testid="scale-select"]', 'aeolian')
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'starter')
+        self.page.select_option('[data-testid="exercise-select"]', 'major_i_iv_vi_v')
+        self.assertEqual(self.page.locator('[data-testid="scale-select"]').input_value(), 'ionian')
+        visible = self.page.locator('[data-testid="exquis-key"]').evaluate_all("""keys => keys
+          .filter(key => key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('in-scale'))
+          .map(key => key.dataset.cellId)""")
+        hardware_lit = self.page.locator('.key.hardware-lit').evaluate_all("keys => keys.map(key => key.dataset.cellId)")
+        chord_targets = self.page.locator('.key.current-grip-target').evaluate_all("keys => keys.map(key => key.dataset.cellId)")
+        self.assertEqual(sorted(visible), sorted(hardware_lit))
+        self.assertGreater(len(hardware_lit), 0)
+        self.assertEqual(len(chord_targets), 3)
+
     def test_regression_imported_progression_catalog_uses_learner_facing_labels(self):
         source_metadata = self.page.evaluate("""() => window.SSLI_VENDOR.progressionGroups.flatMap((group) => (
           group.progressions.map((progression) => ({ name: progression.name, usage: progression.usage }))
@@ -1461,6 +1477,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(events, ["resume", "before-resolve", "start"])
 
     def test_regression_progression_current_chord_highlights_every_target_button(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
         self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
         targets = self.page.locator('[data-testid="exquis-key"].current-grip-target')
         self.assertEqual(targets.count(), 3)
@@ -1472,9 +1489,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         outlines = targets.locator('.chord-target-hex-outline .chord-target-hex-stroke')
         self.assertEqual(outlines.count(), 3)
         self.assertEqual(targets.locator('.chord-target-hex-outline .chord-target-hex-underlay').count(), 3)
+        self.assertIn('Chord target:', bracket.get_attribute('aria-label'))
+        self.assertIn('press together', bracket.get_attribute('aria-label'))
+        self.assertEqual(bracket.locator('[data-testid="chord-target-bracket-label"]').text_content(), 'Chord target: press together')
         self.assertTrue(all(color == "rgb(138, 46, 255)" for color in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).stroke)")))
         self.assertTrue(all(width == "3px" for width in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).strokeWidth)")))
-        self.assertEqual(bracket.evaluate("element => getComputedStyle(element, '::before').content"), "none")
+        self.assertEqual(bracket.locator('[data-testid="chord-target-bracket-label"]').evaluate("element => getComputedStyle(element).textTransform"), "uppercase")
         bracket_box = bracket.bounding_box()
         target_boxes = targets.evaluate_all("elements => elements.map((element) => element.getBoundingClientRect().toJSON())")
         self.assertIsNotNone(bracket_box)
@@ -2494,7 +2514,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247]), last_led_index)
         self.assertLess(last_led_index, transaction.index([240, 0, 33, 126, 127, 6, 247]))
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 6, 247]), transaction.index([240, 0, 33, 126, 127, 7, 247]))
-        self.assertNotIn([240, 0, 33, 126, 247], sent)
+        self.assertIn([240, 0, 33, 126, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 4, 2, 29, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 7, 2, 127, 95, 63, 247], sent)
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0xF7] })")

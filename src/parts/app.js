@@ -4736,6 +4736,31 @@
     phrygian_i_bII_vamp: 'c-phrygian-i-bII-vamp'
   };
 
+  function canonicalScaleForProgressionExercise(exerciseId) {
+    var fixtureId = PROGRESSION_EXERCISE_FIXTURE_IDS[exerciseId] || '';
+    if (fixtureId.indexOf('c-major-') === 0) return 'ionian';
+    if (fixtureId.indexOf('c-minor-') === 0) return 'aeolian';
+    if (fixtureId.indexOf('c-dorian-') === 0) return 'dorian';
+    if (fixtureId.indexOf('c-phrygian-') === 0) return 'phrygian';
+    return '';
+  }
+
+  function applyCanonicalProgressionScale() {
+    var scaleId = canonicalScaleForProgressionExercise(state.exerciseId);
+    if (!scaleId) return false;
+    var changed = false;
+    if (state.scaleId !== scaleId) {
+      state.scaleId = scaleId;
+      state.rootCellId = '';
+      changed = true;
+    }
+    if (state.view !== 'practice') {
+      state.view = 'practice';
+      changed = true;
+    }
+    return changed;
+  }
+
   var REPERTOIRE_LESSONS = [
     {
       id: 'repertoire_anthem_progression',
@@ -5972,7 +5997,7 @@
       var shouldLog = now - lastExquisLegacyKeepaliveLogAt > 5000;
       if (shouldLog) lastExquisLegacyKeepaliveLogAt = now;
       sendExquisLegacyKeepalive(shouldLog ? 'Exquis legacy keepalive tick' : '');
-    }, 380);
+    }, 250);
   }
 
   function stopExquisLegacyKeepalive() {
@@ -6109,7 +6134,7 @@
     cells.forEach(function(cell, index) {
       var key = els.keyboard ? els.keyboard.querySelector('[data-cell-id="' + cell.id + '"]') : null;
       var isVisibleTonic = key && key.classList.contains('tonic') && !key.classList.contains('dimmed');
-      var isVisibleTarget = key && (key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('in-scale')) && !key.classList.contains('dimmed');
+      var isVisibleTarget = key && (key.classList.contains('current-grip-target') || ((key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('in-scale')) && !key.classList.contains('dimmed')));
       var color = isVisibleTonic ? [0x7F, 0x5F, 0x3F] : (isVisibleTarget ? [0x38, 0x1D, 0x41] : [0x00, 0x00, 0x00]);
       var paletteIndex = color[0] === 0x7F ? 3 : (color[0] === 0x38 ? 2 : 1);
       scheduleExquisKeyModeSync(function() {
@@ -6204,6 +6229,7 @@
     }
     state.exquisSyncEnabled = true;
     state.exquisSyncStatus = 'Exquis sync: starting';
+    startExquisLegacyKeepalive();
     syncExquisKeyModeToHardware();
   }
 
@@ -6359,6 +6385,7 @@
     if (!exercises.some(function(exercise) { return exercise.id === state.exerciseId; })) {
       state.exerciseId = exercises.length ? exercises[0].id : EXERCISES[0].id;
     }
+    applyCanonicalProgressionScale();
     for (var i = 0; i < exercises.length; i++) {
       var exercise = exercises[i];
       var eo = document.createElement('option');
@@ -6513,6 +6540,9 @@
     var exercise = getExercise();
     var fingers = getStrategyFingers(strategy);
     var isPracticeMode = state.mode === 'practice';
+    var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
+    var repertoirePractice = isPracticeMode && state.exerciseFamily === 'repertoire';
+    var chordPractice = progressionPractice || repertoirePractice;
     renderRootOptions(logicCells);
     if (els.tonic) els.tonic.value = String(state.tonicPc);
     if (els.scale) els.scale.value = state.scaleId;
@@ -6528,7 +6558,7 @@
     }, []);
     var currentEvent = expectedExerciseEvent();
     var concealExerciseTargets = !!(isPracticeMode && currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets);
-    var path = concealExerciseTargets ? [] : currentPath;
+    var path = concealExerciseTargets || chordPractice ? [] : currentPath;
     var current = path.length ? path[mod(state.step, path.length)] : null;
     var rootId = state.rootCellId;
     var rootCell = null;
@@ -6614,11 +6644,18 @@
       var minTargetY = Math.min.apply(null, currentGripCells.map(function(cell) { return cell.y + shiftY - keyHeight / 2; }));
       var maxTargetY = Math.max.apply(null, currentGripCells.map(function(cell) { return cell.y + shiftY + keyHeight / 2; }));
       var bracket = document.createElement('div');
+      var chordTargetLabel = 'Chord target: press together';
+      var bracketLabel = document.createElement('span');
       var progressionDegree = currentEvent.musicalIntent && currentEvent.musicalIntent.degree ? currentEvent.musicalIntent.degree + ' · ' : '';
       bracket.className = 'chord-target-bracket';
       bracket.setAttribute('data-testid', 'chord-target-bracket');
-      bracket.setAttribute('aria-hidden', 'true');
+      bracket.setAttribute('role', 'note');
+      bracket.setAttribute('aria-label', chordTargetLabel + ' (' + progressionDegree + currentGripTargetNotes.join(' · ') + ')');
       bracket.setAttribute('data-label', progressionDegree + currentGripTargetNotes.join(' · ') + ' together');
+      bracketLabel.className = 'chord-target-bracket-label';
+      bracketLabel.setAttribute('data-testid', 'chord-target-bracket-label');
+      bracketLabel.textContent = chordTargetLabel;
+      bracket.appendChild(bracketLabel);
       bracket.style.left = Math.round(minTargetX - 14) + 'px';
       bracket.style.top = Math.round(minTargetY - 14) + 'px';
       bracket.style.width = Math.round(maxTargetX - minTargetX + 28) + 'px';
@@ -6790,9 +6827,6 @@
       els.coachNextAction.setAttribute('aria-label', lastAttemptAccepted ? 'Continue to the next target' : 'Hear the current target');
     }
     if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
-    var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
-    var repertoirePractice = isPracticeMode && state.exerciseFamily === 'repertoire';
-    var chordPractice = progressionPractice || repertoirePractice;
     if (els.practiceTitle) els.practiceTitle.textContent = repertoirePractice ? 'Repertoire lab' : (progressionPractice ? 'Progression lab' : 'Scale map');
     if (els.exerciseLegend) els.exerciseLegend.textContent = repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise');
     if (els.practiceWorkflowControls) {
@@ -6992,15 +7026,19 @@
         if (!button) return;
         state.exerciseId = button.dataset.value;
         els.exercise.value = state.exerciseId;
+        applyCanonicalProgressionScale();
         state.step = 0;
         render();
+        if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
       });
     }
     els.exercise.addEventListener('change', function() {
       state.exerciseId = els.exercise.value;
       state.exerciseFamily = exerciseFamilyForId(state.exerciseId);
+      applyCanonicalProgressionScale();
       state.step = 0;
       render();
+      if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
     });
     if (els.exerciseFamily) {
       els.exerciseFamily.addEventListener('change', function() {
@@ -7009,6 +7047,7 @@
         state.step = 0;
         renderExerciseOptions();
         render();
+        if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
       });
     }
     if (els.progressionGenre) {
@@ -7018,6 +7057,7 @@
         state.step = 0;
         renderExerciseOptions();
         render();
+        if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
       });
     }
     if (els.repertoireSection) {

@@ -1238,8 +1238,20 @@ input[type="range"]:focus-visible {
   pointer-events: none;
 }
 
-.chord-target-bracket::before {
-  content: none;
+.chord-target-bracket-label {
+  position: absolute;
+  left: 8px;
+  top: -13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #35b9d6;
+  color: #10172d;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .key.calibration-target {

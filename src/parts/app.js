@@ -284,6 +284,7 @@
     { id: 'technique', name: 'Technique' },
     { id: 'shapes', name: 'Shapes' },
     { id: 'progressions', name: 'Progressions' },
+    { id: 'repertoire', name: 'Repertoire' },
     { id: 'ear', name: 'Ear training' }
   ];
   var HEARD_INTERVAL_FIXTURES = {
@@ -961,6 +962,7 @@
   var lastExquisLegacyKeepaliveLogAt = 0;
   var exquisLegacyNoteMapSent = false;
   var exquisSyncSuppressUntil = 0;
+  var exquisKeyModeSyncTimers = [];
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
@@ -1032,6 +1034,7 @@
     midiStatus: 'MIDI is off.',
     exquisSyncEnabled: false,
     exquisSyncStatus: 'Exquis sync: off',
+    exquisCustomScaleActive: false,
     exquisSysexAvailable: false,
     exquisProtocol: 'auto',
     exquisDialListenEnabled: false,
@@ -1050,6 +1053,9 @@
     harmonyQuality: 'major',
     harmonyInversion: 0,
     progressionVoicing: { noteCount: 3, inversion: 0, overrides: {} },
+    repertoireSectionId: '',
+    repertoireTempo: 0,
+    repertoireMastery: {},
     heldNotes: {},
     channelNotes: {},
     correctCount: 0,
@@ -1330,6 +1336,9 @@
   var EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK = 0x10;
   var EXQUIS_DEVELOPER_DIAL_LISTEN_MASK = EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_ENCODERS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK;
   var EXQUIS_DEVELOPER_LEGACY_PROBE_MASK = 0x20;
+  var EXQUIS_KEY_MODE_COMMAND_GAP_MS = 45;
+  var EXQUIS_LED_COMMAND_GAP_MS = 12;
+  var EXQUIS_PAD_COUNT = 61;
 
   function clamp7Bit(value) {
     return Math.max(0, Math.min(127, Math.round(Number(value) || 0)));
@@ -1403,6 +1412,7 @@
   }
 
   function updateTonicFromHardwareRoot(rootPc, source) {
+    cancelPendingExquisKeyModeSync();
     var incomingPc = mod(rootPc, 12);
     exquisSyncSuppressUntil = Date.now() + 250;
     if (incomingPc !== state.tonicPc) {
@@ -1415,6 +1425,7 @@
   }
 
   function updateScaleFromHardwareNumber(scaleNumber, source) {
+    cancelPendingExquisKeyModeSync();
     var scaleId = scaleIdForExquisNumber(scaleNumber);
     exquisSyncSuppressUntil = Date.now() + 250;
     if (scaleId) {
@@ -1454,6 +1465,15 @@
     }
     var sslProgression = getSsliProgressionByExerciseId(state.exerciseId);
     if (sslProgression) return sslProgression.exercise;
+    var repertoireLesson = repertoireLessonForId(state.exerciseId);
+    if (repertoireLesson) {
+      return {
+        id: repertoireLesson.id,
+        name: repertoireLesson.name,
+        family: 'repertoire',
+        prompt: repertoireLesson.style + ' repertoire at ' + String(repertoireLesson.tempo) + ' BPM.'
+      };
+    }
     return EXERCISES[0];
   }
 
@@ -2311,6 +2331,7 @@
       if (EXERCISES[i].id === exerciseId) return EXERCISES[i].family || 'technique';
     }
     if (getSsliProgressionByExerciseId(exerciseId)) return 'progressions';
+    if (repertoireLessonForId(exerciseId)) return 'repertoire';
     return 'technique';
   }
 
@@ -3920,6 +3941,7 @@
   }
 
   function expandConsole() {
+    if (els.practiceTools) els.practiceTools.open = true;
     if (els.consolePanel) {
       els.consolePanel.hidden = false;
       els.consolePanel.classList.add('expanded');
@@ -4714,6 +4736,74 @@
     phrygian_i_bII_vamp: 'c-phrygian-i-bII-vamp'
   };
 
+  var REPERTOIRE_LESSONS = [
+    {
+      id: 'repertoire_anthem_progression',
+      name: 'Anthem progression',
+      style: 'Pop & Rock',
+      tempo: 96,
+      sections: [
+        { id: 'verse', name: 'Verse', progressionId: 'major_i_v_vi_iv' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_iv_vi_v' }
+      ]
+    },
+    {
+      id: 'repertoire_12_bar_blues',
+      name: '12-bar blues form',
+      style: 'Blues',
+      tempo: 76,
+      sections: [
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_12_bar_blues' }
+      ]
+    }
+  ];
+
+  function repertoireLessonForId(id) {
+    for (var i = 0; i < REPERTOIRE_LESSONS.length; i++) {
+      if (REPERTOIRE_LESSONS[i].id === id) return REPERTOIRE_LESSONS[i];
+    }
+    return null;
+  }
+
+  function selectedRepertoireSection() {
+    var lesson = repertoireLessonForId(state.exerciseId);
+    if (!lesson) return null;
+    var section = lesson.sections.filter(function(candidate) {
+      return candidate.id === state.repertoireSectionId;
+    })[0] || lesson.sections[0];
+    if (section) state.repertoireSectionId = section.id;
+    return section ? { lesson: lesson, section: section } : null;
+  }
+
+  function repertoireTempo(selection) {
+    return Math.max(40, Math.min(240, state.repertoireTempo || selection.lesson.tempo));
+  }
+
+  function recordRepertoireLoop(event) {
+    if (!event || !event.musicalIntent || !event.musicalIntent.repertoireId) return;
+    if (mod(state.step, currentExerciseEvents.length) !== currentExerciseEvents.length - 1) return;
+    var key = event.musicalIntent.repertoireId + ':' + event.musicalIntent.repertoireSection;
+    state.repertoireMastery[key] = (state.repertoireMastery[key] || 0) + 1;
+  }
+
+  function repertoireCompletedLoopCount(selection) {
+    if (!selection) return 0;
+    return state.repertoireMastery[selection.lesson.id + ':' + selection.section.id] || 0;
+  }
+
+  function playRepertoireCountIn() {
+    var selection = selectedRepertoireSection();
+    if (!selection) return;
+    var beatMs = Math.round(60000 / repertoireTempo(selection));
+    setFeedback('Count in: 1, 2, 3, 4.', 'neutral');
+    for (var beat = 0; beat < 4; beat++) {
+      (function(index) {
+        window.setTimeout(function() { playNote(index === 0 ? 84 : 72, 0.06, true); }, index * beatMs);
+      })(beat);
+    }
+    render();
+  }
+
   function exactMidiCandidates(cells, midi) {
     return cells.filter(function(cell) { return cell.midi === midi; });
   }
@@ -5015,6 +5105,18 @@
   }
 
   function buildPracticeExerciseEvents(path, fingers) {
+    var repertoireSelection = selectedRepertoireSection();
+    if (repertoireSelection) {
+      var repertoireFixture = buildProgressionFixture(PROGRESSION_EXERCISE_FIXTURE_IDS[repertoireSelection.section.progressionId] || repertoireSelection.section.progressionId);
+      if (!repertoireFixture) return [];
+      repertoireFixture.events.forEach(function(event) {
+        event.musicalIntent.repertoireId = repertoireSelection.lesson.id;
+        event.musicalIntent.repertoireSection = repertoireSelection.section.id;
+        event.musicalIntent.repertoireSectionName = repertoireSelection.section.name;
+        event.musicalIntent.tempo = repertoireTempo(repertoireSelection);
+      });
+      return repertoireFixture.events;
+    }
     var ssliProgression = getSsliProgressionByExerciseId(state.exerciseId);
     if (ssliProgression) {
       var generatedProgression = buildSsliProgressionFixture(ssliProgression.genreIndex, ssliProgression.progressionIndex);
@@ -5399,6 +5501,7 @@
     if (expected && mod(midi, 12) === expected.pc) {
       state.correctCount += 1;
       state.streak += 1;
+      recordRepertoireLoop(expectedExerciseEvent());
       state.calibrated[expectedKey] = { expectedMidi: expected.midi, receivedMidi: midi, at: state.lastMidiAt };
       delete state.mismatched[expectedKey];
       setFeedback('Correct: ' + noteLabelFromMidi(midi) + ' matches the current target.', 'good');
@@ -5422,6 +5525,7 @@
     if (result.accepted) {
       state.correctCount += 1;
       state.streak += 1;
+      recordRepertoireLoop(event);
       var declaredOption = event.fingering.alternatives.filter(function(option) { return option.id === state.gripFingeringOption; })[0];
       setFeedback('Correct grip: ' + event.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ') + '.' + (declaredOption ? ' Declared ' + declaredOption.label + ' fingering.' : ''), 'good');
       if (state.autoAdvance) state.step += 1;
@@ -5547,7 +5651,14 @@
     var velocity = data.length > 2 ? data[2] : 0;
     var isNoteOn = status === 0x90 && velocity > 0;
     var isNoteOff = status === 0x80 || (status === 0x90 && velocity === 0);
-    if (isNoteOn) {
+    var developerPadCell = channel === 15 ? makeGrid().find(function(cell) { return exquisLegacyPadId(cell) === midi; }) : null;
+    if (developerPadCell && isNoteOn) {
+      handleMidiNote(developerPadCell.midi, velocity, channel);
+    } else if (developerPadCell && isNoteOff) {
+      releaseMidiNote(developerPadCell.midi, channel);
+    } else if (developerPadCell && status === 0xA0) {
+      updateMidiPressure(developerPadCell.midi, velocity, 'poly-aftertouch', channel);
+    } else if (isNoteOn) {
       handleMidiNote(midi, velocity, channel);
     } else if (isNoteOff) {
       releaseMidiNote(midi, channel);
@@ -5775,17 +5886,22 @@
     return sendRawMidi(buildExquisSysex(0x00, [enabled ? EXQUIS_DEVELOPER_PADS_MASK : 0x00]), 'Exquis sync send ' + reason);
   }
 
+  function sendOfficialSettingsDeveloperMode(enabled, reason) {
+    var mask = EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK;
+    return sendRawMidi(buildExquisSysex(0x00, [enabled ? mask : 0x00]), 'Exquis sync send ' + reason);
+  }
+
   function sendOfficialDialListenDeveloperMode(enabled, reason) {
     return sendRawMidi(buildExquisSysex(0x00, [enabled ? EXQUIS_DEVELOPER_DIAL_LISTEN_MASK : 0x00]), 'Exquis sync send ' + reason);
   }
 
   function beginOfficialKeyModeTransaction(reason) {
-    return sendOfficialPadsDeveloperMode(true, (reason || 'native-keymode') + ' developer-mode pads=0x01');
+    return sendOfficialSettingsDeveloperMode(true, (reason || 'native-keymode') + ' developer-mode pads+settings/sound=0x11');
   }
 
   function endOfficialKeyModeTransaction(reason) {
     if (state.exquisDialListenEnabled) return true;
-    return sendOfficialPadsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
+    return sendOfficialSettingsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
   }
 
   function sendRawMidi(bytes, reason) {
@@ -5815,12 +5931,12 @@
     var rootPc = mod(state.tonicPc, 12);
     var scaleIndex = exquisScaleNumberForScaleId(state.scaleId);
     sendRawMidi(buildExquisSysex(0x00, [mask]), 'Exquis native probe setup ' + label);
-    sendRawMidi(buildExquisSysex(0x06, [rootPc]), 'Exquis native probe root=' + getTonicName() + ' ' + label);
-    sendRawMidi(buildExquisSysex(0x07, [scaleIndex]), 'Exquis native probe scale=' + state.scaleId + ' index=' + scaleIndex + ' ' + label);
-    sendRawMidi(buildExquisSysex(0x03, []), 'Exquis native probe refresh ' + label);
-    sendRawMidi(buildExquisSysex(0x06, []), 'Exquis native probe root-readback ' + label);
-    sendRawMidi(buildExquisSysex(0x07, []), 'Exquis native probe scale-readback ' + label);
-    sendRawMidi(buildExquisSysex(0x00, [0x00]), 'Exquis native probe developer-mode off ' + label);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x06, [rootPc]), 'Exquis native probe root=' + getTonicName() + ' ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x07, [scaleIndex]), 'Exquis native probe scale=' + state.scaleId + ' index=' + scaleIndex + ' ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x03, []), 'Exquis native probe refresh ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x06, []), 'Exquis native probe root-readback ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 4);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x07, []), 'Exquis native probe scale-readback ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 5);
+    window.setTimeout(function() { sendRawMidi(buildExquisSysex(0x00, [0x00]), 'Exquis native probe developer-mode off ' + label); }, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6);
   }
 
   function exquisLegacyPadId(cell) {
@@ -5963,23 +6079,43 @@
     window.setTimeout(function() {
       state.exquisSyncStatus = 'Exquis native probe: complete; inspect console';
       render();
-    }, masks.length * 900 + 120);
+    }, masks.length * 900 + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 7);
     render();
   }
 
   function sendExquisRoot() {
-    beginOfficialKeyModeTransaction('root=' + getTonicName());
-    var ok = sendExquisSysex(0x06, [mod(state.tonicPc, 12)], 'root=' + getTonicName());
-    endOfficialKeyModeTransaction('root=' + getTonicName());
-    return ok;
+    return sendExquisSysex(0x06, [mod(state.tonicPc, 12)], 'root=' + getTonicName());
   }
 
   function sendExquisScale() {
-    var scaleIndex = exquisScaleNumberForScaleId(state.scaleId);
-    beginOfficialKeyModeTransaction('scale=' + state.scaleId);
-    var okNumber = sendExquisSysex(0x07, [scaleIndex], 'scale-index=' + scaleIndex);
-    endOfficialKeyModeTransaction('scale=' + state.scaleId);
-    return okNumber;
+    return sendExquisSysex(0x01, [1], 'custom-scale-list count=1');
+  }
+
+  function selectExquisCustomScale() {
+    return sendExquisSysex(0x07, [0], 'custom-scale-index=0');
+  }
+
+  function sendExquisCustomScaleDegrees() {
+    var degrees = scaleDegreesFor(state.scaleId);
+    return sendExquisSysex(0x08, degrees, 'custom-scale=' + state.scaleId + ' degrees=' + degrees.join(','));
+  }
+
+  function scheduleExquisPadColors(delayMs) {
+    var cells = makeGrid().slice().sort(function(a, b) { return exquisLegacyPadId(a) - exquisLegacyPadId(b); });
+    logEvent('midi', 'Exquis sync send pad-colors root=' + getTonicName() + ' scale=' + state.scaleId + ' count=' + cells.length);
+    scheduleExquisKeyModeSync(function() {
+      sendExquisSysex(0x02, [1, 0x00, 0x00, 0x00, 0x38, 0x1D, 0x41, 0x7F, 0x5F, 0x3F], 'pad-palette off/scale/root');
+    }, delayMs);
+    cells.forEach(function(cell, index) {
+      var key = els.keyboard ? els.keyboard.querySelector('[data-cell-id="' + cell.id + '"]') : null;
+      var isVisibleTonic = key && key.classList.contains('tonic') && !key.classList.contains('dimmed');
+      var isVisibleTarget = key && (key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('in-scale')) && !key.classList.contains('dimmed');
+      var color = isVisibleTonic ? [0x7F, 0x5F, 0x3F] : (isVisibleTarget ? [0x38, 0x1D, 0x41] : [0x00, 0x00, 0x00]);
+      var paletteIndex = color[0] === 0x7F ? 3 : (color[0] === 0x38 ? 2 : 1);
+      scheduleExquisKeyModeSync(function() {
+        sendRawMidi([0xBF, exquisLegacyPadId(cell), paletteIndex], '');
+      }, delayMs + (index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
+    });
   }
 
   function requestExquisReadback() {
@@ -5992,14 +6128,36 @@
     return sendExquisSysex(0x03, [], reason || 'refresh-display');
   }
 
+  function cancelPendingExquisKeyModeSync() {
+    exquisKeyModeSyncTimers.forEach(function(timer) { window.clearTimeout(timer); });
+    exquisKeyModeSyncTimers = [];
+  }
+
+  function scheduleExquisKeyModeSync(callback, delayMs) {
+    var timer = window.setTimeout(function() {
+      exquisKeyModeSyncTimers = exquisKeyModeSyncTimers.filter(function(candidate) { return candidate !== timer; });
+      callback();
+    }, delayMs);
+    exquisKeyModeSyncTimers.push(timer);
+  }
+
   function syncExquisKeyModeToHardware() {
     if (!state.exquisSyncEnabled) return;
-    sendExquisRoot();
-    sendExquisScale();
-    refreshExquisDisplay('refresh-after-sync');
-    requestExquisReadback();
-    sendExquisLegacyKeyMode('Exquis legacy key/mode after sync', { immediate: true });
-    state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name + ' / legacy lights';
+    cancelPendingExquisKeyModeSync();
+    beginOfficialKeyModeTransaction('key/mode sync');
+    state.exquisCustomScaleActive = true;
+    scheduleExquisKeyModeSync(sendExquisRoot, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
+    scheduleExquisKeyModeSync(sendExquisScale, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
+    scheduleExquisKeyModeSync(selectExquisCustomScale, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
+    scheduleExquisKeyModeSync(sendExquisCustomScaleDegrees, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 4);
+    var refreshDelay = EXQUIS_KEY_MODE_COMMAND_GAP_MS * 5;
+    scheduleExquisKeyModeSync(function() { refreshExquisDisplay('refresh-before-pad-colors'); }, refreshDelay);
+    var ledStartDelay = EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6;
+    scheduleExquisPadColors(ledStartDelay);
+    var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT + 1);
+    scheduleExquisKeyModeSync(function() { sendExquisSysex(0x06, [], 'request-root-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
+    scheduleExquisKeyModeSync(function() { sendExquisSysex(0x07, [], 'request-scale-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
+    state.exquisSyncStatus = 'Exquis sync: active ' + getTonicName() + ' ' + getScale().name + ' custom scale';
     render();
   }
 
@@ -6027,7 +6185,11 @@
     if (parsed.command === 0x06 && parsed.payload.length >= 1) {
       updateTonicFromHardwareRoot(parsed.payload[0], 'official SysEx');
     } else if (parsed.command === 0x07 && parsed.payload.length >= 1) {
-      updateScaleFromHardwareNumber(parsed.payload[0], 'official SysEx');
+      if (state.exquisCustomScaleActive && parsed.payload[0] === 0) {
+        logEvent('midi', 'Exquis custom scale index=' + parsed.payload[0] + ' retained as ' + state.scaleId);
+      } else {
+        updateScaleFromHardwareNumber(parsed.payload[0], 'official SysEx');
+      }
     } else if (parsed.command === 0x03) {
       if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
     }
@@ -6046,6 +6208,7 @@
   }
 
   function disableExquisSync() {
+    cancelPendingExquisKeyModeSync();
     if (exquisLegacySyncTimer) {
       window.clearTimeout(exquisLegacySyncTimer);
       exquisLegacySyncTimer = null;
@@ -6056,6 +6219,7 @@
       sendExquisLegacyKeepalive('Exquis legacy keepalive stop');
     }
     exquisLegacyNoteMapSent = false;
+    state.exquisCustomScaleActive = false;
     state.exquisSyncEnabled = false;
     state.exquisSyncStatus = 'Exquis sync: off';
     render();
@@ -6222,6 +6386,16 @@
   }
 
   function exercisesForSelectedFamily() {
+    if (state.exerciseFamily === 'repertoire') {
+      return REPERTOIRE_LESSONS.map(function(lesson) {
+        return {
+          id: lesson.id,
+          name: lesson.name,
+          family: 'repertoire',
+          prompt: lesson.style + ' repertoire at ' + String(lesson.tempo) + ' BPM.'
+        };
+      });
+    }
     if (state.exerciseFamily !== 'progressions') {
       return EXERCISES.filter(function(exercise) { return exercise.family === state.exerciseFamily; });
     }
@@ -6304,6 +6478,31 @@
       var inversionSelect = document.createElement('select'); inversionSelect.setAttribute('data-testid', 'progression-chord-inversion'); appendInversionOptions(inversionSelect, voicing.noteCount, voicing.inversion); inversionLabel.appendChild(inversionSelect);
       row.appendChild(degree); row.appendChild(quality); row.appendChild(noteLabel); row.appendChild(inversionLabel); els.progressionChordRows.appendChild(row);
     });
+  }
+
+  function renderRepertoireSectionControls(active) {
+    if (!els.repertoireSectionPanel || !els.repertoireSection) return;
+    els.repertoireSectionPanel.hidden = !active;
+    if (!active) return;
+    var selection = selectedRepertoireSection();
+    if (!selection) return;
+    clearChildren(els.repertoireSection);
+    selection.lesson.sections.forEach(function(section) {
+      var option = document.createElement('option');
+      option.value = section.id;
+      option.textContent = section.name;
+      els.repertoireSection.appendChild(option);
+    });
+    els.repertoireSection.value = selection.section.id;
+    if (els.repertoireTempo) els.repertoireTempo.value = String(repertoireTempo(selection));
+    var completedLoops = repertoireCompletedLoopCount(selection);
+    if (els.repertoireSectionSummary) {
+      var chordCount = 0;
+      els.repertoireSectionSummary.textContent = selection.section.name + ' · ' + selection.lesson.style + ' · ' + String(selection.lesson.tempo) + ' BPM · loops after ' + String(chordCount) + ' chords';
+    }
+    if (els.repertoireSectionSummary) {
+      els.repertoireSectionSummary.textContent = selection.section.name + ' · ' + String(repertoireTempo(selection)) + ' BPM · ' + String(completedLoops) + ' completed loop' + (completedLoops === 1 ? '' : 's');
+    }
   }
 
   function render() {
@@ -6592,14 +6791,20 @@
     }
     if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
     var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
-    if (els.practiceTitle) els.practiceTitle.textContent = progressionPractice ? 'Progression lab' : 'Scale map';
-    if (els.exerciseLegend) els.exerciseLegend.textContent = progressionPractice ? 'Progression' : 'Exercise';
-    if (els.practiceWorkflowControls) els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
-    renderProgressionVoicingControls(currentExerciseEvents, progressionPractice);
+    var repertoirePractice = isPracticeMode && state.exerciseFamily === 'repertoire';
+    var chordPractice = progressionPractice || repertoirePractice;
+    if (els.practiceTitle) els.practiceTitle.textContent = repertoirePractice ? 'Repertoire lab' : (progressionPractice ? 'Progression lab' : 'Scale map');
+    if (els.exerciseLegend) els.exerciseLegend.textContent = repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise');
+    if (els.practiceWorkflowControls) {
+      els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
+      els.practiceWorkflowControls.classList.toggle('repertoire-layout', repertoirePractice);
+    }
+    renderProgressionVoicingControls(currentExerciseEvents, chordPractice);
+    renderRepertoireSectionControls(repertoirePractice);
     if (els.progressionGenreControl) els.progressionGenreControl.hidden = state.exerciseFamily !== 'progressions';
-    if (els.octaveControl) els.octaveControl.hidden = progressionPractice;
-    if (els.rootControl) els.rootControl.hidden = progressionPractice;
-    if (els.fingeringControl) els.fingeringControl.hidden = progressionPractice;
+    if (els.octaveControl) els.octaveControl.hidden = chordPractice;
+    if (els.rootControl) els.rootControl.hidden = chordPractice;
+    if (els.fingeringControl) els.fingeringControl.hidden = chordPractice;
     if (els.progressionGenre) els.progressionGenre.value = state.progressionGenre;
     if (els.targetFinger) els.targetFinger.textContent = isPracticeMode && currentEvent && currentEvent.type === 'grip' ? 'Chord ' + displayedGripAssignments.map(function(assignment) { return String(assignment.finger); }).join(' / ') : (isPracticeMode && current ? 'Sequence ' + fingerDisplayName(currentFinger) : 'Finger --');
     if (els.targetStep) els.targetStep.textContent = isPracticeMode && currentEvent ? 'Step ' + String(state.step + 1) + ' of ' + String(currentExerciseEvents.length) : 'Step --';
@@ -6711,11 +6916,7 @@
       state.rootCellId = '';
       state.step = 0;
       if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
-        sendExquisRoot();
-        refreshExquisDisplay('refresh-after-root');
-        requestExquisReadback();
-        sendExquisLegacyKeyMode('Exquis legacy key/mode after root');
-        state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name;
+        syncExquisKeyModeToHardware();
       }
       render();
     });
@@ -6728,11 +6929,7 @@
       state.scaleId = els.scale.value;
       state.step = 0;
       if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
-        sendExquisScale();
-        refreshExquisDisplay('refresh-after-scale');
-        requestExquisReadback();
-        sendExquisLegacyKeyMode('Exquis legacy key/mode after scale');
-        state.exquisSyncStatus = 'Exquis sync: sent ' + getTonicName() + ' ' + getScale().name;
+        syncExquisKeyModeToHardware();
       }
       render();
     });
@@ -6808,6 +7005,7 @@
     if (els.exerciseFamily) {
       els.exerciseFamily.addEventListener('change', function() {
         state.exerciseFamily = els.exerciseFamily.value;
+        state.repertoireSectionId = '';
         state.step = 0;
         renderExerciseOptions();
         render();
@@ -6822,6 +7020,21 @@
         render();
       });
     }
+    if (els.repertoireSection) {
+      els.repertoireSection.addEventListener('change', function() {
+        state.repertoireSectionId = els.repertoireSection.value;
+        state.step = 0;
+        setFeedback('Song section: ' + els.repertoireSection.options[els.repertoireSection.selectedIndex].text + '.', 'neutral');
+        render();
+      });
+    }
+    if (els.repertoireTempo) {
+      els.repertoireTempo.addEventListener('change', function() {
+        state.repertoireTempo = parseInt(els.repertoireTempo.value, 10) || 0;
+        render();
+      });
+    }
+    if (els.repertoireCountIn) els.repertoireCountIn.addEventListener('click', playRepertoireCountIn);
     if (els.progressionGlobalNoteCount) {
       els.progressionGlobalNoteCount.addEventListener('change', function() {
         state.progressionVoicing.noteCount = parseInt(els.progressionGlobalNoteCount.value, 10) || 3;
@@ -6987,6 +7200,7 @@
     els.probeExquis.addEventListener('click', probeExquisHardware);
     els.nativeProbeExquis.addEventListener('click', probeExquisNativeWrites);
     els.dialListen.addEventListener('click', toggleExquisDialListen);
+    els.hardwareDiagnostics.addEventListener('click', expandConsole);
     els.audioDiag.addEventListener('click', function() {
       expandConsole();
       logSsliAudioHealth('manual');
@@ -7043,10 +7257,16 @@
       progressionGenre: document.getElementById('progressionGenreSelect'),
       progressionGenreControl: document.getElementById('progressionGenreControl'),
       practiceWorkflowControls: document.getElementById('practiceWorkflowControls'),
+      practiceTools: document.querySelector('[data-testid="practice-tools"]'),
       progressionVoicingPanel: document.getElementById('progressionVoicingPanel'),
       progressionGlobalNoteCount: document.getElementById('progressionGlobalNoteCount'),
       progressionGlobalInversion: document.getElementById('progressionGlobalInversion'),
       progressionChordRows: document.getElementById('progressionChordRows'),
+      repertoireSectionPanel: document.getElementById('repertoireSectionPanel'),
+      repertoireSection: document.getElementById('repertoireSectionSelect'),
+      repertoireSectionSummary: document.getElementById('repertoireSectionSummary'),
+      repertoireTempo: document.getElementById('repertoireTempo'),
+      repertoireCountIn: document.getElementById('repertoireCountIn'),
       practiceTitle: document.getElementById('practiceTitle'),
       octaveControl: document.getElementById('octaveControl'),
       rootControl: document.getElementById('rootControl'),
@@ -7117,6 +7337,7 @@
       probeExquis: document.getElementById('probeExquis'),
       nativeProbeExquis: document.getElementById('nativeProbeExquis'),
       dialListen: document.getElementById('dialListen'),
+      hardwareDiagnostics: document.getElementById('hardwareDiagnostics'),
       exquisSyncStatus: document.getElementById('exquisSyncStatus'),
       lastMidi: document.getElementById('lastMidi'),
       coachFeedback: document.getElementById('coachFeedback'),

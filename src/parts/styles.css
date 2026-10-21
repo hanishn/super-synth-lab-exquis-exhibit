@@ -164,9 +164,51 @@ input {
   align-items: end;
 }
 
+.practice-workflow-controls.repertoire-layout {
+  display: grid;
+  grid-template-columns: 152px 170px minmax(280px, 340px) 230px;
+  justify-content: start;
+  gap: 4px;
+  align-items: end;
+}
+
 .progression-voicing-panel {
   padding: 7px 10px;
   border-top: 1px solid var(--line-soft);
+}
+
+.repertoire-section-panel {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(130px, 1.25fr);
+  gap: 5px 8px;
+  align-items: end;
+  padding: 7px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.repertoire-section-panel[hidden] {
+  display: none;
+}
+
+.repertoire-section-panel h2 {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+}
+
+.repertoire-section-panel label span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.repertoire-section-panel p {
+  margin: 0 0 2px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .progression-voicing-heading,
@@ -192,7 +234,11 @@ input {
 .practice-workflow-controls.progression-layout .progression-genre-control,
 .practice-workflow-controls.progression-layout .exercise-switch,
 .practice-workflow-controls.progression-layout .grip-fingering-control,
-.practice-workflow-controls.progression-layout .surface-controls {
+.practice-workflow-controls.progression-layout .surface-controls,
+.practice-workflow-controls.repertoire-layout .exercise-family-control,
+.practice-workflow-controls.repertoire-layout .exercise-switch,
+.practice-workflow-controls.repertoire-layout .grip-fingering-control,
+.practice-workflow-controls.repertoire-layout .surface-controls {
   grid-column: auto;
   min-width: 0;
 }

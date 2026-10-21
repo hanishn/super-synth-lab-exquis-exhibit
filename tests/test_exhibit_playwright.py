@@ -151,6 +151,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "chord_fingering_must_not_reuse_single_note_sequence_labels": "test_regression_chord_fingering_uses_distinct_labels_from_sequence_fingering",
         "exquis_chords_must_use_adjacent_finger_positions_not_piano_spacing": "test_regression_exquis_chord_fingers_follow_adjacent_button_order",
         "exquis_chord_fingers_must_use_contiguous_positions_for_every_voicing_size": "test_regression_exquis_chord_fingers_use_contiguous_span_for_every_voicing_size",
+        "repertoire_lessons_must_use_named_loopable_sections_on_existing_progression_events": "test_regression_repertoire_lessons_expose_named_loopable_sections",
         "progression_library_templates_must_resolve_playable_chords_across_major_keys": "test_regression_progression_library_templates_resolve_playable_chords_across_major_keys",
         "progression_prompt_must_include_every_current_chord_member": "test_regression_progression_prompt_includes_every_current_chord_member",
         "exercise_control_must_not_overflow_header_at_desktop_viewport": "test_regression_exercise_control_does_not_overflow_header_at_desktop_viewport",
@@ -278,6 +279,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
             return
         if not drawer.evaluate("el => el.open"):
             drawer.locator("summary").click()
+
+    def open_hardware_tools(self):
+        hardware_tools = self.page.locator('[data-testid="hardware-tools"]')
+        if hardware_tools.count() and not hardware_tools.evaluate("el => el.open"):
+            hardware_tools.locator("summary").click()
 
     def test_every_stated_failure_has_named_regression_test(self):
         available = {name for name in dir(type(self)) if name.startswith("test_")}
@@ -966,17 +972,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("Step 1 / 2", self.page.locator('[data-testid="coach-progress"]').inner_text())
 
     def test_regression_ear_to_gesture_conceals_targets_and_prompt_playback_preserves_score(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
         self.page.select_option('[data-testid="exercise-select"]', "ear_major_third")
         event = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0]")
         self.assertEqual(event["musicalIntent"], {"type": "heard-interval", "quality": "major-third", "promptMidis": [48, 52], "concealTargets": True}, event)
         self.assertEqual(self.page.locator('[data-testid="coach-now-playing"]').inner_text(), "Listen, then answer")
         self.assertEqual(self.page.locator('[data-testid="exquis-key"].in-path').count(), 0)
+        self.assertFalse(self.page.locator('[data-testid="repertoire-section-panel"]').is_visible())
         score_before = self.page.locator('[data-testid="coach-progress"]').inner_text()
         self.page.locator('[data-testid="coach-next-action"]').click()
         self.assertEqual(self.page.locator('[data-testid="coach-progress"]').inner_text(), score_before)
         self.assertIn("Listen for the interval", self.page.locator('[data-testid="coach-feedback"]').inner_text())
 
     def test_regression_ear_to_gesture_scores_exact_interval_and_repairs_wrong_interval(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
         self.page.select_option('[data-testid="exercise-select"]', "ear_major_third")
         self.page.evaluate("""() => {
           window.__earInput = { id: 'ear-input', name: 'Ear Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -997,6 +1006,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("Correct grip", self.page.locator('[data-testid="coach-feedback"]').inner_text())
 
     def test_regression_ear_to_gesture_interval_fixtures_keep_minor_and_major_prompts_exact(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
         fixtures = self.page.evaluate("""() => ['ear_minor_third', 'ear_major_third', 'ear_perfect_fourth', 'ear_perfect_fifth'].map((exerciseId) => {
           document.querySelector('[data-testid="exercise-select"]').value = exerciseId;
           document.querySelector('[data-testid="exercise-select"]').dispatchEvent(new Event('change', { bubbles: true }));
@@ -1012,6 +1022,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(fixtures[3]["event"]["musicalIntent"]["quality"], "perfect-fifth", fixtures)
 
     def test_regression_ear_to_gesture_perfect_fifth_scores_exact_grip(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
         self.page.select_option('[data-testid="exercise-select"]', "ear_perfect_fifth")
         self.page.evaluate("""() => {
           window.__fifthInput = { id: 'fifth-input', name: 'Fifth Input', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -1333,6 +1344,48 @@ class PlaywrightExhibitTests(unittest.TestCase):
               });
             }""")
             self.assertEqual(ordered_fingers, expected_fingers, {"noteCount": note_count, "fingers": ordered_fingers})
+
+    def test_regression_repertoire_lessons_expose_named_loopable_sections(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'repertoire')
+        options = self.page.locator('[data-testid="exercise-select"] option').all_text_contents()
+        self.assertIn('Anthem progression', options)
+        self.page.select_option('[data-testid="exercise-select"]', 'repertoire_anthem_progression')
+        self.assertTrue(self.page.locator('[data-testid="repertoire-section-panel"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="repertoire-section-select"]').input_value(), 'verse')
+        self.page.select_option('[data-testid="repertoire-section-select"]', 'chorus')
+        self.page.locator('[data-testid="repertoire-tempo"]').fill('112')
+        self.page.locator('[data-testid="repertoire-tempo"]').press('Tab')
+        section = self.page.locator('[data-testid="repertoire-section-summary"]').inner_text()
+        self.assertIn('Chorus', section)
+        self.assertIn('112 BPM', section)
+        self.assertIn('0 completed loops', section)
+        self.page.locator('[data-testid="repertoire-count-in"]').click()
+        self.assertIn('Count in: 1, 2, 3, 4.', self.page.locator('[data-testid="coach-feedback"]').inner_text())
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual(len(events), 4, events)
+        self.assertTrue(all(event["musicalIntent"].get("repertoireSection") == 'chorus' for event in events), events)
+        self.page.evaluate("""() => {
+          window.__mockRepertoireInput = { id: 'repertoire-exquis', name: 'Repertoire Exquis', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (cb) => cb(window.__mockRepertoireInput) },
+            outputs: { forEach: () => {} },
+            onstatechange: null
+          });
+        }""")
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockRepertoireInput && window.__mockRepertoireInput.onmidimessage")
+        self.page.evaluate("""async () => {
+          const input = window.__mockRepertoireInput;
+          const events = window.__exquisDebugSnapshot().exerciseEvents;
+          for (const event of events) {
+            for (const [index, target] of event.targets.entries()) {
+              input.onmidimessage({ data: [0x90 | index, target.midi, 80] });
+            }
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          }
+        }""")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"repertoire-section-summary\"]').textContent.includes('1 completed loop')")
+        self.assertIn('1 completed loop', self.page.locator('[data-testid="repertoire-section-summary"]').inner_text())
 
     def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
@@ -2406,29 +2459,44 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.open_hardware_tools()
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
-        self.page.wait_for_timeout(140)
+        self.page.wait_for_timeout(1200)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
         self.assertIn([176, 122, 0], sent)
         self.assertIn([176, 120, 0], sent)
         self.assertIn([176, 123, 0], sent)
         self.assertIn([191, 122, 0], sent)
-        self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
-        self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
-        self.assertIn([240, 0, 33, 126, 127, 6, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 17, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 127, 6, 0, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent)
-        self.assertIn([240, 0, 33, 126, 127, 7, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 1, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 7, 0, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 127, 1, 8, 247], sent)
-        self.assertNotIn([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247], sent)
+        self.assertEqual(sum(1 for message in sent if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and 1 <= message[2] <= 3), 61)
         self.assertIn([240, 0, 33, 126, 127, 3, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 6, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 7, 247], sent)
-        self.assertIn([240, 0, 33, 126, 247], sent)
-        self.assertIn([240, 0, 33, 126, 4, 2, 29, 247], sent)
-        self.assertIn([240, 0, 33, 126, 7, 2, 127, 95, 63, 247], sent)
+        transaction_start = max(index for index, message in enumerate(sent) if message == [240, 0, 33, 126, 127, 0, 17, 247])
+        transaction = sent[transaction_start:]
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 6, 5, 247]), transaction.index([240, 0, 33, 126, 127, 1, 1, 247]))
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 1, 1, 247]), transaction.index([240, 0, 33, 126, 127, 7, 0, 247]))
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 7, 0, 247]), transaction.index([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247]))
+        last_led_index = max(index for index, message in enumerate(transaction) if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and 1 <= message[2] <= 3)
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247]), transaction.index([240, 0, 33, 126, 127, 3, 247]))
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 3, 247]), transaction.index([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247]))
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247]), last_led_index)
+        self.assertLess(last_led_index, transaction.index([240, 0, 33, 126, 127, 6, 247]))
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 6, 247]), transaction.index([240, 0, 33, 126, 127, 7, 247]))
+        self.assertNotIn([240, 0, 33, 126, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 4, 2, 29, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 7, 2, 127, 95, 63, 247], sent)
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xF0, 0x00, 0x21, 0x7E, 0xF7] })")
         echo_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
         self.page.wait_for_timeout(140)
@@ -2443,10 +2511,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         light_messages = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", before_lights)
         self.assertIn([240, 0, 33, 126, 3, 3, 127, 95, 63, 247], light_messages)
         self.assertIn([240, 0, 33, 126, 7, 3, 127, 95, 63, 247], light_messages)
+        self.open_audio_drawer()
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("Exquis legacy key/mode", log)
         self.assertIn("buttonColors=61 noteColors=0 noteMap=61", log)
-        self.assertIn("sent F Dorian", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+        self.assertIn("custom-scale=dorian", log)
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], self.page.evaluate("() => window.__mockExquisOutput.sent"))
 
     def test_regression_exquis_dial_listen_uses_settings_encoder_developer_mode_and_logs_dials(self):
         self.page.evaluate("""
@@ -2510,6 +2581,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.open_hardware_tools()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
         self.page.locator('[data-testid="native-probe-exquis"]').click()
@@ -2522,6 +2594,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 7, 1, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 3, 247], sent)
+        self.page.locator('[data-testid="hardware-diagnostics"]').click()
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("Exquis native probe started root=F scale=Dorian", log)
         self.assertIn("mask=0x10 settings", log)
@@ -2871,6 +2944,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.open_hardware_tools()
         self.page.locator('[data-testid="sync-exquis"]').click()
         before_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
         self.page.evaluate("""
@@ -2884,11 +2958,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("D Dorian", self.page.locator("#stateTitle").inner_text())
         self.page.wait_for_timeout(140)
         after_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
-        self.assertGreater(after_count, before_count)
+        self.assertEqual(after_count, before_count)
         sent_after = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", before_count)
         self.assertNotIn([240, 0, 33, 126, 127, 6, 2, 247], sent_after)
         self.assertNotIn([240, 0, 33, 126, 127, 7, 1, 247], sent_after)
-        self.assertIn([240, 0, 33, 126, 247], sent_after)
+        self.assertEqual(sent_after, [])
 
     def test_regression_exquis_sync_falls_back_to_input_only_when_sysex_permission_denied(self):
         self.page.evaluate("""
@@ -2908,7 +2982,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.open_hardware_tools()
         self.assertEqual(self.page.evaluate("() => window.__requests.map(r => !!r.sysex)"), [True, False])
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"exquis-sync-status\"]').textContent.includes('SysEx permission unavailable')")
         self.assertTrue(self.page.locator('[data-testid="sync-exquis"]').is_disabled())
         self.assertIn("SysEx permission unavailable", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
 

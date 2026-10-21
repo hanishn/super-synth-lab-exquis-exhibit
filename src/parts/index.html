@@ -163,6 +163,13 @@
       </div>
       <div id="progressionChordRows" class="progression-chord-rows"></div>
     </section>
+    <section class="repertoire-section-panel" id="repertoireSectionPanel" data-testid="repertoire-section-panel" hidden>
+      <h2>Song section</h2>
+      <label><span>Section</span><select id="repertoireSectionSelect" data-testid="repertoire-section-select"></select></label>
+      <label><span>Tempo</span><input id="repertoireTempo" type="number" min="40" max="240" step="1" data-testid="repertoire-tempo"></label>
+      <button id="repertoireCountIn" type="button" data-testid="repertoire-count-in">Count in</button>
+      <p id="repertoireSectionSummary" data-testid="repertoire-section-summary"></p>
+    </section>
     <details class="practice-tools" data-testid="hardware-tools">
       <summary>Hardware tools</summary>
       <section class="midi-coach-section" data-testid="midi-coach-section">
@@ -172,6 +179,7 @@
         <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Probe</button>
         <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" title="Probe native Exquis root/scale write masks" disabled>Native</button>
         <button id="dialListen" type="button" data-testid="dial-listen" disabled>Dial Listen</button>
+        <button id="hardwareDiagnostics" type="button" data-testid="hardware-diagnostics">Diagnostics</button>
       </div>
       <label class="midi-picker">
         <span>MIDI Input</span>

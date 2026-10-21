@@ -326,6 +326,14 @@ Repertoire lessons are named, ordered collections of existing exact harmony fixt
 - A correct chord advances to the next ordered progression event. A wrong or partial chord retains the current event, increments the miss count, and provides a repair message.
 - Prompt playback may demonstrate the current chord but never changes score or progression position.
 
+### Repertoire Sections
+
+The `Repertoire` practice family turns named song lessons into sectional, repeatable practice material without creating a separate chord, score, or audio path. A lesson declares a stable song identifier, learner-facing title, style, tempo, and an ordered list of named sections. Every section references an existing progression fixture and therefore inherits exact playable targets, voicing controls, simultaneous-grip scoring, and prompt playback.
+
+- Selecting a song exposes a `Song section` control in the guidance rail. Selecting a section resets practice to that section's first chord and displays the selected section name and tempo.
+- The final correct chord in a selected section loops back to that section's first chord. Score and streak remain intact so a learner can build reliable repetitions rather than repeatedly restarting a lesson.
+- The initial catalog contains an `Anthem progression` lesson with Verse and Chorus sections plus a `12-bar blues form` lesson. Song identifiers and sectional fixtures are data, not copied event handlers.
+
 ### Progression Voicing Controls
 
 Selecting a progression exposes a `Chord progression` control surface with global defaults and per-chord overrides. The control surface follows SSLI chord-pad semantics while remaining an Exquis practice feature, not a second sound engine.

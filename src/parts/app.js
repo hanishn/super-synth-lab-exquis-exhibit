@@ -2490,6 +2490,9 @@
       if (!voice || !voice.ssli || voice.instrumentType !== 'physical') return;
       if (nowMs - (voice.startedAt || 0) <= PHYSICAL_SIMULTANEOUS_ONSET_MS) recentPhysicalVoices += 1;
     });
+    // A cluster that began in the simultaneous-onset window is a single chord
+    // gesture, not accumulated sustain. Counting it as held would make each
+    // chord tone quieter than a solo note before the physical engine hears it.
     if (recentPhysicalVoices === held && held < PHYSICAL_UNSCALED_SIMULTANEOUS_VOICES) return 0;
     return held;
   }
@@ -2497,6 +2500,10 @@
   function playablePhysicalMidiVelocity(velocity, heldPhysicalVoices) {
     var raw = Math.max(1, Math.min(127, Math.round(velocity || 1)));
     var held = Math.max(0, Math.min(6, Math.round(heldPhysicalVoices || 0)));
+    // This is protective gain staging, not musical velocity remapping. The
+    // floor preserves quiet contact response and the cap prevents a growing
+    // physical voice set from clipping/over-exciting the model. Keep the two
+    // bounds paired when tuning; changing only one breaks that safety envelope.
     var scales = [1, 0.72, 0.56, 0.42, 0.3, 0.22, 0.18];
     var voiceLoadScale = scales[held] || 0.18;
     var cap = Math.max(42, Math.round(96 * voiceLoadScale));
@@ -2632,6 +2639,10 @@
   }
 
   function cancelPendingReleaseStrumCommitsForContact(midi) {
+    // A release-strum remains provisional only to absorb immediate recontact.
+    // Recontact means the player began a new physical gesture, so letting the
+    // old timer fire would turn the previous release tail into a press sound.
+    // Cancel by MIDI note; another pad/channel may legitimately be independent.
     var nowMs = diagnosticNowMs();
     var removed = false;
     pendingReleaseStrumCommits = pendingReleaseStrumCommits.filter(function(pending) {
@@ -2646,6 +2657,10 @@
   }
 
   function releasePendingArticulation(key, releasedHeld) {
+    // This is the articulation ownership boundary: queued contact belongs to a
+    // logical MIDI key until it is either discarded, committed exactly once, or
+    // absorbed by recontact. It may run after state.heldNotes was removed, so
+    // do not use current held state as proof that a queued event is invalid.
     var removed = false;
     var nowMs = Date.now();
     var releaseEvents = [];
@@ -3804,6 +3819,9 @@
   }
 
   function releaseMidiVoice(key, immediate, releasedHeld) {
+    // Release the queued gesture before consulting midiVoices. A physical
+    // release-strum can own a pending onset without owning a live SSLI voice;
+    // reversing this order loses the gesture or leaves an orphaned timer.
     releasePendingArticulation(key, releasedHeld);
     var voice = midiVoices[key];
     if (voice && voice.ssli) {
@@ -4928,6 +4946,10 @@
   }
 
   function resolvePlayableChordRootMidi(desiredRootMidi, quality, noteCount, inversion) {
+    // Chord labels describe pitch classes, but a lesson needs one exact,
+    // playable Exquis voicing. Search each physical instance of the requested
+    // root and choose the closest valid ergonomic grip; never approximate a
+    // missing note with a neighboring pad just to keep a progression running.
     var offsets = chordVoicingOffsets(quality, noteCount, inversion);
     var cells = makeGrid();
     if (!offsets) return null;
@@ -4950,6 +4972,9 @@
   }
 
   function buildHarmonyGripFixture(spec) {
+    // Fixture construction is the schema boundary between harmony generation
+    // and the scorer/renderers. Return null on any unplayable voicing so callers
+    // can report an unavailable exercise instead of emitting partial targets.
     spec = spec || {};
     var noteCount = Math.max(2, Math.min(5, parseInt(spec.noteCount, 10) || 3));
     var inversion = Math.max(0, Math.min(noteCount - 1, parseInt(spec.inversion, 10) || 0));
@@ -5118,6 +5143,9 @@
   }
 
   function evaluateGripAttempt(event, attempts) {
+    // Match each attempted cell/MIDI pair at most once. A repeated note cannot
+    // satisfy two chord targets, and a complete pitch set still fails when its
+    // spread exceeds the event tolerance: simultaneity is part of the lesson.
     var targets = (event && event.targets || []).slice();
     var matched = [];
     var wrong = [];
@@ -5354,6 +5382,9 @@
     cells.forEach(function(cell) {
       (candidatesByMidi[cell.midi] || (candidatesByMidi[cell.midi] = [])).push(cell);
     });
+    // The pitch lattice intentionally contains duplicate MIDI notes. A stable
+    // geometry-based winner prevents UI and hardware from lighting two pads for
+    // one input note, and avoids a visual jump caused by DOM/grid enumeration.
     return Object.keys(candidatesByMidi).reduce(function(canonicalByMidi, midi) {
       var candidates = candidatesByMidi[midi];
       candidates.sort(function(a, b) {
@@ -6445,6 +6476,9 @@
   }
 
   function scheduleExquisKeyModeSync(callback, delayMs) {
+    // Keep every timer in the current transaction so the next key/mode change
+    // can cancel it. Untracked delayed packets are hardware races: an obsolete
+    // palette/effect write may arrive after the replacement light frame.
     var timer = window.setTimeout(function() {
       exquisKeyModeSyncTimers = exquisKeyModeSyncTimers.filter(function(candidate) { return candidate !== timer; });
       callback();
@@ -6457,6 +6491,9 @@
     cancelPendingExquisKeyModeSync();
     lastExquisPadPalette = {};
     lastExquisPadEffect = {};
+    // This is a cancelable transaction, not independent MIDI writes. The device
+    // must learn scale context before it receives root-relative palette values;
+    // effects come last so no old target pulse can outlive a new light frame.
     beginOfficialKeyModeTransaction('key/mode sync');
     state.exquisCustomScaleActive = true;
     scheduleExquisKeyModeSync(sendExquisRoot, EXQUIS_KEY_MODE_COMMAND_GAP_MS);

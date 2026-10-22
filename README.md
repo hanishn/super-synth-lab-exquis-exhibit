@@ -84,6 +84,17 @@ Omit `--limit` and `--one-per-category` for acceptance sweeps.
 - `tools/` contains repeatable validation utilities.
 - `index.html` follows SSLI's root-runnable app convention.
 
+## Developer Documentation
+
+- `docs/debug-api.md` — test/debug API names, shapes, stability, and coverage.
+- `docs/runtime-patches.md` — vendored SSLI patch ownership, catalog, and upgrade rules.
+- `docs/audio-and-integration.md` — SSLI boundary, voice ownership, articulation, and cache policy.
+
+- `docs/architecture.md` — source ownership, runtime boundaries, rendering, and invariants.
+- `docs/exquis-midi.md` — official hardware protocol and lighting contract.
+- `docs/uat-expressive-lighting.md` — hardware-lighting acceptance script.
+- `docs/source-provenance.md` — vendored SSLI and Exquis sources.
+
 ## Provenance
 
 This project is standalone, but intentionally SSLI-first. Existing SSLI implementations and data are reused before local Exquis-specific code is added. See `docs/source-provenance.md`.

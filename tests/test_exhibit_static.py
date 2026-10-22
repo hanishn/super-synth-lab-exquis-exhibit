@@ -40,6 +40,9 @@ class StaticExhibitTests(unittest.TestCase):
             "src/parts/styles.css",
             "src/parts/app.js",
             "docs/capabilities.md",
+            "docs/architecture.md",
+            "docs/exquis-midi.md",
+            "docs/audio-and-integration.md",
             "tools/preset_sweep.py",
             "tools/preset_signature_check.py",
             "build.py"
@@ -145,6 +148,76 @@ class StaticExhibitTests(unittest.TestCase):
         ]
         positions = [section.index(item) for item in required_order]
         self.assertEqual(positions, sorted(positions))
+
+    def test_maintainer_docs_preserve_build_audio_and_hardware_contracts(self):
+        architecture = (ROOT / "docs/architecture.md").read_text(encoding="utf-8")
+        hardware = (ROOT / "docs/exquis-midi.md").read_text(encoding="utf-8")
+        audio = (ROOT / "docs/audio-and-integration.md").read_text(encoding="utf-8")
+        self.assertIn("Generated `index.html`", architecture)
+        self.assertIn("Iteration Loop", architecture)
+        self.assertIn("pads Developer-Mode mask", hardware)
+        self.assertIn("one MIDI pitch has one hardware representation", hardware)
+        self.assertIn("`midiVoices` is the ownership ledger", audio)
+        self.assertIn("service-worker registrations", audio)
+
+    def test_maintainer_docs_trace_to_real_sources_public_hooks_and_runtime_patches(self):
+        import build
+
+        architecture = (ROOT / "docs/architecture.md").read_text(encoding="utf-8")
+        debug_api = (ROOT / "docs/debug-api.md").read_text(encoding="utf-8")
+        patch_catalog = (ROOT / "docs/runtime-patches.md").read_text(encoding="utf-8")
+        app = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        self.assertIn("`src/parts/index.html`, `src/parts/styles.css`", architecture)
+        self.assertNotIn("`index.html`, `styles.css`", architecture)
+        public_hooks = set(re.findall(r"window\.(__exquis(?:Debug|LightDebug|SysexDebug)\w*)", app))
+        self.assertGreaterEqual(len(public_hooks), 14)
+        for hook in public_hooks:
+            self.assertIn(hook, debug_api, hook)
+        self.assertRegex(app, r"function shouldUseSsliPlayback\(presetApplied, hasOutput\)")
+        self.assertIn("`__exquisDebugShouldUseSsliPlayback` | `(presetApplied, hasOutput)`", debug_api)
+        self.assertRegex(app, r"function startAfterAudioResume\(ctx, start\)")
+        self.assertIn("`__exquisDebugStartAfterAudioResume` | `(audioContext, start)`", debug_api)
+        self.assertRegex(app, r"function buildVoiceLeadingTransition\(spec\)")
+        self.assertIn("`__exquisDebugBuildVoiceLeadingTransition` | `{from, to}` harmony-fixture spec", debug_api)
+        self.assertRegex(app, r"function buildProgressionFixture\(id\)")
+        self.assertIn("arguments.length > 1", app)
+        self.assertIn("`__exquisDebugBuildProgressionFixture` | `(fixtureId, tonicPc?)`", debug_api)
+        sysex_contracts = {
+            "build": (r"function buildExquisSysex\(command, payload\)", "`build` | `(command, payload?)`"),
+            "parse": (r"function parseExquisSysex\(data\)", "`parse` | `(bytes)`"),
+            "degreesFor": (r"function scaleDegreesFor\(scaleId\)", "`degreesFor` | `(scaleId?)`"),
+            "scaleIndexFor": (r"function scaleIndexFor\(scaleId\)", "`scaleIndexFor` | `(scaleId)`"),
+            "scaleIdForIndex": (r"function scaleIdForIndex\(index\)", "`scaleIdForIndex` | `(index)`"),
+            "exquisScaleNumberFor": (r"function exquisScaleNumberForScaleId\(scaleId\)", "`exquisScaleNumberFor` | `(scaleId)`"),
+            "scaleIdForExquisNumber": (r"function scaleIdForExquisNumber\(scaleNumber\)", "`scaleIdForExquisNumber` | `(scaleNumber)`"),
+            "legacy": (r"function buildExquisLegacySysex\(command, payload\)", "`legacy` | `(command, payload?)`"),
+        }
+        for name, (implementation, documentation) in sysex_contracts.items():
+            self.assertIn(f"{name}:", app, name)
+            self.assertRegex(app, implementation)
+            self.assertIn(documentation, debug_api, name)
+        self.assertIn("`developerMask` | none", debug_api)
+        patch_groups = (
+            build.SSLI_INDEX_PATCHES,
+            build.SSLI_WORKLET_PATCHES,
+            build.SSLI_FM_MIX_PATCHES,
+            build.SSLI_SYNTH_WORKLET_PATCHES,
+            build.SSLI_PHYSICAL_WORKLET_PATCHES,
+        )
+        patch_names = {patch.name for group in patch_groups for patch in group}
+        self.assertGreaterEqual(len(patch_names), 90)
+        for name in patch_names:
+            self.assertIn(name, patch_catalog, name)
+        expected_prefix_counts = {
+            "disable-": 2, "expression-": 1, "voice-pool-": 11,
+            "physical-note-on-": 4, "physical-engine-": 2,
+            "physical-fallback-": 14, "fm-fallback-": 16,
+            "fm-worklet-": 16, "physical-worklet-": 29,
+            "subtractive-": 3, "synth-worklet-": 1,
+        }
+        for prefix, expected_count in expected_prefix_counts.items():
+            self.assertEqual(sum(name.startswith(prefix) for name in patch_names), expected_count, prefix)
+            self.assertIn(f"`{prefix}*` ({expected_count})", patch_catalog, prefix)
 
     def test_regression_ssli_runtime_patches_do_not_mutate_synth_behavior(self):
         import build

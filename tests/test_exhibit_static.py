@@ -92,6 +92,18 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("event.targets", docs)
         self.assertIn("concealTargets", docs)
 
+    def test_practice_notation_uses_conventional_svg_clef_and_key_signature_symbols(self):
+        """The learning view must be legible notation, not a staff-shaped approximation."""
+        source = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        styles = (ROOT / "src/parts/styles.css").read_text(encoding="utf-8")
+        self.assertIn("notationKeySignature", source)
+        self.assertIn("notationClefGlyph", source)
+        self.assertIn("\\ud834\\udd1e", source)  # U+1D11E MUSICAL SYMBOL G CLEF
+        self.assertIn("\\ud834\\udd22", source)  # U+1D122 MUSICAL SYMBOL F CLEF
+        self.assertIn("key-signature-accidental", source)
+        self.assertIn("preserveAspectRatio', 'xMidYMid meet'", source)
+        self.assertIn("@media (max-width: 640px)", styles)
+
     def test_build_version_is_generated_visible_and_used_for_cache_busting(self):
         match = re.search(r'data-testid="build-version"[^>]*title="Built ([^"]+)"[^>]*>\s*<span>Build</span>\s*<b>([^<]+)</b>', self.bundle)
         self.assertIsNotNone(match)

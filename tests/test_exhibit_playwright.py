@@ -2896,6 +2896,23 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(roll_midis, staff_midis)
         self.assertEqual(len(set(roll_notes.evaluate_all("nodes => nodes.map((node) => node.getAttribute('data-event-index'))"))), 1)
 
+    def test_practice_notation_uses_music_symbols_and_keeps_a_compact_tablet_fit(self):
+        self.page.set_viewport_size({"width": 768, "height": 1024})
+        self.page.select_option('[data-testid="tonic-select"]', '4')  # E major: four sharps.
+        panel = self.page.locator('[data-testid="practice-notation"]')
+        staff = self.page.locator('[data-testid="staff-notation"]')
+        roll = self.page.locator('[data-testid="piano-roll-notation"]')
+        panel_box = panel.bounding_box()
+        staff_box = staff.bounding_box()
+        roll_box = roll.bounding_box()
+        self.assertLessEqual(panel_box['height'], 116)
+        self.assertLess(abs(staff_box['y'] - roll_box['y']), 2, 'tablet keeps staff and piano roll side by side')
+        self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'), 768)
+        symbols = staff.locator('text').all_text_contents()
+        self.assertTrue(any(symbol in {'\U0001d11e', '\U0001d122'} for symbol in symbols))
+        self.assertEqual(staff.locator('.key-signature-accidental').count(), 4)
+        self.assertIn('E Major', staff.get_attribute('aria-label'))
+
     def test_regression_exquis_sync_pulses_every_current_chord_target(self):
         self.page.evaluate("""
         () => {

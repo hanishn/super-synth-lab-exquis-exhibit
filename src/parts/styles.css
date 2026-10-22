@@ -3086,10 +3086,11 @@ input[type="range"]:focus-visible {
 
 .practice-notation {
   display: grid;
-  grid-template-columns: minmax(128px, 0.26fr) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 144px minmax(0, 1fr);
+  gap: 8px;
   align-items: stretch;
-  min-height: 104px;
+  min-height: 0;
+  height: 112px;
   margin: 0 0 8px;
   padding: 8px 10px;
   border: 1px solid rgba(117, 167, 255, 0.34);
@@ -3114,14 +3115,14 @@ input[type="range"]:focus-visible {
 
 .notation-views {
   display: grid;
-  grid-template-columns: minmax(230px, 1fr) minmax(230px, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
   min-width: 0;
 }
 
 .notation-views svg {
   width: 100%;
-  height: 86px;
+  height: 92px;
   overflow: visible;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 5px;
@@ -3130,7 +3131,15 @@ input[type="range"]:focus-visible {
 
 .staff-line, .roll-grid-line { stroke: rgba(218, 230, 240, 0.28); stroke-width: 1; }
 .staff-ledger { stroke: rgba(255, 241, 168, 0.82); stroke-width: 1.4; }
-.staff-clef { fill: #dce4ec; font: 28px Georgia, serif; }
+.staff-clef {
+  fill: #f5f1dd;
+  font: 52px "Bravura", "Noto Music", "Segoe UI Symbol", serif;
+}
+.key-signature-accidental,
+.staff-note-accidental {
+  fill: #f5f1dd;
+  font: 18px "Bravura", "Noto Music", "Segoe UI Symbol", serif;
+}
 .staff-note { fill: #8ba8c7; stroke: #0c1116; stroke-width: 1.2; }
 .staff-note.notation-active { fill: #fff1a8; stroke: #f26d6d; stroke-width: 2.3; }
 .staff-note.notation-completed { fill: #62d2a2; }
@@ -3150,9 +3159,19 @@ input[type="range"]:focus-visible {
 }
 
 @media (max-width: 900px) {
-  .practice-notation { grid-template-columns: 1fr; }
+  .practice-notation { grid-template-columns: 118px minmax(0, 1fr); height: 104px; }
+  .notation-views { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notation-views svg { height: 84px; }
+  .notation-concealed { grid-column: 2; }
+}
+
+@media (max-width: 640px) {
+  .practice-notation { grid-template-columns: 1fr; height: auto; }
+  .notation-heading { grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
+  .notation-heading .eyebrow { grid-row: span 2; }
+  .notation-harmony { grid-column: 2; }
   .notation-views { grid-template-columns: 1fr; }
-  .notation-views svg { height: 78px; }
+  .notation-views svg { height: 82px; }
   .notation-concealed { grid-column: 1; }
 }
 

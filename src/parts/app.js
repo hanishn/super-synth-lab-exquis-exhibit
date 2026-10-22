@@ -5507,6 +5507,33 @@
     };
   }
 
+  // A key signature is meaningful only for conventional diatonic modes. The
+  // other exercises show their scale name without inventing a signature.
+  function notationKeySignature() {
+    var parentMajorOffset = { ionian: 0, aeolian: 3, dorian: -2, mixolydian: -5 }[state.scaleId];
+    var scale = getScale();
+    if (typeof parentMajorOffset !== 'number') {
+      return { count: 0, symbol: '', label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: false };
+    }
+    var parentPc = mod(state.tonicPc + parentMajorOffset, 12);
+    // Positive values are sharps, negative values are flats. These spellings
+    // match the tonic choices exposed by the product (Db rather than C#).
+    var accidentalCountByMajorPc = { 0: 0, 1: -5, 2: 2, 3: -3, 4: 4, 5: -1, 6: 6, 7: 1, 8: -4, 9: 3, 10: -2, 11: 5 };
+    var count = accidentalCountByMajorPc[parentPc];
+    return { count: count, symbol: count < 0 ? '\u266d' : (count > 0 ? '\u266f' : ''), label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: true };
+  }
+
+  function notationClefGlyph(useBass) {
+    // U+1D11E / U+1D122 are real music glyphs. Segoe UI Symbol covers them on Windows.
+    return useBass ? '\ud834\udd22' : '\ud834\udd1e';
+  }
+
+  function chooseNotationClef(events) {
+    var midis = events.reduce(function(all, event) { return all.concat(event.midis); }, []);
+    if (!midis.length) return false;
+    return midis.reduce(function(sum, midi) { return sum + midi; }, 0) / midis.length < 60;
+  }
+
   // Projection is intentionally pure display data from canonical exercise
   // events. It has no playback/scoring cursor of its own, so every practice
   // transition already updates staff, roll, and Exquis guidance in lockstep.
@@ -5548,8 +5575,8 @@
   function clearNotationSvg(svg, label) {
     if (!svg) return;
     clearChildren(svg);
-    svg.setAttribute('viewBox', '0 0 360 86');
-    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('viewBox', '0 0 560 104');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     svg.setAttribute('aria-label', label);
     svg.appendChild(notationSvgElement('title', {}, label));
   }
@@ -5559,36 +5586,57 @@
     if (!svg) return;
     clearNotationSvg(svg, 'Staff notation of current and upcoming practice steps');
     if (projection.concealed) return;
-    var average = projection.events.reduce(function(total, event) { return total + event.midis.reduce(function(sum, midi) { return sum + midi; }, 0); }, 0) /
-      Math.max(1, projection.events.reduce(function(total, event) { return total + event.midis.length; }, 0));
-    var useBass = average < 60;
-    var reference = useBass ? spellNotationPitch(43).diatonicIndex : spellNotationPitch(64).diatonicIndex;
+    var useBass = chooseNotationClef(projection.events);
+    // Middle line: B4 in treble, D3 in bass. Six SVG units equal one staff step.
+    var reference = useBass ? spellNotationPitch(50).diatonicIndex : spellNotationPitch(71).diatonicIndex;
+    var staffTop = 24;
+    var staffBottom = 72;
+    var staffCenter = 48;
+    var signature = notationKeySignature();
     for (var line = 0; line < 5; line++) {
-      var y = 18 + line * 11;
-      svg.appendChild(notationSvgElement('line', { x1: 30, y1: y, x2: 352, y2: y, class: 'staff-line' }));
+      var y = staffTop + line * 12;
+      svg.appendChild(notationSvgElement('line', { x1: 88, y1: y, x2: 550, y2: y, class: 'staff-line' }));
     }
-    svg.appendChild(notationSvgElement('text', { x: 5, y: 54, class: 'staff-clef', 'aria-hidden': 'true' }, useBass ? 'F' : 'G'));
+    svg.appendChild(notationSvgElement('text', { x: 16, y: useBass ? 62 : 70, class: 'staff-clef', 'aria-hidden': 'true' }, notationClefGlyph(useBass)));
+    if (signature.count) {
+      var sharpSteps = useBass ? [2, 5, 1, 4, 0, 3, -1] : [4, 1, 5, 2, 6, 3, 0];
+      var flatSteps = useBass ? [0, 3, -1, 2, 5, 1, 4] : [0, 3, -1, 2, 5, 1, 4];
+      var signatureSteps = signature.count > 0 ? sharpSteps : flatSteps;
+      for (var accidentalIndex = 0; accidentalIndex < Math.abs(signature.count); accidentalIndex++) {
+        svg.appendChild(notationSvgElement('text', {
+          x: 61 + accidentalIndex * 10,
+          y: staffCenter - signatureSteps[accidentalIndex] * 6 + 5,
+          class: 'key-signature-accidental',
+          'aria-hidden': 'true'
+        }, signature.symbol));
+      }
+    }
     projection.events.forEach(function(event, eventOffset) {
-      var x = 66 + eventOffset * (278 / Math.max(1, projection.events.length - 1));
-      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 18, y: 8, width: 36, height: 60, rx: 5, class: 'roll-column-active' }));
+      var columnWidth = (550 - 146) / Math.max(1, projection.events.length);
+      var x = 146 + eventOffset * columnWidth + columnWidth / 2;
+      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - columnWidth / 2 + 3, y: 14, width: Math.max(20, columnWidth - 6), height: 68, rx: 5, class: 'roll-column-active' }));
       event.midis.forEach(function(midi, pitchIndex) {
         var pitch = spellNotationPitch(midi);
         var staffSteps = pitch.diatonicIndex - reference;
-        var y = 40 - staffSteps * 5.5;
-        var noteX = x + (pitchIndex && Math.abs(event.midis[pitchIndex - 1] - midi) === 1 ? 4 : 0);
+        var y = staffCenter - staffSteps * 6;
+        var noteX = x + (pitchIndex && Math.abs(event.midis[pitchIndex - 1] - midi) === 1 ? 5 : 0);
         var classes = 'staff-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
-        if (y < 18 || y > 62) {
-          var ledgerY = y < 18 ? 18 : 62;
-          svg.appendChild(notationSvgElement('line', { x1: noteX - 8, y1: ledgerY, x2: noteX + 8, y2: ledgerY, class: 'staff-ledger' }));
+        if (y < staffTop || y > staffBottom) {
+          var ledgerY = y < staffTop ? staffTop - 12 : staffBottom + 12;
+          var ledgerDirection = y < staffTop ? -12 : 12;
+          for (; ledgerDirection < 0 ? ledgerY >= y : ledgerY <= y; ledgerY += ledgerDirection) {
+            svg.appendChild(notationSvgElement('line', { x1: noteX - 9, y1: ledgerY, x2: noteX + 9, y2: ledgerY, class: 'staff-ledger' }));
+          }
         }
-        var head = notationSvgElement('ellipse', { cx: noteX, cy: y, rx: 6.5, ry: 4.8, class: classes, 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
+        var head = notationSvgElement('ellipse', { cx: noteX, cy: y, rx: 7, ry: 5.1, class: classes, 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
         head.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + pitch.label + ', step ' + String(event.index + 1));
         if (event.active) head.setAttribute('aria-current', 'step');
         svg.appendChild(head);
-        if (pitch.accidental) svg.appendChild(notationSvgElement('text', { x: noteX - 14, y: y + 4, class: 'staff-note-label' }, pitch.accidental));
+        if (pitch.accidental) svg.appendChild(notationSvgElement('text', { x: noteX - 16, y: y + 5, class: 'staff-note-accidental', 'aria-hidden': 'true' }, pitch.accidental === '#' ? '\u266f' : '\u266d'));
       });
-      if (event.degree) svg.appendChild(notationSvgElement('text', { x: x - 4, y: 80, class: 'staff-note-label', 'text-anchor': 'middle' }, event.degree));
+      if (event.degree) svg.appendChild(notationSvgElement('text', { x: x, y: 96, class: 'staff-note-label', 'text-anchor': 'middle' }, event.degree));
     });
+    svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
   }
 
   function renderPianoRollNotation(projection) {
@@ -5600,15 +5648,15 @@
     var high = projection.highMidi + 2;
     var range = Math.max(5, high - low);
     for (var midi = low; midi <= high; midi++) {
-      var y = 8 + (high - midi) * (64 / range);
-      svg.appendChild(notationSvgElement('line', { x1: 28, y1: y, x2: 352, y2: y, class: 'roll-grid-line' }));
+      var y = 16 + (high - midi) * (66 / range);
+      svg.appendChild(notationSvgElement('line', { x1: 42, y1: y, x2: 550, y2: y, class: 'roll-grid-line' }));
     }
     projection.events.forEach(function(event, eventOffset) {
-      var columnWidth = 278 / Math.max(1, projection.events.length);
-      var x = 58 + eventOffset * columnWidth;
-      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: 6, width: columnWidth - 3, height: 68, rx: 4, class: 'roll-column-active' }));
+      var columnWidth = 500 / Math.max(1, projection.events.length);
+      var x = 46 + eventOffset * columnWidth;
+      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: 12, width: columnWidth - 3, height: 74, rx: 4, class: 'roll-column-active' }));
       event.midis.forEach(function(midi) {
-        var y = 8 + (high - midi) * (64 / range) - 3.7;
+        var y = 16 + (high - midi) * (66 / range) - 3.7;
         var classes = 'roll-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
         var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: 7.5, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
         note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));

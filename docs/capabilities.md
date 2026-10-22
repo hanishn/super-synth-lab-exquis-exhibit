@@ -376,10 +376,11 @@ never be used to infer notation.
 - The active step is exactly the normalized practice `state.step`; setup
   changes, manual stepping, accepted MIDI, progression voicing changes, and
   hardware lighting therefore advance together.
-- Staff spelling follows the app's existing selected-key sharp/flat policy.
-  It deliberately does not claim a conventional key signature for modal or
-  ambiguous spellings. Ledger lines communicate register rather than clamping
-  notes into the staff.
+- Ionian, Aeolian, Dorian, and Mixolydian use conventional SVG clef and
+  key-signature glyphs. Their signatures derive from the applicable relative
+  major key; non-diatonic scales deliberately show no fabricated signature.
+  Staff spelling otherwise follows the app's selected-key sharp/flat policy.
+  Ledger lines communicate register rather than clamping notes into the staff.
 - Degree/Roman/quality/inversion context appears only when present in
   `musicalIntent`. Exquis fingering remains separate from conventional notation
   and is not relabeled as piano fingering.
@@ -388,7 +389,8 @@ never be used to infer notation.
   note label, notehead, piano-roll position, or future target before an attempt.
 - The lens is hidden in Play mode, has semantic SVG labels, exposes active state
   with `aria-current`, and uses structure/text in addition to color. It remains
-  shallow on desktop and stacks without horizontal clipping on narrow screens.
+  a fixed shallow two-view strip through tablet width; only phone-width layouts
+  stack the views to preserve readable notation without horizontal clipping.
 
 ## Test Expectations
 

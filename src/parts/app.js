@@ -5915,6 +5915,10 @@
       render();
     }, 1400);
     render();
+    // MIDI sequence scoring advances state outside the manual next-button path.
+    // Render first so currentLightFrame represents the new target, then send the
+    // coalesced effect update that moves the physical Exquis pulse with it.
+    if (advancedPracticeStep) syncExquisPracticePadFrame();
   }
 
   function onMidiMessage(event) {
@@ -7796,7 +7800,6 @@
     state.workspace = workspace;
     placeWorkspaceControls();
     render();
-    if (advancedPracticeStep) syncExquisPracticePadFrame();
   }
 
   function init() {

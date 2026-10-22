@@ -81,6 +81,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "ssli_engines_must_initialize_before_selected_preset_playback": "test_regression_ssli_engine_initializes_before_selected_preset_playback",
         "exquis_midi_must_use_ssli_sustained_notes_and_expression": "test_regression_exquis_midi_uses_ssli_sustained_note_and_expression_api",
         "hardware_target_sync_must_clear_previous_pulses": "test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets",
+        "hardware_target_pulse_must_advance_after_correct_midi_sequence_note": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
         "hardware_chord_sync_must_pulse_all_current_targets": "test_regression_exquis_sync_pulses_every_current_chord_target",
         "rgb_probe_must_use_official_pad_only_protocol": "test_regression_exquis_rgb_pad_probe_uses_official_pad_only_direct_led_protocol",
         "exquis_low_velocity_midi_must_still_start_audible_ssli_voice": "test_regression_exquis_low_velocity_starts_audible_ssli_voice",
@@ -2820,6 +2821,44 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.assertIn([175, pad_id, 0], updates)
         for pad_id in targets_after:
             self.assertIn([175, pad_id, 63], updates)
+
+    def test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.select_option('[data-testid="exercise-family-select"]', "technique")
+        self.page.select_option('[data-testid="exercise-select"]', "root_octave")
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.wait_for_timeout(2200)
+        before = self.page.evaluate("""() => ({
+          target: window.__exquisLightDebug.hardwareFrame().find((pad) => pad.isTarget),
+          sent: window.__mockExquisOutput.sent.length
+        })""")
+        self.assertIsNotNone(before["target"])
+        self.page.evaluate("(midi) => window.__mockExquisInput.onmidimessage({ data: [0x90, midi, 100] })", before["target"]["midi"])
+        self.page.wait_for_timeout(1000)
+        after = self.page.evaluate("""(count) => ({
+          target: window.__exquisLightDebug.hardwareFrame().find((pad) => pad.isTarget),
+          updates: window.__mockExquisOutput.sent.slice(count)
+        })""", before["sent"])
+        self.assertIsNotNone(after["target"])
+        self.assertNotEqual(after["target"]["padId"], before["target"]["padId"])
+        self.assertIn([175, before["target"]["padId"], 0], after["updates"])
+        self.assertIn([175, after["target"]["padId"], 63], after["updates"])
 
     def test_regression_exquis_sync_pulses_every_current_chord_target(self):
         self.page.evaluate("""

@@ -360,6 +360,36 @@ Selecting a progression exposes a `Chord progression` control surface with globa
 
 Finger guidance has two deliberately distinct meanings. Sequential exercises teach the next physical finger for one note at a time and may use descriptive names such as `Index (2)` or `Ring (4)`. Simultaneous grips, including progression voicings, teach the finger's position within the chord shape instead: every current chord target displays one unique numeric `Chord finger` value from 1 through 5. The assignment is derived from the active physical grip size: a two-note grip receives the centered contiguous span `2-3`, a three-note `C-E-G` grip receives `2-3-4`, four notes receive `1-2-3-4`, and five notes receive `1-2-3-4-5`. Successive chord voices use successive finger positions, regardless of hand-side preference; no piano-interval tables or hand reversal participate in simultaneous-grip guidance. A chord view never overlays sequence-finger labels on the same target surface, and assistive text identifies the active context as either `Sequence finger` or `Chord finger`.
 
+### Practice Notation Lens
+
+Practice mode projects the canonical `ExerciseEvent` sequence into a compact
+Notation Lens above the Exquis surface. It provides a staff view, a horizontal
+piano-roll view, and functional degree/harmony context without creating a
+second scoring, playback, or cursor state. `event.targets` is the sole source
+of displayed pitches; Exquis pad geometry, CSS classes, and path chips must
+never be used to infer notation.
+
+- The staff and piano roll show the active target plus a short upcoming window.
+  Sequential notes occupy successive instructional slots; grips/chords stack
+  their actual MIDI pitches simultaneously. The display is a pitch map, not
+  fabricated rhythmic engraving.
+- The active step is exactly the normalized practice `state.step`; setup
+  changes, manual stepping, accepted MIDI, progression voicing changes, and
+  hardware lighting therefore advance together.
+- Staff spelling follows the app's existing selected-key sharp/flat policy.
+  It deliberately does not claim a conventional key signature for modal or
+  ambiguous spellings. Ledger lines communicate register rather than clamping
+  notes into the staff.
+- Degree/Roman/quality/inversion context appears only when present in
+  `musicalIntent`. Exquis fingering remains separate from conventional notation
+  and is not relabeled as piano fingering.
+- When `musicalIntent.concealTargets` is true, the entire pitch projection is
+  replaced by a neutral listen-first placeholder. It must reveal no answer MIDI,
+  note label, notehead, piano-roll position, or future target before an attempt.
+- The lens is hidden in Play mode, has semantic SVG labels, exposes active state
+  with `aria-current`, and uses structure/text in addition to color. It remains
+  shallow on desktop and stacks without horizontal clipping on narrow screens.
+
 ## Test Expectations
 
 New feature workflow invariant:

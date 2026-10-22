@@ -82,6 +82,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "exquis_midi_must_use_ssli_sustained_notes_and_expression": "test_regression_exquis_midi_uses_ssli_sustained_note_and_expression_api",
         "hardware_target_sync_must_clear_previous_pulses": "test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets",
         "hardware_target_pulse_must_advance_after_correct_midi_sequence_note": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
+        "practice_notation_must_follow_canonical_target_step": "test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers",
         "hardware_chord_sync_must_pulse_all_current_targets": "test_regression_exquis_sync_pulses_every_current_chord_target",
         "rgb_probe_must_use_official_pad_only_protocol": "test_regression_exquis_rgb_pad_probe_uses_official_pad_only_direct_led_protocol",
         "exquis_low_velocity_midi_must_still_start_audible_ssli_voice": "test_regression_exquis_low_velocity_starts_audible_ssli_voice",
@@ -2859,6 +2860,41 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertNotEqual(after["target"]["padId"], before["target"]["padId"])
         self.assertIn([175, before["target"]["padId"], 0], after["updates"])
         self.assertIn([175, after["target"]["padId"], 63], after["updates"])
+
+    def test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers(self):
+        panel = self.page.locator('[data-testid="practice-notation"]')
+        staff = self.page.locator('[data-testid="staff-notation"]')
+        roll = self.page.locator('[data-testid="piano-roll-notation"]')
+        self.assertTrue(panel.is_visible())
+        self.assertTrue(staff.is_visible())
+        self.assertTrue(roll.is_visible())
+        active_before = self.page.locator('[data-testid="piano-roll-note"].notation-active')
+        self.assertEqual(active_before.count(), 1)
+        before_index = active_before.get_attribute('data-event-index')
+        before_midi = active_before.get_attribute('data-midi')
+        self.page.locator('[data-testid="next-step"]').click()
+        active_after = self.page.locator('[data-testid="piano-roll-note"].notation-active')
+        self.assertEqual(active_after.count(), 1)
+        self.assertNotEqual(active_after.get_attribute('data-event-index'), before_index)
+        self.assertNotEqual(active_after.get_attribute('data-midi'), before_midi)
+        self.assertEqual(self.page.locator('[data-testid="staff-note"].notation-active').count(), 1)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
+        self.page.select_option('[data-testid="exercise-select"]', 'ear_major_third')
+        self.assertTrue(self.page.locator('[data-testid="notation-concealed"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="piano-roll-note"]').count(), 0)
+        self.assertEqual(self.page.locator('[data-testid="staff-note"]').count(), 0)
+
+    def test_practice_notation_lens_stacks_canonical_grip_pitches(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="exercise-select"]', 'c_major_progression')
+        roll_notes = self.page.locator('[data-testid="piano-roll-note"].notation-active')
+        staff_notes = self.page.locator('[data-testid="staff-note"].notation-active')
+        self.assertEqual(roll_notes.count(), 3)
+        self.assertEqual(staff_notes.count(), 3)
+        roll_midis = sorted(int(roll_notes.nth(index).get_attribute('data-midi')) for index in range(roll_notes.count()))
+        staff_midis = sorted(int(staff_notes.nth(index).get_attribute('data-midi')) for index in range(staff_notes.count()))
+        self.assertEqual(roll_midis, staff_midis)
+        self.assertEqual(len(set(roll_notes.evaluate_all("nodes => nodes.map((node) => node.getAttribute('data-event-index'))"))), 1)
 
     def test_regression_exquis_sync_pulses_every_current_chord_target(self):
         self.page.evaluate("""

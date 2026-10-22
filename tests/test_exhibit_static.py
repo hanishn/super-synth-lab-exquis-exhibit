@@ -79,6 +79,19 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("color: #dce4ec;", self.bundle)
         self.assertIn("color: #0b1016;", self.bundle)
 
+    def test_practice_notation_lens_is_built_from_canonical_exercise_events(self):
+        source = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        docs = (ROOT / "docs/capabilities.md").read_text(encoding="utf-8")
+        self.assertIn('data-testid="practice-notation"', self.bundle)
+        self.assertIn('data-testid="staff-notation"', self.bundle)
+        self.assertIn('data-testid="piano-roll-notation"', self.bundle)
+        self.assertIn("function buildNotationProjection", source)
+        self.assertIn("function renderPracticeNotation", source)
+        self.assertIn("renderPracticeNotation(currentExerciseEvents, currentEvent", source)
+        self.assertIn("### Practice Notation Lens", docs)
+        self.assertIn("event.targets", docs)
+        self.assertIn("concealTargets", docs)
+
     def test_build_version_is_generated_visible_and_used_for_cache_busting(self):
         match = re.search(r'data-testid="build-version"[^>]*title="Built ([^"]+)"[^>]*>\s*<span>Build</span>\s*<b>([^<]+)</b>', self.bundle)
         self.assertIsNotNone(match)

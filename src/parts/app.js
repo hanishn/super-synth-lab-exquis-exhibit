@@ -5490,6 +5490,158 @@
     return currentExerciseEvents[mod(state.step, currentExerciseEvents.length)];
   }
 
+  function spellNotationPitch(midi) {
+    var names = FLAT_KEY_ROOTS.indexOf(state.tonicPc) >= 0 ? NOTES_FLAT : NOTES_SHARP;
+    var name = names[mod(midi, 12)];
+    var letter = name.charAt(0);
+    var accidental = name.slice(1);
+    var pitchOctave = octave(midi);
+    var letterIndex = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 }[letter];
+    return {
+      midi: midi,
+      letter: letter,
+      accidental: accidental,
+      octave: pitchOctave,
+      label: name + pitchOctave,
+      diatonicIndex: pitchOctave * 7 + letterIndex
+    };
+  }
+
+  // Projection is intentionally pure display data from canonical exercise
+  // events. It has no playback/scoring cursor of its own, so every practice
+  // transition already updates staff, roll, and Exquis guidance in lockstep.
+  function buildNotationProjection(events, currentEvent) {
+    var concealed = !!(currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets);
+    if (concealed) return { concealed: true, events: [], lowMidi: 0, highMidi: 0 };
+    var windowSize = Math.min(6, events.length);
+    var start = events.length ? mod(state.step, events.length) : 0;
+    var projected = [];
+    for (var offset = 0; offset < windowSize; offset++) {
+      var source = events[mod(start + offset, events.length)] || {};
+      var midis = (source.targets || []).map(function(target) { return target.midi; }).filter(function(midi) { return typeof midi === 'number'; }).sort(function(a, b) { return a - b; });
+      projected.push({
+        index: mod(start + offset, events.length),
+        active: offset === 0,
+        completed: false,
+        midis: midis,
+        degree: source.musicalIntent && source.musicalIntent.degree || '',
+        quality: source.musicalIntent && source.musicalIntent.quality || '',
+        inversion: source.musicalIntent && source.musicalIntent.inversion || ''
+      });
+    }
+    var allMidis = projected.reduce(function(result, event) { return result.concat(event.midis); }, []);
+    return {
+      concealed: false,
+      events: projected,
+      lowMidi: allMidis.length ? Math.min.apply(null, allMidis) : 48,
+      highMidi: allMidis.length ? Math.max.apply(null, allMidis) : 60
+    };
+  }
+
+  function notationSvgElement(name, attributes, textValue) {
+    var node = document.createElementNS('http://www.w3.org/2000/svg', name);
+    Object.keys(attributes || {}).forEach(function(key) { node.setAttribute(key, String(attributes[key])); });
+    if (typeof textValue === 'string') node.textContent = textValue;
+    return node;
+  }
+
+  function clearNotationSvg(svg, label) {
+    if (!svg) return;
+    clearChildren(svg);
+    svg.setAttribute('viewBox', '0 0 360 86');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('aria-label', label);
+    svg.appendChild(notationSvgElement('title', {}, label));
+  }
+
+  function renderStaffNotation(projection) {
+    var svg = els.staffNotation;
+    if (!svg) return;
+    clearNotationSvg(svg, 'Staff notation of current and upcoming practice steps');
+    if (projection.concealed) return;
+    var average = projection.events.reduce(function(total, event) { return total + event.midis.reduce(function(sum, midi) { return sum + midi; }, 0); }, 0) /
+      Math.max(1, projection.events.reduce(function(total, event) { return total + event.midis.length; }, 0));
+    var useBass = average < 60;
+    var reference = useBass ? spellNotationPitch(43).diatonicIndex : spellNotationPitch(64).diatonicIndex;
+    for (var line = 0; line < 5; line++) {
+      var y = 18 + line * 11;
+      svg.appendChild(notationSvgElement('line', { x1: 30, y1: y, x2: 352, y2: y, class: 'staff-line' }));
+    }
+    svg.appendChild(notationSvgElement('text', { x: 5, y: 54, class: 'staff-clef', 'aria-hidden': 'true' }, useBass ? 'F' : 'G'));
+    projection.events.forEach(function(event, eventOffset) {
+      var x = 66 + eventOffset * (278 / Math.max(1, projection.events.length - 1));
+      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 18, y: 8, width: 36, height: 60, rx: 5, class: 'roll-column-active' }));
+      event.midis.forEach(function(midi, pitchIndex) {
+        var pitch = spellNotationPitch(midi);
+        var staffSteps = pitch.diatonicIndex - reference;
+        var y = 40 - staffSteps * 5.5;
+        var noteX = x + (pitchIndex && Math.abs(event.midis[pitchIndex - 1] - midi) === 1 ? 4 : 0);
+        var classes = 'staff-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
+        if (y < 18 || y > 62) {
+          var ledgerY = y < 18 ? 18 : 62;
+          svg.appendChild(notationSvgElement('line', { x1: noteX - 8, y1: ledgerY, x2: noteX + 8, y2: ledgerY, class: 'staff-ledger' }));
+        }
+        var head = notationSvgElement('ellipse', { cx: noteX, cy: y, rx: 6.5, ry: 4.8, class: classes, 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
+        head.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + pitch.label + ', step ' + String(event.index + 1));
+        if (event.active) head.setAttribute('aria-current', 'step');
+        svg.appendChild(head);
+        if (pitch.accidental) svg.appendChild(notationSvgElement('text', { x: noteX - 14, y: y + 4, class: 'staff-note-label' }, pitch.accidental));
+      });
+      if (event.degree) svg.appendChild(notationSvgElement('text', { x: x - 4, y: 80, class: 'staff-note-label', 'text-anchor': 'middle' }, event.degree));
+    });
+  }
+
+  function renderPianoRollNotation(projection) {
+    var svg = els.pianoRollNotation;
+    if (!svg) return;
+    clearNotationSvg(svg, 'Piano roll of current and upcoming practice steps');
+    if (projection.concealed) return;
+    var low = projection.lowMidi - 2;
+    var high = projection.highMidi + 2;
+    var range = Math.max(5, high - low);
+    for (var midi = low; midi <= high; midi++) {
+      var y = 8 + (high - midi) * (64 / range);
+      svg.appendChild(notationSvgElement('line', { x1: 28, y1: y, x2: 352, y2: y, class: 'roll-grid-line' }));
+    }
+    projection.events.forEach(function(event, eventOffset) {
+      var columnWidth = 278 / Math.max(1, projection.events.length);
+      var x = 58 + eventOffset * columnWidth;
+      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: 6, width: columnWidth - 3, height: 68, rx: 4, class: 'roll-column-active' }));
+      event.midis.forEach(function(midi) {
+        var y = 8 + (high - midi) * (64 / range) - 3.7;
+        var classes = 'roll-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
+        var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: 7.5, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
+        note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));
+        if (event.active) note.setAttribute('aria-current', 'step');
+        svg.appendChild(note);
+        if (event.active) svg.appendChild(notationSvgElement('text', { x: x + 2, y: y - 2, class: 'roll-note-label' }, spellNotationPitch(midi).label));
+      });
+    });
+  }
+
+  function renderPracticeNotation(events, currentEvent, isPracticeMode) {
+    if (!els.practiceNotation) return;
+    els.practiceNotation.hidden = !isPracticeMode;
+    if (!isPracticeMode) return;
+    var projection = buildNotationProjection(events, currentEvent);
+    els.notationConcealed.hidden = !projection.concealed;
+    els.notationViews.hidden = projection.concealed;
+    if (projection.concealed) {
+      clearNotationSvg(els.staffNotation, 'Staff notation is concealed until the ear-training answer');
+      clearNotationSvg(els.pianoRollNotation, 'Piano roll is concealed until the ear-training answer');
+      if (els.notationStepLabel) els.notationStepLabel.textContent = 'Listen, then answer';
+      if (els.notationHarmony) els.notationHarmony.textContent = 'Ear training keeps answer pitches hidden.';
+      return;
+    }
+    renderStaffNotation(projection);
+    renderPianoRollNotation(projection);
+    if (els.notationStepLabel) els.notationStepLabel.textContent = 'Step ' + String(state.step + 1) + ' of ' + String(events.length);
+    if (els.notationHarmony) {
+      var intent = currentEvent && currentEvent.musicalIntent || {};
+      els.notationHarmony.textContent = intent.progressionId ? ((intent.degree || '') + (intent.quality ? ' ' + intent.quality : '') + (intent.inversion ? ' / ' + intent.inversion : '')) : (currentEvent && currentEvent.type === 'grip' ? 'Simultaneous grip' : 'Pitch map, not rhythm notation');
+    }
+  }
+
   function getPromptMidis(event) {
     if (!event) return [];
     if (event.musicalIntent && Array.isArray(event.musicalIntent.promptMidis)) return event.musicalIntent.promptMidis.slice();
@@ -6916,6 +7068,7 @@
     state.step = currentExerciseEvents.length ? mod(state.step, currentExerciseEvents.length) : 0;
     var currentStepIndex = state.step;
     currentEvent = expectedExerciseEvent();
+    renderPracticeNotation(currentExerciseEvents, currentEvent, isPracticeMode);
     var currentGripTargetsByKey = {};
     var currentGripFingerByCell = {};
     var currentGripTargetNotes = [];
@@ -7882,6 +8035,13 @@
       exquisDevice: document.getElementById('exquisDevice'),
       keyboard: document.getElementById('keyboard'),
       practicePathStrip: document.getElementById('practicePathStrip'),
+      practiceNotation: document.getElementById('practiceNotation'),
+      notationStepLabel: document.getElementById('notationStepLabel'),
+      notationHarmony: document.getElementById('notationHarmony'),
+      notationConcealed: document.getElementById('notationConcealed'),
+      notationViews: document.getElementById('notationViews'),
+      staffNotation: document.getElementById('staffNotation'),
+      pianoRollNotation: document.getElementById('pianoRollNotation'),
       edgeTopControls: document.getElementById('edgeTopControls'),
       edgeBottomControls: document.getElementById('edgeBottomControls'),
       edgeControlStatus: document.getElementById('edgeControlStatus'),

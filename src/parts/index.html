@@ -173,7 +173,6 @@
         <p id="stateSubtitle">Left hand: Natural clusters</p>
       </div>
       <div id="practicePathStrip" class="practice-path-strip practice-control" data-testid="practice-path-strip" aria-label="Practice path"></div>
-      <div id="practicePianoReference" class="practice-piano-reference" data-testid="practice-piano-reference" aria-label="Piano reference"></div>
       <button id="coachToggle" class="coach-toggle" type="button" data-testid="coach-toggle" aria-expanded="false">Coach</button>
       <div class="stepper practice-control" aria-label="Practice note stepper" data-testid="practice-stepper">
         <button id="prevStep" type="button" aria-label="Previous note" data-testid="prev-step">Prev</button>
@@ -182,11 +181,12 @@
         <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
       </div>
     </div>
+    <div id="practicePianoReference" class="practice-piano-reference" data-testid="practice-piano-reference" aria-label="Piano reference"></div>
     <div class="practice-surface" data-testid="practice-surface">
       <section id="practiceNotation" class="practice-notation" data-testid="practice-notation" aria-label="Musical notation" aria-live="polite">
         <aside id="notationStaffRail" class="notation-rail notation-staff-rail">
           <div class="notation-heading">
-            <p class="eyebrow">Notation lens</p>
+            <p class="eyebrow">Practice steps</p>
             <p id="notationStepLabel" data-testid="notation-step-label">Current practice step</p>
             <p id="notationHarmony" class="notation-harmony" data-testid="notation-harmony"></p>
           </div>
@@ -194,7 +194,7 @@
           <div id="staffNotation" class="staff-notation" data-testid="staff-notation" role="img" aria-label="Staff notation for the current practice sequence"></div>
         </aside>
         <aside id="notationRollRail" class="notation-rail notation-roll-rail">
-          <div class="notation-rail-heading"><p class="eyebrow">Piano roll</p><p>Current + next targets</p></div>
+          <div class="notation-rail-heading"><p class="eyebrow">Pitch map</p><p>Current + next targets</p></div>
           <svg id="pianoRollNotation" class="piano-roll-notation" data-testid="piano-roll-notation" role="img" aria-label="Piano roll for the current practice sequence"></svg>
         </aside>
       </section>

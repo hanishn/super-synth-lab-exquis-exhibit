@@ -2896,7 +2896,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(roll_midis, staff_midis)
         self.assertEqual(len(set(roll_notes.evaluate_all("nodes => nodes.map((node) => node.getAttribute('data-event-index'))"))), 1)
 
-    def test_practice_notation_uses_music_symbols_and_keeps_a_compact_tablet_fit(self):
+    def test_practice_notation_uses_legible_two_panel_tablet_fit(self):
         self.page.set_viewport_size({"width": 768, "height": 1024})
         self.page.select_option('[data-testid="tonic-select"]', '4')  # E major: four sharps.
         panel = self.page.locator('[data-testid="practice-notation"]')
@@ -2905,26 +2905,63 @@ class PlaywrightExhibitTests(unittest.TestCase):
         panel_box = panel.bounding_box()
         staff_box = staff.bounding_box()
         roll_box = roll.bounding_box()
-        self.assertLessEqual(panel_box['height'], 116)
+        self.assertGreaterEqual(panel_box['height'], 210)
+        self.assertLessEqual(panel_box['height'], 400)
         self.assertLess(staff_box['x'] + staff_box['width'], roll_box['x'], 'tablet keeps staff and piano roll side by side')
         self.assertLess(abs(staff_box['y'] - roll_box['y']), 30, 'the two rails remain in one visual band')
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'), 768)
-        symbols = staff.locator('text').all_text_contents()
-        self.assertTrue(any(symbol in {'\U0001d11e', '\U0001d122'} for symbol in symbols))
-        self.assertEqual(staff.locator('.key-signature-accidental').count(), 4)
+        self.assertEqual(staff.locator('svg').count(), 1)
+        self.assertGreater(staff.locator('svg path').count(), 10)
+        colors = staff.locator('svg path').evaluate_all("nodes => nodes.slice(0, 30).map(node => getComputedStyle(node).fill)")
+        self.assertTrue(all(color not in {'rgb(0, 0, 0)', 'rgba(0, 0, 0, 0)'} for color in colors))
         self.assertIn('E Major', staff.get_attribute('aria-label'))
 
-    def test_practice_notation_uses_desktop_side_rails_not_the_exquis_vertical_space(self):
+    def test_practice_notation_preserves_the_play_surface_on_normal_desktop(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()
         roll = self.page.locator('[data-testid="piano-roll-notation"]').bounding_box()
         device = self.page.locator('[data-testid="exquis-device"]').bounding_box()
         surface = self.page.locator('[data-testid="practice-surface"]').bounding_box()
+        self.assertLess(staff['x'] + staff['width'], roll['x'])
+        self.assertGreaterEqual(staff['y'], device['y'] + device['height'])
+        self.assertGreaterEqual(roll['y'], device['y'] + device['height'])
+        self.assertLessEqual(device['x'] + device['width'], surface['x'] + surface['width'] + 1)
+        self.assertGreater(staff['y'], surface['y'], 'notation lives beside, not above, the play surface')
+        self.assertAlmostEqual(device['y'], surface['y'], delta=1)
+
+    def test_practice_piano_reference_tracks_real_target_range_and_active_note(self):
+        keys = self.page.locator('[data-testid="practice-piano-key"]')
+        active = self.page.locator('[data-testid="practice-piano-key"].is-current')
+        self.assertGreaterEqual(keys.count(), 18)
+        self.assertEqual(active.count(), 1)
+        active_midi = active.get_attribute('data-midi')
+        roll_midi = self.page.locator('[data-testid="piano-roll-note"].notation-active').get_attribute('data-midi')
+        self.assertEqual(active_midi, roll_midi)
+        self.page.locator('[data-testid="next-step"]').click()
+        self.assertEqual(
+            self.page.locator('[data-testid="practice-piano-key"].is-current').get_attribute('data-midi'),
+            self.page.locator('[data-testid="piano-roll-note"].notation-active').get_attribute('data-midi')
+        )
+
+    def test_practice_notation_uses_side_rails_only_when_the_full_device_fits(self):
+        self.page.set_viewport_size({"width": 1920, "height": 1080})
+        staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()
+        roll = self.page.locator('[data-testid="piano-roll-notation"]').bounding_box()
+        device = self.page.locator('[data-testid="exquis-device"]').bounding_box()
         self.assertLessEqual(staff['x'] + staff['width'], device['x'])
         self.assertGreaterEqual(roll['x'], device['x'] + device['width'])
-        self.assertGreater(staff['y'], surface['y'], 'notation lives beside, not above, the play surface')
-        self.assertGreater(roll['y'], surface['y'], 'notation lives beside, not above, the play surface')
-        self.assertAlmostEqual(device['y'], surface['y'], delta=1)
+        self.assertGreaterEqual(staff['height'], 320)
+        self.assertGreaterEqual(roll['height'], 320)
+
+    def test_practice_notation_keeps_clef_and_pitch_axis_stable_across_steps(self):
+        staff = self.page.locator('[data-testid="staff-notation"]')
+        roll_note = self.page.locator('[data-testid="piano-roll-note"][data-midi="48"]').first
+        clef_before = staff.get_attribute('aria-label')
+        y_before = roll_note.get_attribute('y')
+        self.page.locator('[data-testid="next-step"]').click()
+        self.assertEqual(staff.get_attribute('aria-label'), clef_before)
+        roll_note_after = self.page.locator('[data-testid="piano-roll-note"][data-midi="48"]').first
+        self.assertEqual(roll_note_after.get_attribute('y'), y_before)
 
     def test_regression_exquis_sync_pulses_every_current_chord_target(self):
         self.page.evaluate("""

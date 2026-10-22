@@ -5528,14 +5528,15 @@
     return useBass ? '\ud834\udd22' : '\ud834\udd1e';
   }
 
-  function chooseNotationClef(events) {
-    var midis = events.reduce(function(all, event) { return all.concat(event.midis); }, []);
+  function chooseNotationClef(midis) {
     if (!midis.length) return false;
     return midis.reduce(function(sum, midi) { return sum + midi; }, 0) / midis.length < 60;
   }
 
   function isNotationRailLayout() {
-    return window.matchMedia && window.matchMedia('(min-width: 901px)').matches;
+    // The physical Exquis needs nearly a kilopixel of central stage width.
+    // Rails only appear when the viewport can provide that without collision.
+    return window.matchMedia && window.matchMedia('(min-width: 1600px)').matches;
   }
 
   function notationCanvasWidth() {
@@ -5550,7 +5551,7 @@
     if (concealed) return { concealed: true, events: [], lowMidi: 0, highMidi: 0 };
     // Side rails have room for a legible current/next phrase, not six tiny
     // notes. The mobile top strip keeps the wider six-step overview.
-    var windowSize = Math.min(isNotationRailLayout() ? 3 : 6, events.length);
+    var windowSize = Math.min(8, events.length);
     var start = events.length ? mod(state.step, events.length) : 0;
     var projected = [];
     for (var offset = 0; offset < windowSize; offset++) {
@@ -5566,12 +5567,13 @@
         inversion: source.musicalIntent && source.musicalIntent.inversion || ''
       });
     }
-    var allMidis = projected.reduce(function(result, event) { return result.concat(event.midis); }, []);
+    var allMidis = events.reduce(function(result, event) { return result.concat((event.targets || []).map(function(target) { return target.midi; })); }, []);
     return {
       concealed: false,
       events: projected,
       lowMidi: allMidis.length ? Math.min.apply(null, allMidis) : 48,
-      highMidi: allMidis.length ? Math.max.apply(null, allMidis) : 60
+      highMidi: allMidis.length ? Math.max.apply(null, allMidis) : 60,
+      useBass: chooseNotationClef(allMidis)
     };
   }
 
@@ -5602,7 +5604,9 @@
     if (!container) return;
     clearStaffNotation(container, 'Staff notation of current and upcoming practice steps');
     if (projection.concealed) return;
-    var useBass = chooseNotationClef(projection.events);
+    // Clef selection is exercise-wide, never a function of the moving window:
+    // stepping through a phrase must not make the notation jump between clefs.
+    var useBass = projection.useBass;
     var signature = notationKeySignature();
     var VF = window.Vex && window.Vex.Flow;
     if (!VF) {
@@ -5610,14 +5614,10 @@
       return;
     }
     var width = Math.max(130, Math.floor(container.clientWidth || 180));
-    var height = Math.max(100, Math.floor(container.clientHeight || 132));
+    var height = Math.max(220, Math.floor(container.clientHeight || 260));
     var renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
     renderer.resize(width, height);
     var context = renderer.getContext();
-    var stave = new VF.Stave(4, 22, Math.max(110, width - 8));
-    stave.addClef(useBass ? 'bass' : 'treble');
-    if (signature.conventional) stave.addKeySignature(signature.vexKey);
-    stave.setContext(context).draw();
     var alteredPcs = signature.count > 0 ? [6, 1, 8, 3, 10, 5, 11].slice(0, signature.count) :
       (signature.count < 0 ? [10, 3, 8, 1, 6, 11, 5].slice(0, -signature.count) : []);
     var notes = projection.events.map(function(event) {
@@ -5633,17 +5633,32 @@
         var accidental = spellNotationPitch(midi).accidental;
         if (accidental && alteredPcs.indexOf(mod(midi, 12)) === -1) note.addModifier(new VF.Accidental(accidental), index);
       });
-      note.setStyle({ fillStyle: event.active ? '#fff1a8' : '#8ba8c7', strokeStyle: event.active ? '#f26d6d' : '#0c1116' });
+      note.setStyle({ fillStyle: event.active ? '#ffd166' : '#a7c7e7', strokeStyle: event.active ? '#ffd166' : '#a7c7e7' });
       return note;
     });
-    if (notes.length) {
-      var voice = new VF.Voice({ num_beats: notes.length, beat_value: 4 }).setStrict(false);
-      voice.addTickables(notes);
-      new VF.Formatter().joinVoices([voice]).format([voice], Math.max(32, width - 80));
+    // A wide lesson strip earns one phrase-wide stave; narrow side rails split
+    // at four steps so neither form degenerates into a row of tiny symbols.
+    var notesPerSystem = width >= 480 ? 8 : 4;
+    var systemCount = Math.ceil(notes.length / notesPerSystem);
+    for (var systemStart = 0; systemStart < notes.length; systemStart += notesPerSystem) {
+      var systemNotes = notes.slice(systemStart, systemStart + notesPerSystem);
+      var systemIndex = systemStart / notesPerSystem;
+      var systemY = systemCount === 1 ? Math.max(18, Math.floor((height - 92) / 2)) : 20 + systemIndex * 104;
+      var stave = new VF.Stave(8, systemY, Math.max(110, width - 16));
+      stave.addClef(useBass ? 'bass' : 'treble');
+      if (signature.conventional) stave.addKeySignature(signature.vexKey);
+      stave.setContext(context).draw();
+      var voice = new VF.Voice({ num_beats: systemNotes.length, beat_value: 4 }).setStrict(false);
+      voice.addTickables(systemNotes);
+      new VF.Formatter().joinVoices([voice]).format([voice], Math.max(72, width - 120));
       voice.draw(context, stave);
     }
     var svg = container.querySelector('svg');
     if (svg) {
+      svg.querySelectorAll('path, line, text').forEach(function(node) {
+        node.style.stroke = '#dbe8f4';
+        node.style.fill = '#dbe8f4';
+      });
       svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
       var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
       projection.events.forEach(function(event) {
@@ -5668,16 +5683,18 @@
     var range = Math.max(5, high - low);
     for (var midi = low; midi <= high; midi++) {
       var y = 16 + (high - midi) * (66 / range);
-      svg.appendChild(notationSvgElement('line', { x1: 42, y1: y, x2: notationCanvasWidth() - 10, y2: y, class: 'roll-grid-line' }));
+      svg.appendChild(notationSvgElement('line', { x1: 42, y1: y, x2: notationCanvasWidth() - 10, y2: y, class: 'roll-grid-line' + (mod(midi, 12) === 0 ? ' roll-c-line' : '') }));
+      if (mod(midi, 12) === 0) svg.appendChild(notationSvgElement('text', { x: 3, y: y + 3, class: 'roll-axis-label' }, 'C' + octave(midi)));
     }
     projection.events.forEach(function(event, eventOffset) {
       var columnWidth = (notationCanvasWidth() - 50) / Math.max(1, projection.events.length);
       var x = 46 + eventOffset * columnWidth;
       if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: 12, width: columnWidth - 3, height: 74, rx: 4, class: 'roll-column-active' }));
       event.midis.forEach(function(midi) {
-        var y = 16 + (high - midi) * (66 / range) - 3.7;
+        var noteHeight = Math.max(10, Math.min(16, 66 / range * 1.55));
+        var y = 16 + (high - midi) * (66 / range) - noteHeight / 2;
         var classes = 'roll-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
-        var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: 7.5, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
+        var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: noteHeight, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
         note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));
         if (event.active) note.setAttribute('aria-current', 'step');
         svg.appendChild(note);
@@ -5706,7 +5723,7 @@
     if (els.notationStepLabel) els.notationStepLabel.textContent = 'Step ' + String(state.step + 1) + ' of ' + String(events.length);
     if (els.notationHarmony) {
       var intent = currentEvent && currentEvent.musicalIntent || {};
-      els.notationHarmony.textContent = intent.progressionId ? ((intent.degree || '') + (intent.quality ? ' ' + intent.quality : '') + (intent.inversion ? ' / ' + intent.inversion : '')) : (currentEvent && currentEvent.type === 'grip' ? 'Simultaneous grip' : 'Pitch map, not rhythm notation');
+      els.notationHarmony.textContent = intent.progressionId ? ((intent.degree || '') + (intent.quality ? ' ' + intent.quality : '') + (intent.inversion ? ' / ' + intent.inversion : '')) : (currentEvent && currentEvent.type === 'grip' ? 'Simultaneous grip' : 'Current target highlighted in amber');
     }
   }
 
@@ -5719,34 +5736,35 @@
     clearChildren(container);
     if (!isPracticeMode || (currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets)) return;
     var activeMidis = (currentEvent && currentEvent.targets || []).map(function(target) { return target.midi; });
-    var upcoming = events.slice(0, Math.min(events.length, 6)).reduce(function(all, event) {
-      return all.concat((event.targets || []).map(function(target) { return target.midi; }));
-    }, []);
-    var baseMidi = 36 + state.tonicPc;
-    baseMidi -= mod(baseMidi, 12);
-    var whitePcs = [0, 2, 4, 5, 7, 9, 11, 0];
-    for (var whiteIndex = 0; whiteIndex < whitePcs.length; whiteIndex++) {
-      var midi = baseMidi + (whiteIndex === 7 ? 12 : [0, 2, 4, 5, 7, 9, 11][whiteIndex]);
+    var allMidis = events.reduce(function(all, event) { return all.concat((event.targets || []).map(function(target) { return target.midi; })); }, []);
+    var upcoming = allMidis.filter(function(midi) { return activeMidis.indexOf(midi) < 0; });
+    var baseMidi = Math.floor(((allMidis.length ? Math.min.apply(null, allMidis) : 48) - 2) / 12) * 12;
+    var endMidi = Math.ceil(((allMidis.length ? Math.max.apply(null, allMidis) : baseMidi + 12) + 2) / 12) * 12;
+    endMidi = Math.max(endMidi, baseMidi + 24);
+    var whiteMidis = [];
+    for (var candidate = baseMidi; candidate <= endMidi; candidate++) if ([0, 2, 4, 5, 7, 9, 11].indexOf(mod(candidate, 12)) >= 0) whiteMidis.push(candidate);
+    for (var whiteIndex = 0; whiteIndex < whiteMidis.length; whiteIndex++) {
+      var midi = whiteMidis[whiteIndex];
       var key = document.createElement('span');
       key.className = 'reference-piano-key reference-piano-white' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
       key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
-      key.textContent = noteName(midi) + octave(midi);
+      key.textContent = mod(midi, 12) === 0 ? noteName(midi) + octave(midi) : '';
       key.setAttribute('data-testid', 'practice-piano-key');
       key.setAttribute('data-midi', String(midi));
       container.appendChild(key);
     }
-    [1, 3, 6, 8, 10].forEach(function(pc) {
-      var offset = { 1: 0.72, 3: 1.72, 6: 3.72, 8: 4.72, 10: 5.72 }[pc];
-      var midi = baseMidi + pc;
+    for (var blackMidi = baseMidi; blackMidi <= endMidi; blackMidi++) if ([1, 3, 6, 8, 10].indexOf(mod(blackMidi, 12)) >= 0) {
+      var previousWhite = whiteMidis.filter(function(whiteMidi) { return whiteMidi < blackMidi; }).length;
+      var midi = blackMidi;
       var key = document.createElement('span');
       key.className = 'reference-piano-key reference-piano-black' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
-      key.style.left = 'calc(' + (offset / 8 * 100) + '% - 10px)';
+      key.style.left = 'calc(' + ((previousWhite - 0.28) / whiteMidis.length * 100) + '% - 10px)';
       key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
-      key.textContent = noteName(midi);
+      key.textContent = '';
       key.setAttribute('data-testid', 'practice-piano-key');
       key.setAttribute('data-midi', String(midi));
       container.appendChild(key);
-    });
+    }
   }
 
   function getPromptMidis(event) {

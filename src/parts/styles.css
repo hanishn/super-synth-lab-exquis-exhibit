@@ -1285,6 +1285,11 @@ input[type="range"]:focus-visible {
   align-items: stretch;
 }
 
+/* At ordinary desktop widths the instrument owns the primary canvas; the
+   lesson strip follows it instead of competing for the top of the stage. */
+.practice-surface .exquis-device { order: 1; }
+.practice-surface .practice-notation { order: 2; }
+
 .practice-dashboard {
   display: none;
 }
@@ -1918,11 +1923,9 @@ input[type="range"]:focus-visible {
 .practice-piano-reference {
   position: relative;
   display: flex;
-  flex: 1 1 250px;
-  align-self: center;
-  height: 46px;
-  min-width: 200px;
-  max-width: 360px;
+  height: 52px;
+  width: 100%;
+  margin: 0 0 10px;
   overflow: hidden;
   border: 1px solid rgba(117, 167, 255, 0.4);
   border-radius: 5px;
@@ -1930,14 +1933,14 @@ input[type="range"]:focus-visible {
 }
 
 .practice-piano-reference[hidden] { display: none; }
-.reference-piano-key { position: relative; display: flex; align-items: flex-end; justify-content: center; box-sizing: border-box; font-size: 8px; font-weight: 800; }
+.reference-piano-key { position: relative; display: flex; align-items: flex-end; justify-content: center; box-sizing: border-box; font-size: 11px; font-weight: 850; }
 .reference-piano-white { flex: 1 1 0; padding-bottom: 3px; border-right: 1px solid #1a2230; background: linear-gradient(180deg, #eff5ff, #9eafc5); color: #172030; }
 .reference-piano-black { position: absolute; top: 0; z-index: 2; width: 20px; height: 29px; padding-bottom: 2px; border: 1px solid #06080c; border-radius: 0 0 3px 3px; background: linear-gradient(180deg, #303d4e, #080b10); color: #d7e6f5; }
-.reference-piano-key.is-upcoming { box-shadow: inset 0 -5px 0 hsl(var(--piano-hue) 72% 58%); }
-.reference-piano-key.is-current { background: hsl(var(--piano-hue) 90% 68%); color: #10141a; box-shadow: inset 0 0 0 2px #fff1a8, 0 0 10px hsl(var(--piano-hue) 90% 62% / 0.7); }
+.reference-piano-key.is-upcoming { box-shadow: inset 0 -6px 0 #7fa8d8; }
+.reference-piano-key.is-current { background: #ffd166; color: #10141a; box-shadow: inset 0 0 0 2px #fff5c6, 0 0 12px rgba(255, 209, 102, 0.72); }
 
 @media (max-width: 1000px) {
-  .practice-piano-reference { order: 4; flex-basis: 100%; max-width: none; }
+  .practice-piano-reference { height: 44px; }
   .practice-path-strip { display: none; }
 }
 
@@ -3116,7 +3119,7 @@ input[type="range"]:focus-visible {
   gap: 6px;
   align-items: stretch;
   min-height: 0;
-  height: 112px;
+  min-height: 248px;
   margin: 0 0 8px;
   padding: 8px 10px;
   border: 1px solid rgba(117, 167, 255, 0.34);
@@ -3131,7 +3134,7 @@ input[type="range"]:focus-visible {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 3px;
   min-width: 0;
-  padding: 7px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 5px;
   background: rgba(5, 10, 14, 0.5);
@@ -3162,7 +3165,9 @@ input[type="range"]:focus-visible {
 .notation-rail-heading p { margin: 0; }
 .notation-rail-heading p:last-child { color: var(--muted); font-size: 10px; }
 
-.staff-line, .roll-grid-line { stroke: rgba(218, 230, 240, 0.28); stroke-width: 1; }
+.staff-line, .roll-grid-line { stroke: rgba(218, 230, 240, 0.34); stroke-width: 1; }
+.roll-c-line { stroke: rgba(255, 209, 102, 0.62); stroke-width: 1.3; }
+.roll-axis-label { fill: #dce8f3; font: 11px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
 .staff-ledger { stroke: rgba(255, 241, 168, 0.82); stroke-width: 1.4; }
 .staff-clef {
   fill: #f5f1dd;
@@ -3180,7 +3185,7 @@ input[type="range"]:focus-visible {
 .roll-note { fill: rgba(139, 168, 199, 0.82); stroke: rgba(9, 15, 21, 0.95); stroke-width: 1; }
 .roll-note.notation-active { fill: #fff1a8; stroke: #f26d6d; stroke-width: 2; }
 .roll-note.notation-completed { fill: #62d2a2; }
-.roll-column-active { fill: rgba(242, 109, 109, 0.14); }
+.roll-column-active { fill: rgba(255, 209, 102, 0.18); }
 .notation-concealed {
   align-self: center;
   padding: 12px;
@@ -3191,12 +3196,12 @@ input[type="range"]:focus-visible {
 }
 
 @media (max-width: 900px) {
-  .practice-notation { height: 104px; }
+  .practice-notation { min-height: 210px; }
   .notation-rail { padding: 6px; }
 }
 
 @media (max-width: 640px) {
-  .practice-notation { grid-template-columns: 1fr; height: auto; }
+  .practice-notation { grid-template-columns: 1fr; min-height: 0; }
   .notation-rail { min-height: 82px; }
   .notation-heading { grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; }
   .notation-heading .eyebrow { grid-row: span 2; }
@@ -3204,22 +3209,25 @@ input[type="range"]:focus-visible {
   .notation-roll-rail { min-height: 82px; }
 }
 
-@media (min-width: 901px) {
+@media (min-width: 1900px) {
   .app-shell[data-workspace="practice"] .practice-surface {
-    grid-template-columns: minmax(184px, 0.95fr) minmax(560px, 4fr) minmax(184px, 0.95fr);
+    grid-template-columns: clamp(280px, 18vw, 340px) minmax(1120px, 1fr) clamp(280px, 18vw, 340px);
     grid-template-rows: minmax(0, 1fr);
     gap: 10px;
   }
 
   .app-shell[data-workspace="practice"] .practice-notation {
     display: contents;
+    order: initial;
   }
 
   .app-shell[data-workspace="practice"] .notation-rail {
     align-self: center;
-    min-height: 178px;
-    max-height: 240px;
-    padding: 9px;
+    min-height: 360px;
+    max-height: none;
+    padding: 8px;
+    border: 0;
+    background: transparent;
   }
 
   .app-shell[data-workspace="practice"] .notation-staff-rail {
@@ -3235,13 +3243,31 @@ input[type="range"]:focus-visible {
   .app-shell[data-workspace="practice"] .exquis-device {
     grid-column: 2;
     grid-row: 1;
+    order: initial;
   }
 
   .app-shell[data-workspace="practice"] .notation-rail svg,
   .app-shell[data-workspace="practice"] .staff-notation {
-    height: 132px;
+    height: min(62vh, 440px);
   }
 }
+
+.staff-notation svg path,
+.staff-notation svg text,
+.staff-notation svg line {
+  fill: #dbe8f4 !important;
+  stroke: #dbe8f4 !important;
+  stroke-width: 1.4px;
+}
+
+.staff-notation svg .vf-notehead path,
+.staff-notation svg .vf-notehead {
+  fill: #dbe8f4 !important;
+  stroke: #dbe8f4 !important;
+}
+
+.staff-notation svg .vf-notehead path[fill="#ffd166"],
+.staff-notation svg .vf-notehead[fill="#ffd166"] { fill: #ffd166 !important; stroke: #ffd166 !important; }
 
 @media (max-width: 1000px) {
   .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) {

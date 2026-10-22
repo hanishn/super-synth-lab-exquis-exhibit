@@ -104,6 +104,16 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("preserveAspectRatio', 'xMidYMid meet'", source)
         self.assertIn("@media (max-width: 640px)", styles)
 
+    def test_practice_staff_uses_pinned_vexflow_svg_engraving_runtime(self):
+        template = (ROOT / "src/parts/template.html").read_text(encoding="utf-8")
+        source = (ROOT / "src/parts/app.js").read_text(encoding="utf-8")
+        runtime = ROOT / "src" / "vendor" / "vexflow" / "vexflow-4.2.2.js"
+        self.assertIn('src="vendor/vexflow/vexflow-4.2.2.js"', template)
+        self.assertTrue(runtime.exists())
+        self.assertGreater(runtime.stat().st_size, 500_000)
+        self.assertIn("new VF.Renderer", source)
+        self.assertIn("VF.Renderer.Backends.SVG", source)
+
     def test_build_version_is_generated_visible_and_used_for_cache_busting(self):
         match = re.search(r'data-testid="build-version"[^>]*title="Built ([^"]+)"[^>]*>\s*<span>Build</span>\s*<b>([^<]+)</b>', self.bundle)
         self.assertIsNotNone(match)

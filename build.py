@@ -2446,6 +2446,12 @@ def build() -> dict:
     DIST_DIR.mkdir(exist_ok=True)
     ROOT_INDEX.write_text(bundle, encoding="utf-8")
     DIST_INDEX.write_text(bundle, encoding="utf-8")
+    # Pin the engraving runtime locally: practice notation must work without a
+    # CDN and must not change because a third-party latest tag changed.
+    vexflow_source = VENDOR / "vexflow"
+    if vexflow_source.exists():
+        shutil.copytree(vexflow_source, ROOT / "vendor" / "vexflow", dirs_exist_ok=True)
+        shutil.copytree(vexflow_source, DIST_DIR / "vendor" / "vexflow", dirs_exist_ok=True)
     sync_ssli_runtime(ROOT_SSLI_DIR)
     sync_ssli_runtime(DIST_SSLI_DIR)
     return {

@@ -5513,14 +5513,14 @@
     var parentMajorOffset = { ionian: 0, aeolian: 3, dorian: -2, mixolydian: -5 }[state.scaleId];
     var scale = getScale();
     if (typeof parentMajorOffset !== 'number') {
-      return { count: 0, symbol: '', label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: false };
+      return { count: 0, symbol: '', label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: false, vexKey: '' };
     }
     var parentPc = mod(state.tonicPc + parentMajorOffset, 12);
     // Positive values are sharps, negative values are flats. These spellings
     // match the tonic choices exposed by the product (Db rather than C#).
     var accidentalCountByMajorPc = { 0: 0, 1: -5, 2: 2, 3: -3, 4: 4, 5: -1, 6: 6, 7: 1, 8: -4, 9: 3, 10: -2, 11: 5 };
     var count = accidentalCountByMajorPc[parentPc];
-    return { count: count, symbol: count < 0 ? '\u266d' : (count > 0 ? '\u266f' : ''), label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: true };
+    return { count: count, symbol: count < 0 ? '\u266d' : (count > 0 ? '\u266f' : ''), label: tonicNameForPc(state.tonicPc) + ' ' + scale.name, conventional: true, vexKey: tonicNameForPc(parentPc) };
   }
 
   function notationClefGlyph(useBass) {
@@ -5591,64 +5591,71 @@
     svg.appendChild(notationSvgElement('title', {}, label));
   }
 
+  function clearStaffNotation(container, label) {
+    if (!container) return;
+    clearChildren(container);
+    container.setAttribute('aria-label', label);
+  }
+
   function renderStaffNotation(projection) {
-    var svg = els.staffNotation;
-    if (!svg) return;
-    clearNotationSvg(svg, 'Staff notation of current and upcoming practice steps');
+    var container = els.staffNotation;
+    if (!container) return;
+    clearStaffNotation(container, 'Staff notation of current and upcoming practice steps');
     if (projection.concealed) return;
     var useBass = chooseNotationClef(projection.events);
-    // Middle line: B4 in treble, D3 in bass. Six SVG units equal one staff step.
-    var reference = useBass ? spellNotationPitch(50).diatonicIndex : spellNotationPitch(71).diatonicIndex;
-    var staffTop = 24;
-    var staffBottom = 72;
-    var staffCenter = 48;
     var signature = notationKeySignature();
-    for (var line = 0; line < 5; line++) {
-      var y = staffTop + line * 12;
-      svg.appendChild(notationSvgElement('line', { x1: 88, y1: y, x2: notationCanvasWidth() - 10, y2: y, class: 'staff-line' }));
+    var VF = window.Vex && window.Vex.Flow;
+    if (!VF) {
+      container.textContent = 'Music engraving renderer unavailable.';
+      return;
     }
-    svg.appendChild(notationSvgElement('text', { x: 16, y: useBass ? 62 : 70, class: 'staff-clef', 'aria-hidden': 'true' }, notationClefGlyph(useBass)));
-    if (signature.count) {
-      var sharpSteps = useBass ? [2, 5, 1, 4, 0, 3, -1] : [4, 1, 5, 2, 6, 3, 0];
-      var flatSteps = useBass ? [0, 3, -1, 2, 5, 1, 4] : [0, 3, -1, 2, 5, 1, 4];
-      var signatureSteps = signature.count > 0 ? sharpSteps : flatSteps;
-      for (var accidentalIndex = 0; accidentalIndex < Math.abs(signature.count); accidentalIndex++) {
-        svg.appendChild(notationSvgElement('text', {
-          x: 61 + accidentalIndex * 10,
-          y: staffCenter - signatureSteps[accidentalIndex] * 6 + 5,
-          class: 'key-signature-accidental',
-          'aria-hidden': 'true'
-        }, signature.symbol));
-      }
-    }
-    projection.events.forEach(function(event, eventOffset) {
-      var eventStart = 56 + Math.abs(signature.count) * 10;
-      var columnWidth = (notationCanvasWidth() - eventStart - 10) / Math.max(1, projection.events.length);
-      var x = eventStart + eventOffset * columnWidth + columnWidth / 2;
-      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - columnWidth / 2 + 3, y: 14, width: Math.max(20, columnWidth - 6), height: 68, rx: 5, class: 'roll-column-active' }));
-      event.midis.forEach(function(midi, pitchIndex) {
-        var pitch = spellNotationPitch(midi);
-        var staffSteps = pitch.diatonicIndex - reference;
-        var y = staffCenter - staffSteps * 6;
-        var noteX = x + (pitchIndex && Math.abs(event.midis[pitchIndex - 1] - midi) === 1 ? 5 : 0);
-        var classes = 'staff-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
-        if (y < staffTop || y > staffBottom) {
-          var ledgerY = y < staffTop ? staffTop - 12 : staffBottom + 12;
-          var ledgerDirection = y < staffTop ? -12 : 12;
-          for (; ledgerDirection < 0 ? ledgerY >= y : ledgerY <= y; ledgerY += ledgerDirection) {
-            svg.appendChild(notationSvgElement('line', { x1: noteX - 9, y1: ledgerY, x2: noteX + 9, y2: ledgerY, class: 'staff-ledger' }));
-          }
-        }
-        var noteRadius = isNotationRailLayout() ? 9 : 7;
-        var head = notationSvgElement('ellipse', { cx: noteX, cy: y, rx: noteRadius, ry: noteRadius * 0.73, class: classes, 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
-        head.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + pitch.label + ', step ' + String(event.index + 1));
-        if (event.active) head.setAttribute('aria-current', 'step');
-        svg.appendChild(head);
-        if (pitch.accidental) svg.appendChild(notationSvgElement('text', { x: noteX - 16, y: y + 5, class: 'staff-note-accidental', 'aria-hidden': 'true' }, pitch.accidental === '#' ? '\u266f' : '\u266d'));
+    var width = Math.max(130, Math.floor(container.clientWidth || 180));
+    var height = Math.max(100, Math.floor(container.clientHeight || 132));
+    var renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
+    renderer.resize(width, height);
+    var context = renderer.getContext();
+    var stave = new VF.Stave(4, 22, Math.max(110, width - 8));
+    stave.addClef(useBass ? 'bass' : 'treble');
+    if (signature.conventional) stave.addKeySignature(signature.vexKey);
+    stave.setContext(context).draw();
+    var alteredPcs = signature.count > 0 ? [6, 1, 8, 3, 10, 5, 11].slice(0, signature.count) :
+      (signature.count < 0 ? [10, 3, 8, 1, 6, 11, 5].slice(0, -signature.count) : []);
+    var notes = projection.events.map(function(event) {
+      var note = new VF.StaveNote({
+        clef: useBass ? 'bass' : 'treble',
+        keys: event.midis.map(function(midi) {
+          var pitch = spellNotationPitch(midi);
+          return pitch.letter.toLowerCase() + pitch.accidental.toLowerCase() + '/' + pitch.octave;
+        }),
+        duration: 'q'
       });
-      if (event.degree) svg.appendChild(notationSvgElement('text', { x: x, y: 96, class: 'staff-note-label', 'text-anchor': 'middle' }, event.degree));
+      event.midis.forEach(function(midi, index) {
+        var accidental = spellNotationPitch(midi).accidental;
+        if (accidental && alteredPcs.indexOf(mod(midi, 12)) === -1) note.addModifier(new VF.Accidental(accidental), index);
+      });
+      note.setStyle({ fillStyle: event.active ? '#fff1a8' : '#8ba8c7', strokeStyle: event.active ? '#f26d6d' : '#0c1116' });
+      return note;
     });
-    svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
+    if (notes.length) {
+      var voice = new VF.Voice({ num_beats: notes.length, beat_value: 4 }).setStrict(false);
+      voice.addTickables(notes);
+      new VF.Formatter().joinVoices([voice]).format([voice], Math.max(32, width - 80));
+      voice.draw(context, stave);
+    }
+    var svg = container.querySelector('svg');
+    if (svg) {
+      svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
+      var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
+      projection.events.forEach(function(event) {
+        event.midis.forEach(function(midi) {
+          var marker = notationSvgElement('rect', { width: 0, height: 0, class: 'staff-note' + (event.active ? ' notation-active' : ''), 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
+          if (event.active) marker.setAttribute('aria-current', 'step');
+          metadata.appendChild(marker);
+        });
+      });
+      svg.appendChild(metadata);
+    }
+    container.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
   }
 
   function renderPianoRollNotation(projection) {
@@ -5688,7 +5695,7 @@
     if (els.notationStaffRail) els.notationStaffRail.classList.toggle('notation-concealed-rail', projection.concealed);
     if (els.notationRollRail) els.notationRollRail.hidden = projection.concealed;
     if (projection.concealed) {
-      clearNotationSvg(els.staffNotation, 'Staff notation is concealed until the ear-training answer');
+      clearStaffNotation(els.staffNotation, 'Staff notation is concealed until the ear-training answer');
       clearNotationSvg(els.pianoRollNotation, 'Piano roll is concealed until the ear-training answer');
       if (els.notationStepLabel) els.notationStepLabel.textContent = 'Listen, then answer';
       if (els.notationHarmony) els.notationHarmony.textContent = 'Ear training keeps answer pitches hidden.';
@@ -5701,6 +5708,45 @@
       var intent = currentEvent && currentEvent.musicalIntent || {};
       els.notationHarmony.textContent = intent.progressionId ? ((intent.degree || '') + (intent.quality ? ' ' + intent.quality : '') + (intent.inversion ? ' / ' + intent.inversion : '')) : (currentEvent && currentEvent.type === 'grip' ? 'Simultaneous grip' : 'Pitch map, not rhythm notation');
     }
+  }
+
+  // Adapted from SSLI's familiar white/black-key vocabulary: it is a compact
+  // reference, never a second input surface or scoring authority.
+  function renderPracticePianoReference(events, currentEvent, isPracticeMode) {
+    var container = els.practicePianoReference;
+    if (!container) return;
+    container.hidden = !isPracticeMode;
+    clearChildren(container);
+    if (!isPracticeMode || (currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets)) return;
+    var activeMidis = (currentEvent && currentEvent.targets || []).map(function(target) { return target.midi; });
+    var upcoming = events.slice(0, Math.min(events.length, 6)).reduce(function(all, event) {
+      return all.concat((event.targets || []).map(function(target) { return target.midi; }));
+    }, []);
+    var baseMidi = 36 + state.tonicPc;
+    baseMidi -= mod(baseMidi, 12);
+    var whitePcs = [0, 2, 4, 5, 7, 9, 11, 0];
+    for (var whiteIndex = 0; whiteIndex < whitePcs.length; whiteIndex++) {
+      var midi = baseMidi + (whiteIndex === 7 ? 12 : [0, 2, 4, 5, 7, 9, 11][whiteIndex]);
+      var key = document.createElement('span');
+      key.className = 'reference-piano-key reference-piano-white' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
+      key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
+      key.textContent = noteName(midi) + octave(midi);
+      key.setAttribute('data-testid', 'practice-piano-key');
+      key.setAttribute('data-midi', String(midi));
+      container.appendChild(key);
+    }
+    [1, 3, 6, 8, 10].forEach(function(pc) {
+      var offset = { 1: 0.72, 3: 1.72, 6: 3.72, 8: 4.72, 10: 5.72 }[pc];
+      var midi = baseMidi + pc;
+      var key = document.createElement('span');
+      key.className = 'reference-piano-key reference-piano-black' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
+      key.style.left = 'calc(' + (offset / 8 * 100) + '% - 10px)';
+      key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
+      key.textContent = noteName(midi);
+      key.setAttribute('data-testid', 'practice-piano-key');
+      key.setAttribute('data-midi', String(midi));
+      container.appendChild(key);
+    });
   }
 
   function getPromptMidis(event) {
@@ -7130,6 +7176,7 @@
     var currentStepIndex = state.step;
     currentEvent = expectedExerciseEvent();
     renderPracticeNotation(currentExerciseEvents, currentEvent, isPracticeMode);
+    renderPracticePianoReference(currentExerciseEvents, currentEvent, isPracticeMode);
     var currentGripTargetsByKey = {};
     var currentGripFingerByCell = {};
     var currentGripTargetNotes = [];
@@ -8096,6 +8143,7 @@
       exquisDevice: document.getElementById('exquisDevice'),
       keyboard: document.getElementById('keyboard'),
       practicePathStrip: document.getElementById('practicePathStrip'),
+      practicePianoReference: document.getElementById('practicePianoReference'),
       practiceNotation: document.getElementById('practiceNotation'),
       notationStepLabel: document.getElementById('notationStepLabel'),
       notationHarmony: document.getElementById('notationHarmony'),

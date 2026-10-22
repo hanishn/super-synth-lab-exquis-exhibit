@@ -363,11 +363,11 @@ Finger guidance has two deliberately distinct meanings. Sequential exercises tea
 ### Practice Notation Lens
 
 Practice mode projects the canonical `ExerciseEvent` sequence into a compact
-Notation Lens above the Exquis surface. It provides a staff view, a horizontal
-piano-roll view, and functional degree/harmony context without creating a
-second scoring, playback, or cursor state. `event.targets` is the sole source
-of displayed pitches; Exquis pad geometry, CSS classes, and path chips must
-never be used to infer notation.
+Notation Lens in the unused left/right rails of the desktop Exquis surface. It
+provides a staff view, a horizontal piano-roll view, and functional
+degree/harmony context without creating a second scoring, playback, or cursor
+state. `event.targets` is the sole source of displayed pitches; Exquis pad
+geometry, CSS classes, and path chips must never be used to infer notation.
 
 - The staff and piano roll show the active target plus a short upcoming window.
   Sequential notes occupy successive instructional slots; grips/chords stack
@@ -388,9 +388,9 @@ never be used to infer notation.
   replaced by a neutral listen-first placeholder. It must reveal no answer MIDI,
   note label, notehead, piano-roll position, or future target before an attempt.
 - The lens is hidden in Play mode, has semantic SVG labels, exposes active state
-  with `aria-current`, and uses structure/text in addition to color. It remains
-  a fixed shallow two-view strip through tablet width; only phone-width layouts
-  stack the views to preserve readable notation without horizontal clipping.
+  with `aria-current`, and uses structure/text in addition to color. Desktop
+  uses its side rails, preserving the Exquis vertical play surface; tablet uses
+  a shallow two-view strip and only phone-width layouts stack the views.
 
 ## Test Expectations
 

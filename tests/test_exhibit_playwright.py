@@ -2906,12 +2906,25 @@ class PlaywrightExhibitTests(unittest.TestCase):
         staff_box = staff.bounding_box()
         roll_box = roll.bounding_box()
         self.assertLessEqual(panel_box['height'], 116)
-        self.assertLess(abs(staff_box['y'] - roll_box['y']), 2, 'tablet keeps staff and piano roll side by side')
+        self.assertLess(staff_box['x'] + staff_box['width'], roll_box['x'], 'tablet keeps staff and piano roll side by side')
+        self.assertLess(abs(staff_box['y'] - roll_box['y']), 30, 'the two rails remain in one visual band')
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'), 768)
         symbols = staff.locator('text').all_text_contents()
         self.assertTrue(any(symbol in {'\U0001d11e', '\U0001d122'} for symbol in symbols))
         self.assertEqual(staff.locator('.key-signature-accidental').count(), 4)
         self.assertIn('E Major', staff.get_attribute('aria-label'))
+
+    def test_practice_notation_uses_desktop_side_rails_not_the_exquis_vertical_space(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()
+        roll = self.page.locator('[data-testid="piano-roll-notation"]').bounding_box()
+        device = self.page.locator('[data-testid="exquis-device"]').bounding_box()
+        surface = self.page.locator('[data-testid="practice-surface"]').bounding_box()
+        self.assertLessEqual(staff['x'] + staff['width'], device['x'])
+        self.assertGreaterEqual(roll['x'], device['x'] + device['width'])
+        self.assertGreater(staff['y'], surface['y'], 'notation lives beside, not above, the play surface')
+        self.assertGreater(roll['y'], surface['y'], 'notation lives beside, not above, the play surface')
+        self.assertAlmostEqual(device['y'], surface['y'], delta=1)
 
     def test_regression_exquis_sync_pulses_every_current_chord_target(self):
         self.page.evaluate("""

@@ -62,6 +62,20 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("function playNote", self.bundle)
         self.assertIn("SSLI_VENDOR", self.bundle)
 
+    def test_expressive_light_language_is_built_with_reduced_motion_fallback(self):
+        self.assertIn("function buildPadLightFrame", self.bundle)
+        self.assertIn("window.__exquisLightDebug", self.bundle)
+        self.assertIn("function syncExquisPracticePadFrame", self.bundle)
+        self.assertIn("@keyframes exquis-target-breathe", self.bundle)
+        self.assertIn("animation: exquis-target-breathe 1s ease-in-out infinite;", self.bundle)
+        self.assertIn("filter: brightness(0.25) saturate(1.04);", self.bundle)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", self.bundle)
+        self.assertRegex(self.bundle, r"\.key\.light-target\s*\{\s*animation: none !important;")
+        self.assertIn("hsl(var(--pad-hue, 258deg) 100% 76%) 88%", self.bundle)
+        self.assertIn("hsl(120deg 100% 60%)", self.bundle)
+        self.assertIn("color: #dce4ec;", self.bundle)
+        self.assertIn("color: #0b1016;", self.bundle)
+
     def test_build_version_is_generated_visible_and_used_for_cache_busting(self):
         match = re.search(r'data-testid="build-version"[^>]*title="Built ([^"]+)"[^>]*>\s*<span>Build</span>\s*<b>([^<]+)</b>', self.bundle)
         self.assertIsNotNone(match)

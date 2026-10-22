@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "partVersion": "0.1.27",
+  "partVersion": "0.1.28",
   "capabilities": [
     {
       "id": "exquis_layout_model",
@@ -49,6 +49,26 @@
         "test_regression_interval_grip_requires_complete_timed_targets",
         "test_major_third_exercise_emits_selected_root_interval",
         "test_major_triad_midi_grip_scores_once_and_advances_once"
+      ]
+    },
+    {
+      "id": "expressive_light_language",
+      "name": "Expressive Light Language",
+      "status": "prototype",
+      "description": "Projects a shared semantic pad-light frame to the visual Exquis surface and hardware adapter, using an evenly spaced hue cycle across every selected scale octave with explicit target, chord, held, and mismatch states.",
+      "userValue": "Makes pitch relationships readable at a glance while clearly showing the next note or complete chord to play.",
+      "acceptanceCriteria": [
+        "every rendered pad has a deterministic root-relative interval color",
+        "the selected root is green in every key",
+        "single-note and simultaneous-chord targets pulse without obscuring their interval identity",
+        "reduced-motion mode has a stable high-contrast target ring",
+        "hardware colors are projected from semantic state rather than DOM class inspection",
+        "hardware target animation is never attempted through a full 61-pad rewrite"
+      ],
+      "testIds": [
+        "test_regression_expressive_light_frame_is_root_relative_and_marks_every_chord_target",
+        "test_regression_expressive_light_targets_pulse_without_hiding_interval_identity",
+        "test_expressive_light_language_is_built_with_reduced_motion_fallback"
       ]
     },
     {

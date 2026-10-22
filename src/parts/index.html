@@ -25,7 +25,7 @@
       <button type="button" data-workspace="setup" data-testid="workspace-setup">Setup</button>
     </nav>
     <section class="session-setup" data-testid="session-setup">
-      <div class="setup-drawer-body">
+      <div class="setup-controls-body">
     <div class="controls-grid primary-controls" id="primaryControls">
       <fieldset class="mode-switch" data-testid="mode-switch" aria-label="Session">
         <legend>Session</legend>
@@ -143,7 +143,7 @@
     <header class="workspace-screen-header">
       <p class="eyebrow">Studio</p>
       <h2 id="studioTitle">Connect hardware.</h2>
-      <p>Sound design, MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.</p>
+      <p id="studioDescription">Sound design, MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.</p>
     </header>
     <nav class="studio-tabs" aria-label="Studio mode" data-testid="studio-tabs">
       <button type="button" data-studio-tab="hardware" data-testid="studio-hardware-tab">Hardware</button>
@@ -245,25 +245,41 @@
     <details class="practice-tools" data-testid="hardware-tools">
       <summary>Hardware tools</summary>
       <section class="midi-coach-section" data-testid="midi-coach-section">
-      <h2>Connection and diagnostics</h2>
-      <div class="midi-action-row">
+      <h2>Exquis hardware</h2>
+      <section class="hardware-control-group" aria-labelledby="hardware-connection-heading">
+        <h3 id="hardware-connection-heading">Connection</h3>
+        <p class="hardware-control-help">Connect your Exquis, then sync the current key and scale.</p>
+        <div class="midi-action-row hardware-primary-actions">
         <button id="enableMidi" type="button" data-testid="enable-midi">Reconnect Exquis</button>
         <button id="syncExquis" type="button" data-testid="sync-exquis" disabled>Sync Key/Mode</button>
-        <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Probe</button>
-        <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" title="Probe native Exquis root/scale write masks" disabled>Native</button>
+        </div>
+        <label class="midi-picker">
+          <span>MIDI Input</span>
+          <select id="midiInputSelect" data-testid="midi-input-select" disabled>
+            <option value="">No inputs scanned</option>
+          </select>
+        </label>
+        <p id="midiDevices" data-testid="midi-devices">Devices: not scanned</p>
+      </section>
+      <section class="hardware-control-group" aria-labelledby="hardware-diagnostics-heading">
+        <h3 id="hardware-diagnostics-heading">Diagnostics</h3>
+        <p class="hardware-control-help">View connection activity, run an audio snapshot, and export a support report.</p>
+        <div class="midi-action-row">
+          <button id="hardwareDiagnostics" type="button" data-testid="hardware-diagnostics">Open diagnostics</button>
+        </div>
+      </section>
+      <details class="advanced-hardware-research" data-testid="advanced-hardware-research">
+        <summary>Advanced hardware research</summary>
+        <p class="hardware-control-warning">These actions send experimental or disruptive MIDI messages. Watch the device and do not use them during a performance.</p>
+        <div class="midi-action-row">
+        <button id="probeExquis" type="button" data-testid="probe-exquis" disabled>Protocol Discovery Probe</button>
+        <button id="nativeProbeExquis" type="button" data-testid="native-probe-exquis" disabled>Native LED Probe</button>
+        <button id="rgbPadTestExquis" type="button" data-testid="rgb-pad-test-exquis" disabled>Official Pad Color Test (Magenta)</button>
         <button id="dialListen" type="button" data-testid="dial-listen" disabled>Dial Listen</button>
-        <button id="hardwareDiagnostics" type="button" data-testid="hardware-diagnostics">Diagnostics</button>
-      </div>
-      <label class="midi-picker">
-        <span>MIDI Input</span>
-        <select id="midiInputSelect" data-testid="midi-input-select" disabled>
-          <option value="">No inputs scanned</option>
-        </select>
-      </label>
-      <p id="midiDevices" data-testid="midi-devices">Devices: not scanned</p>
+        </div>
       <div class="legacy-control-row">
         <label class="legacy-map-picker">
-          <span>Map</span>
+          <span>Legacy pad-map origin</span>
           <select id="legacyMapSelect" data-testid="legacy-map-select" aria-label="Legacy pad map">
             <option value="bottom_left">Bottom-left</option>
             <option value="bottom_right">Bottom-right</option>
@@ -272,7 +288,7 @@
           </select>
         </label>
         <label class="legacy-light-picker">
-          <span>Lights</span>
+          <span>Legacy light destination</span>
           <select id="legacyLightSelect" data-testid="legacy-light-select" aria-label="Legacy light target">
             <option value="buttons">Buttons</option>
             <option value="notes">Notes</option>
@@ -280,6 +296,7 @@
           </select>
         </label>
       </div>
+      </details>
       <p id="exquisSyncStatus" data-testid="exquis-sync-status">Exquis sync: off</p>
       <p id="midiActivity" class="feedback-neutral" role="status" aria-live="polite" data-testid="midi-activity">Activity: none</p>
       <p id="lastMidi" data-testid="last-midi">Last input: --</p>
@@ -394,8 +411,8 @@
       <div class="console-header">
         <h2>Console</h2>
         <div class="console-actions">
-          <button id="audioDiag" type="button" data-testid="audio-diag">Audio Diag</button>
-          <button id="resetConsole" type="button" data-testid="reset-console">Reset</button>
+          <button id="audioDiag" type="button" data-testid="audio-diag">Audio snapshot</button>
+          <button id="resetConsole" type="button" data-testid="reset-console">Clear log</button>
           <button id="copyConsole" type="button" data-testid="copy-console">Copy</button>
           <button id="exitConsole" type="button" data-testid="exit-console">Collapse</button>
         </div>

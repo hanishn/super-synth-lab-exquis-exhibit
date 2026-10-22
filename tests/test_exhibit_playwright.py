@@ -160,14 +160,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "first_ssli_prompt_must_fall_back_until_preset_output_is_ready": "test_regression_first_ssli_prompt_falls_back_until_preset_output_is_ready",
         "first_fallback_note_must_wait_for_audio_context_resume": "test_regression_first_fallback_note_waits_for_audio_context_resume",
         "progression_current_chord_must_highlight_every_target_button": "test_regression_progression_current_chord_highlights_every_target_button",
+        "expressive_light_frame_must_keep_root_relative_interval_identity": "test_regression_expressive_light_frame_is_root_relative_and_marks_every_chord_target",
+        "expressive_light_targets_must_pulse_without_hiding_note_identity": "test_regression_expressive_light_targets_pulse_without_hiding_interval_identity",
+        "illuminated_pad_labels_must_remain_legible": "test_regression_illuminated_pad_labels_have_minimum_contrast",
         "major_progression_must_replace_prior_minor_path_with_selected_key_lights": "test_regression_major_progression_replaces_minor_scale_path_with_current_chord_targets",
         "ipad_shell_must_prioritize_playing_canvas_over_setup_controls": "test_regression_ipad_shell_prioritizes_playing_canvas_over_setup_controls",
         "practice_surface_must_use_its_available_canvas": "test_regression_practice_surface_uses_its_available_canvas",
         "build_metadata_must_not_cover_the_practice_surface": "test_regression_build_metadata_does_not_dominate_practice_surface",
         "workspaces_must_separate_practice_library_and_studio": "test_regression_workspaces_separate_practice_library_and_studio",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
+        "studio_diagnostics_must_open_a_visible_hardware_drawer": "test_regression_studio_diagnostics_opens_visible_hardware_drawer",
+        "studio_hardware_must_fit_laptop_height_without_scroll_or_cutoff": "test_regression_studio_hardware_fits_laptop_height_without_scroll_or_cutoff",
         "exquis_sysex_helpers_must_encode_official_root_scale_messages": "test_regression_exquis_sysex_helpers_encode_official_root_scale_messages",
         "exquis_key_mode_sync_must_use_official_developer_sysex": "test_regression_exquis_key_mode_sync_uses_official_developer_sysex",
+        "manual_key_mode_changes_must_beat_delayed_hardware_readbacks": "test_regression_manual_key_mode_change_syncs_after_hardware_readback",
         "exquis_incoming_root_scale_sysex_must_update_ui": "test_regression_exquis_incoming_root_scale_sysex_updates_ui_without_echo",
         "exquis_sync_must_fallback_when_sysex_permission_denied": "test_regression_exquis_sync_falls_back_to_input_only_when_sysex_permission_denied",
         "exquis_probe_must_capture_official_and_legacy_sysex": "test_regression_exquis_probe_sends_official_and_legacy_diagnostics",
@@ -521,6 +527,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
           });
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         result = self.page.evaluate("""
@@ -1276,6 +1283,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }""")
         self.page.locator('[data-testid="workspace-studio"]').click()
         self.assertEqual(self.page.locator('[data-testid="enable-midi"]').inner_text(), 'Reconnect Exquis')
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__landingMidiInput.onmidimessage !== null")
         self.assertIn('Landing MIDI', self.page.locator('[data-testid="midi-status"]').inner_text())
@@ -1560,24 +1568,165 @@ class PlaywrightExhibitTests(unittest.TestCase):
         targets = self.page.locator('[data-testid="exquis-key"].current-grip-target')
         self.assertEqual(targets.count(), 3)
         self.assertEqual(sorted(targets.evaluate_all("elements => elements.map((element) => Number(element.dataset.midi))")), [48, 52, 55])
-        bracket = self.page.locator('[data-testid="chord-target-bracket"]')
-        self.assertEqual(bracket.count(), 1)
         self.assertTrue(all("chord target" in label for label in targets.evaluate_all("elements => elements.map((element) => element.getAttribute('aria-label'))")))
-        self.assertEqual(self.page.locator('[data-testid="exquis-key"].current-grip-target .chord-target-marker').count(), 0)
-        outlines = targets.locator('.chord-target-hex-outline .chord-target-hex-stroke')
-        self.assertEqual(outlines.count(), 3)
-        self.assertEqual(targets.locator('.chord-target-hex-outline .chord-target-hex-underlay').count(), 3)
-        self.assertIn('Chord target:', bracket.get_attribute('aria-label'))
-        self.assertIn('press together', bracket.get_attribute('aria-label'))
-        self.assertEqual(bracket.locator('[data-testid="chord-target-bracket-label"]').text_content(), 'Chord target: press together')
-        self.assertTrue(all(color == "rgb(138, 46, 255)" for color in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).stroke)")))
-        self.assertTrue(all(width == "3px" for width in outlines.evaluate_all("elements => elements.map((element) => getComputedStyle(element).strokeWidth)")))
-        self.assertEqual(bracket.locator('[data-testid="chord-target-bracket-label"]').evaluate("element => getComputedStyle(element).textTransform"), "uppercase")
-        bracket_box = bracket.bounding_box()
-        target_boxes = targets.evaluate_all("elements => elements.map((element) => element.getBoundingClientRect().toJSON())")
-        self.assertIsNotNone(bracket_box)
-        self.assertLessEqual(bracket_box["x"], min(box["x"] for box in target_boxes) - 8)
-        self.assertLessEqual(bracket_box["y"], min(box["y"] for box in target_boxes) - 8)
+        self.assertEqual(self.page.locator('[data-testid="chord-target-bracket"]').count(), 0)
+        self.assertEqual(targets.locator('.chord-target-hex-outline').count(), 0)
+        self.assertTrue(all(name == "exquis-target-breathe" for name in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).animationName)")))
+        self.assertEqual(targets.locator('.finger.chord-finger').count(), 3)
+
+    def test_regression_expressive_light_frame_is_root_relative_and_marks_every_chord_target(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        frame = self.page.evaluate("() => window.__exquisLightDebug.currentFrame()")
+        self.assertEqual(len(frame["pads"]), 61)
+        self.assertEqual({pad["interval"] for pad in frame["pads"] if pad["isRoot"]}, {0})
+        self.assertEqual({pad["hue"] for pad in frame["pads"] if pad["isRoot"]}, {120})
+        major_hues = {
+            interval: {pad["hue"] for pad in frame["pads"] if pad["interval"] == interval}
+            for interval in [0, 2, 4, 5, 7, 9, 11]
+        }
+        self.assertEqual(major_hues, {0: {120}, 2: {171}, 4: {223}, 5: {274}, 7: {326}, 9: {17}, 11: {69}})
+        targets = [pad for pad in frame["pads"] if pad["isTarget"]]
+        self.assertEqual(sorted(pad["midi"] for pad in targets), [48, 52, 55])
+        self.assertEqual({pad["midi"]: pad["hue"] for pad in targets}, {48: 120, 52: 223, 55: 326})
+        self.assertTrue(all(pad["role"] == "target" for pad in targets))
+        self.assertTrue(all(pad["isScale"] for pad in targets))
+        hardware_frame = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame()")
+        self.assertEqual(len(hardware_frame), 61)
+        self.assertEqual({pad["paletteIndex"] for pad in hardware_frame if pad["role"] == "root"}, {28})
+        self.assertEqual(
+            {pad["midi"]: pad["paletteIndex"] for pad in hardware_frame if pad["isTarget"]},
+            {48: 28, 52: 20, 55: 23}
+        )
+        root_rgb = self.page.evaluate("() => window.__exquisLightDebug.paletteRgbFor({ isRoot: true, interval: 0 })")
+        scale_rgb = self.page.evaluate("() => window.__exquisLightDebug.paletteRgbFor({ isRoot: false, interval: 0 })")
+        root_brightness = max(root_rgb)
+        scale_brightness = max(scale_rgb)
+        self.assertGreaterEqual(root_brightness, scale_brightness * 1.25)
+
+        self.page.select_option('[data-testid="tonic-select"]', "5")
+        shifted = self.page.evaluate("() => window.__exquisLightDebug.currentFrame()")
+        self.assertEqual({pad["interval"] for pad in shifted["pads"] if pad["isRoot"]}, {0})
+        self.assertEqual({pad["hue"] for pad in shifted["pads"] if pad["isRoot"]}, {120})
+        self.assertNotEqual(
+            next(pad["hue"] for pad in frame["pads"] if pad["pc"] == 0),
+            next(pad["hue"] for pad in shifted["pads"] if pad["pc"] == 0),
+        )
+
+    def test_regression_c_minor_lights_only_the_meridian_duplicate_in_ui_and_hardware(self):
+        self.page.select_option('[data-testid="tonic-select"]', '0')
+        self.page.select_option('[data-testid="scale-select"]', 'aeolian')
+        choices = self.page.evaluate("""() => {
+          const frame = window.__exquisLightDebug.currentFrame().pads;
+          const hardware = Object.fromEntries(window.__exquisLightDebug.hardwareFrame()
+            .map((pad) => [pad.padId, pad.paletteIndex]));
+          const keyById = Object.fromEntries([...document.querySelectorAll('[data-testid="exquis-key"]')]
+            .map((key) => [key.dataset.cellId, key]));
+          const keyboard = document.querySelector('[data-testid="keyboard"]').getBoundingClientRect();
+          const center = { x: keyboard.left + keyboard.width / 2, y: keyboard.top + keyboard.height / 2 };
+          const byMidi = frame.reduce((groups, pad) => {
+            (groups[pad.midi] ||= []).push(pad);
+            return groups;
+          }, {});
+          return Object.values(byMidi).map((pads) => {
+            const candidates = pads.map((pad) => {
+              const rect = keyById[pad.cellId].getBoundingClientRect();
+              return {
+                id: pad.cellId,
+                midi: pad.midi,
+                axisDistance: Math.abs(rect.top + rect.height / 2 - center.y),
+                crossAxisDistance: Math.abs(rect.left + rect.width / 2 - center.x),
+                frameLit: pad.isScale || pad.isRoot,
+                hardwareLit: hardware[pad.padId] > 1,
+                uiLit: keyById[pad.cellId].dataset.lightRole !== 'off'
+              };
+            }).sort((a, b) => a.axisDistance - b.axisDistance || a.crossAxisDistance - b.crossAxisDistance || a.id.localeCompare(b.id));
+            return {
+              midi: pads[0].midi,
+              candidates,
+              lit: candidates.filter((candidate) => candidate.frameLit),
+              hardwareLit: candidates.filter((candidate) => candidate.hardwareLit),
+              uiLit: candidates.filter((candidate) => candidate.uiLit)
+            };
+          }).filter((choice) => choice.candidates.length > 1 && choice.lit.length);
+        }""")
+        self.assertGreaterEqual(len(choices), 2, choices)
+        for choice in choices:
+            with self.subTest(midi=choice["midi"]):
+                expected = choice["candidates"][0]["id"]
+                self.assertEqual([candidate["id"] for candidate in choice["lit"]], [expected], choice)
+                self.assertEqual([candidate["id"] for candidate in choice["hardwareLit"]], [expected], choice)
+                self.assertEqual([candidate["id"] for candidate in choice["uiLit"]], [expected], choice)
+
+    def test_regression_expressive_light_targets_pulse_without_hiding_interval_identity(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        targets = self.page.locator('[data-testid="exquis-key"].current-grip-target')
+        self.assertEqual(targets.count(), 3)
+        self.assertTrue(all(role == "target" for role in targets.evaluate_all("elements => elements.map((element) => element.dataset.lightRole)")))
+        self.assertTrue(all(interval is not None for interval in targets.evaluate_all("elements => elements.map((element) => element.dataset.interval)")))
+        self.assertTrue(all(name == "exquis-target-breathe" for name in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).animationName)")))
+        self.assertTrue(all(float(duration.removesuffix("s")) == 1 for duration in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).animationDuration)")))
+        self.assertTrue(all(shadow == "none" for shadow in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).boxShadow)")))
+        self.assertTrue(all(filter_value != "none" for filter_value in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).filter)")))
+
+    def test_regression_expressive_light_reduced_motion_keeps_static_target_emphasis(self):
+        self.page.emulate_media(reduced_motion="reduce")
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        targets = self.page.locator('[data-testid="exquis-key"].current-grip-target')
+        self.assertEqual(targets.count(), 3)
+        self.assertTrue(all(name == "none" for name in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).animationName)")))
+        self.assertTrue(all(filter_value != "none" for filter_value in targets.evaluate_all("elements => elements.map((element) => getComputedStyle(element).filter)")))
+
+    def test_regression_illuminated_pad_labels_have_minimum_contrast(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        pads = self.page.evaluate("""() => {
+          const parseColor = (value) => {
+            const values = (value.match(/\\d+(?:\\.\\d+)?/g) || []).slice(0, 3).map(Number);
+            return value.startsWith('color(') ? values.map((component) => component * 255) : values;
+          };
+          const linear = (component) => component <= 0.04045
+            ? component / 12.92 : Math.pow((component + 0.055) / 1.055, 2.4);
+          const luminance = (rgb) => 0.2126 * linear(rgb[0] / 255)
+            + 0.7152 * linear(rgb[1] / 255) + 0.0722 * linear(rgb[2] / 255);
+          const pads = [...document.querySelectorAll('[data-testid="exquis-key"].hardware-lit')];
+          const states = ['', 'midi-hit', 'midi-held', 'midi-held-pitch', 'midi-pitch', 'midi-last', 'midi-last-pitch', 'mismatch', 'dimmed'];
+          return states.flatMap((state) => pads.map((element) => {
+            if (state) element.classList.add(state);
+            const buttonStyle = getComputedStyle(element);
+            const labels = ['.note', '.octave'].map((selector) => {
+              const labelStyle = getComputedStyle(element.querySelector(selector));
+              const foreground = parseColor(labelStyle.color);
+              const background = parseColor(buttonStyle.backgroundColor);
+              const foregroundLuminance = luminance(foreground);
+              const backgroundLuminance = luminance(background);
+              return {
+                selector,
+                foreground: labelStyle.color,
+                contrast: (Math.max(foregroundLuminance, backgroundLuminance) + 0.05)
+                  / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+              };
+            });
+            const result = { state: state || 'base', note: element.querySelector('.note').textContent.trim(), background: buttonStyle.backgroundColor, labels };
+            if (state) element.classList.remove(state);
+            return result;
+          }));
+        }""")
+        self.assertTrue(pads)
+        baseline_backgrounds = {pad["note"]: pad["background"] for pad in pads if pad["state"] == "base"}
+        self.assertTrue(all(pad["background"] == baseline_backgrounds[pad["note"]] for pad in pads), pads)
+        labels = [label for pad in pads for label in pad["labels"]]
+        self.assertTrue(all(label["foreground"] in {"rgb(11, 16, 22)", "rgb(23, 25, 28)"} for label in labels), pads)
+        self.assertGreaterEqual(min(label["contrast"] for label in labels), 4.5, pads)
+
+    def test_regression_root_marker_is_visible_without_relying_on_hue(self):
+        roots = self.page.locator('[data-testid="exquis-key"].tonic')
+        self.assertGreater(roots.count(), 0)
+        self.assertEqual(roots.locator('.root-marker').count(), roots.count())
+        self.assertTrue(all(marker == "R" for marker in roots.locator('.root-marker').all_text_contents()))
 
     def test_major_third_exercise_emits_selected_root_interval(self):
         self.page.select_option('[data-testid="exercise-select"]', "major_third")
@@ -2555,43 +2704,46 @@ class PlaywrightExhibitTests(unittest.TestCase):
           };
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.open_hardware_tools()
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
-        self.page.wait_for_timeout(1200)
+        self.page.wait_for_timeout(1600)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
         self.assertIn([176, 122, 0], sent)
         self.assertIn([176, 120, 0], sent)
         self.assertIn([176, 123, 0], sent)
         self.assertIn([191, 122, 0], sent)
-        self.assertIn([240, 0, 33, 126, 127, 0, 17, 247], sent)
-        self.assertNotIn([240, 0, 33, 126, 127, 0, 0, 247], sent)
-        self.assertNotIn([240, 0, 33, 126, 127, 6, 0, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
+        self.assertNotIn([240, 0, 33, 126, 127, 0, 17, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 1, 1, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 7, 0, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 127, 1, 8, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247], sent)
-        self.assertIn([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247], sent)
-        self.assertEqual(sum(1 for message in sent if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and 1 <= message[2] <= 3), 61)
+        palette_messages = [message for message in sent if len(message) > 6 and message[:6] == [240, 0, 33, 126, 127, 2]]
+        self.assertTrue(any(message[6] == 1 and len(message) == 92 for message in palette_messages))
+        self.assertEqual(sum(1 for message in sent if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and (message[2] == 1 or 16 <= message[2] <= 28)), 61)
         self.assertIn([240, 0, 33, 126, 127, 3, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 6, 247], sent)
         self.assertIn([240, 0, 33, 126, 127, 7, 247], sent)
-        transaction_start = max(index for index, message in enumerate(sent) if message == [240, 0, 33, 126, 127, 0, 17, 247])
+        transaction_start = max(index for index, message in enumerate(sent) if message == [240, 0, 33, 126, 127, 0, 1, 247])
         transaction = sent[transaction_start:]
+        self.assertNotIn([240, 0, 33, 126, 127, 6, 0, 247], transaction)
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 6, 5, 247]), transaction.index([240, 0, 33, 126, 127, 1, 1, 247]))
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 1, 1, 247]), transaction.index([240, 0, 33, 126, 127, 7, 0, 247]))
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 7, 0, 247]), transaction.index([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247]))
-        last_led_index = max(index for index, message in enumerate(transaction) if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and 1 <= message[2] <= 3)
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247]), transaction.index([240, 0, 33, 126, 127, 3, 247]))
-        self.assertLess(transaction.index([240, 0, 33, 126, 127, 3, 247]), transaction.index([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247]))
-        self.assertLess(transaction.index([240, 0, 33, 126, 127, 2, 1, 0, 0, 0, 56, 29, 65, 127, 95, 63, 247]), last_led_index)
+        last_led_index = max(index for index, message in enumerate(transaction) if len(message) == 3 and message[0] == 191 and 0 <= message[1] < 61 and (message[2] == 1 or 16 <= message[2] <= 28))
+        palette_index = next(index for index, message in enumerate(transaction) if len(message) > 6 and message[:6] == [240, 0, 33, 126, 127, 2])
+        self.assertLess(transaction.index([240, 0, 33, 126, 127, 3, 247]), palette_index)
+        self.assertLess(palette_index, last_led_index)
         self.assertLess(last_led_index, transaction.index([240, 0, 33, 126, 127, 6, 247]))
         self.assertLess(transaction.index([240, 0, 33, 126, 127, 6, 247]), transaction.index([240, 0, 33, 126, 127, 7, 247]))
+        self.assertNotIn([240, 0, 33, 126, 127, 0, 0, 247], transaction)
         self.assertIn([240, 0, 33, 126, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 4, 2, 29, 247], sent)
         self.assertNotIn([240, 0, 33, 126, 7, 2, 127, 95, 63, 247], sent)
@@ -2599,13 +2751,17 @@ class PlaywrightExhibitTests(unittest.TestCase):
         echo_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
         self.page.wait_for_timeout(140)
         post_input_messages = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", echo_count)
-        self.assertEqual([message for message in post_input_messages if message != [254]], [])
-        self.page.select_option('[data-testid="legacy-map-select"]', "top_left")
+        self.assertEqual(
+            [message for message in post_input_messages if message not in ([254], [240, 0, 33, 126, 247])],
+            []
+        )
+        self.page.locator('[data-testid="advanced-hardware-research"]').evaluate("element => element.open = true")
+        self.page.locator('[data-testid="legacy-map-select"]').select_option("top_left")
         self.page.wait_for_timeout(60)
         remapped = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", echo_count)
         self.assertIn([240, 0, 33, 126, 4, 0, 62, 247], remapped)
         before_lights = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
-        self.page.select_option('[data-testid="legacy-light-select"]', "both")
+        self.page.locator('[data-testid="legacy-light-select"]').select_option("both")
         self.page.wait_for_timeout(60)
         light_messages = self.page.evaluate("(before) => window.__mockExquisOutput.sent.slice(before)", before_lights)
         self.assertIn([240, 0, 33, 126, 3, 3, 127, 95, 63, 247], light_messages)
@@ -2617,6 +2773,72 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("custom-scale=dorian", log)
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], self.page.evaluate("() => window.__mockExquisOutput.sent"))
+
+    def test_regression_exquis_rgb_pad_probe_uses_official_pad_only_direct_led_protocol(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="advanced-hardware-research"] summary').click()
+        before = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+        self.page.locator('[data-testid="rgb-pad-test-exquis"]').click()
+        self.page.wait_for_timeout(360)
+        sent = self.page.evaluate("(count) => window.__mockExquisOutput.sent.slice(count)", before)
+        self.assertIn([240, 0, 33, 126, 127, 0, 1, 247], sent)
+        self.assertIn([240, 0, 33, 126, 127, 4, 0, 127, 0, 127, 0, 247], sent)
+        self.assertFalse(any(message[:4] == [240, 0, 33, 126] and message[4] != 127 for message in sent))
+        self.assertNotIn([240, 0, 33, 126, 127, 0, 16, 247], sent)
+        self.assertNotIn([191, 100, 127], sent)
+        self.assertIn("Official pad color test active: bottom-left pad is magenta", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+
+    def test_regression_manual_key_mode_change_syncs_after_hardware_readback(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out',
+            name: 'Exquis USB MIDI',
+            manufacturer: 'Intuitive Instruments',
+            sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.wait_for_timeout(1200)
+        sent_before_change = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
+
+        self.page.select_option('[data-testid="tonic-select"]', "5")
+        self.page.select_option('[data-testid="scale-select"]', "dorian")
+        self.page.evaluate("""() => window.__mockExquisInput.onmidimessage({
+          data: [0xF0, 0x00, 0x21, 0x7E, 0x7F, 0x06, 0x00, 0xF7]
+        })""")
+        self.page.wait_for_timeout(1200)
+        sent_after_change = self.page.evaluate("(count) => window.__mockExquisOutput.sent.slice(count)", sent_before_change)
+        self.assertEqual(self.page.locator('[data-testid="tonic-select"]').input_value(), "5")
+        self.assertIn([240, 0, 33, 126, 127, 6, 5, 247], sent_after_change)
+        self.assertIn([240, 0, 33, 126, 127, 8, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 247], sent_after_change)
 
     def test_regression_exquis_dial_listen_uses_settings_encoder_developer_mode_and_logs_dials(self):
         self.page.evaluate("""
@@ -2678,11 +2900,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
           });
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.open_hardware_tools()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
+        self.page.locator('[data-testid="advanced-hardware-research"] summary').click()
         self.page.locator('[data-testid="native-probe-exquis"]').click()
         self.page.wait_for_timeout(3100)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
@@ -2710,6 +2933,45 @@ class PlaywrightExhibitTests(unittest.TestCase):
         text = "\n".join(item["text"] for item in labels)
         for expected in ["Settings", "Sound", "Record", "Loop", "Clips", "Play/Stop", "Down", "Up", "Undo", "Redo", "Encoder 1", "Encoder 2", "Encoder 3", "Encoder 4", "Slider"]:
             self.assertIn(expected, text)
+
+    def test_regression_studio_diagnostics_opens_visible_hardware_drawer(self):
+        self.open_hardware_tools()
+        hardware = self.page.locator('[data-testid="hardware-tools"]')
+        self.assertTrue(hardware.is_visible())
+        self.assertFalse(hardware.locator('> summary').is_visible())
+        advanced = self.page.locator('[data-testid="advanced-hardware-research"]')
+        self.assertTrue(advanced.is_visible())
+        self.assertFalse(advanced.evaluate("element => element.open"))
+        advanced.locator('summary').click()
+        self.assertEqual(self.page.locator('[data-testid="native-probe-exquis"]').inner_text(), "Native LED Probe")
+        self.page.locator('[data-testid="hardware-diagnostics"]').click()
+        drawer = self.page.locator('[data-testid="console-panel"]')
+        log = self.page.locator('[data-testid="diagnostic-log"]')
+        drawer_box = drawer.bounding_box()
+        log_box = log.bounding_box()
+        self.assertTrue(drawer.is_visible())
+        self.assertTrue(log.is_visible())
+        self.assertIsNotNone(drawer_box)
+        self.assertIsNotNone(log_box)
+        self.assertGreater(drawer_box["width"], 300)
+        self.assertGreater(drawer_box["height"], 180)
+        self.assertGreater(log_box["height"], 160)
+        drawer_layout = drawer.evaluate("""element => ({
+          position: getComputedStyle(element).position,
+          left: element.getBoundingClientRect().left,
+          hardwareRight: document.querySelector('[data-testid="hardware-tools"]').getBoundingClientRect().right,
+          actionLabels: [...element.querySelectorAll('.console-actions button')].map(button => button.textContent.trim()),
+          clippedActions: [...element.querySelectorAll('.console-actions button')].filter(button => button.scrollWidth > button.clientWidth).map(button => button.textContent.trim())
+        })""")
+        self.assertEqual(drawer_layout["position"], "absolute")
+        self.assertLess(drawer_layout["left"], drawer_layout["hardwareRight"])
+        self.assertEqual(drawer_layout["actionLabels"], ["Audio snapshot", "Clear log", "Copy", "Collapse"])
+        self.assertEqual(drawer_layout["clippedActions"], [])
+        self.assertEqual(self.page.locator('[data-testid="probe-exquis"]').inner_text(), "Protocol Discovery Probe")
+        labels = advanced.locator('label').evaluate_all("elements => elements.map((element) => element.querySelector('span').textContent.trim())")
+        self.assertIn("Legacy pad-map origin", labels)
+        self.assertIn("Legacy light destination", labels)
+        self.assertIn("experimental or disruptive MIDI messages", advanced.inner_text())
         layout = self.page.evaluate("""
         () => ({
           encoders: [...document.querySelectorAll('[data-testid="edge-top-controls"] [data-testid="edge-control"]')].map((el) => el.dataset.edgeId),
@@ -2728,6 +2990,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(layout["actions"], ["settings", "sound", "record", "loop", "clips", "playStop"])
         self.assertTrue(layout["topBeforeKeys"], layout)
         self.assertTrue(layout["bottomAfterKeys"], layout)
+
         self.page.evaluate("""
         () => {
           window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -2754,6 +3017,90 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 42, 5] })")
         self.assertGreaterEqual(self.page.locator('[data-edge-id="enc2"].active').count(), 1)
         self.assertIn("5", self.page.locator('[data-edge-id="enc2"]').inner_text())
+
+    def test_regression_studio_hardware_fits_laptop_height_without_scroll_or_cutoff(self):
+        self.page.set_viewport_size({"width": 1280, "height": 600})
+        self.open_hardware_tools()
+
+        def layout_metrics():
+            return self.page.evaluate("""() => {
+              const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+              const studio = document.querySelector('[data-testid="studio-workspace"]');
+              const slot = document.querySelector('#studioControlsSlot');
+              return {
+                studio: rect('[data-testid="studio-workspace"]'),
+                hardware: rect('[data-testid="hardware-tools"]'),
+                activity: rect('[data-testid="midi-activity"]'),
+                console: rect('[data-testid="console-panel"]'),
+                studioScrollHeight: studio.scrollHeight,
+                studioClientHeight: studio.clientHeight,
+                slotScrollHeight: slot.scrollHeight,
+                slotClientHeight: slot.clientHeight
+              };
+            }""")
+
+        collapsed = layout_metrics()
+        self.assertLessEqual(collapsed["hardware"]["bottom"], collapsed["studio"]["bottom"])
+        self.assertLessEqual(collapsed["activity"]["bottom"], collapsed["hardware"]["bottom"])
+        self.assertLessEqual(collapsed["studioScrollHeight"], collapsed["studioClientHeight"] + 1)
+        self.assertLessEqual(collapsed["slotScrollHeight"], collapsed["slotClientHeight"] + 1)
+        density = self.page.evaluate("""() => {
+          const hardware = document.querySelector('[data-testid="hardware-tools"]').getBoundingClientRect();
+          const regions = [...document.querySelectorAll(
+            '[aria-labelledby="hardware-connection-heading"], [aria-labelledby="hardware-diagnostics-heading"], .advanced-hardware-research, #exquisSyncStatus, #midiActivity'
+          )].map((element) => element.getBoundingClientRect());
+          const columns = 20;
+          const rows = 12;
+          const occupied = [];
+          for (let row = 0; row < rows; row += 1) {
+            for (let column = 0; column < columns; column += 1) {
+              const cell = {
+                left: hardware.left + column * hardware.width / columns,
+                right: hardware.left + (column + 1) * hardware.width / columns,
+                top: hardware.top + row * hardware.height / rows,
+                bottom: hardware.top + (row + 1) * hardware.height / rows
+              };
+              occupied[row * columns + column] = regions.some((region) => (
+                region.left < cell.right && region.right > cell.left &&
+                region.top < cell.bottom && region.bottom > cell.top
+              ));
+            }
+          }
+          let largestEmptyCells = 0;
+          for (let top = 0; top < rows; top += 1) {
+            for (let bottom = top; bottom < rows; bottom += 1) {
+              for (let left = 0; left < columns; left += 1) {
+                for (let right = left; right < columns; right += 1) {
+                  let empty = true;
+                  for (let row = top; row <= bottom && empty; row += 1) {
+                    for (let column = left; column <= right; column += 1) {
+                      if (occupied[row * columns + column]) {
+                        empty = false;
+                        break;
+                      }
+                    }
+                  }
+                  if (empty) largestEmptyCells = Math.max(largestEmptyCells, (right - left + 1) * (bottom - top + 1));
+                }
+              }
+            }
+          }
+          return {
+            occupiedRatio: occupied.filter(Boolean).length / (columns * rows),
+            largestEmptyRatio: largestEmptyCells / (columns * rows)
+          };
+        }""")
+        self.assertGreaterEqual(density["occupiedRatio"], 0.70, density)
+        self.assertLessEqual(density["largestEmptyRatio"], 0.16, density)
+
+        self.page.locator('[data-testid="hardware-diagnostics"]').click()
+        expanded = layout_metrics()
+        self.assertLessEqual(expanded["hardware"]["bottom"], expanded["studio"]["bottom"])
+        self.assertLessEqual(expanded["activity"]["bottom"], expanded["hardware"]["bottom"])
+        self.assertLessEqual(expanded["console"]["bottom"], expanded["hardware"]["bottom"])
+        self.assertGreaterEqual(expanded["console"]["left"], expanded["activity"]["right"])
+        self.assertLessEqual(expanded["studioScrollHeight"], expanded["studioClientHeight"] + 1)
+        self.assertLessEqual(expanded["slotScrollHeight"], expanded["slotClientHeight"] + 1)
 
     def test_regression_exquis_edge_controls_follow_orientation_layout(self):
         def metrics_for(orientation):
@@ -3065,9 +3412,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
           });
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.open_hardware_tools()
         self.page.locator('[data-testid="sync-exquis"]').click()
         before_count = self.page.evaluate("() => window.__mockExquisOutput.sent.length")
         self.page.evaluate("""
@@ -3103,9 +3450,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
           };
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
-        self.open_hardware_tools()
         self.assertEqual(self.page.evaluate("() => window.__requests.map(r => !!r.sysex)"), [True, False])
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"exquis-sync-status\"]').textContent.includes('SysEx permission unavailable')")
         self.assertTrue(self.page.locator('[data-testid="sync-exquis"]').is_disabled())
@@ -8154,6 +8501,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('SSLI runtime preset API ready')")
         self.page.locator('[data-testid="play-step"]').click()
         self.page.wait_for_function("() => /SSLI preset applied|SSLI MIDI sustain start/.test(document.querySelector('[data-testid=\"diagnostic-log\"]').textContent)")
+        self.page.once("dialog", lambda dialog: dialog.accept())
         self.page.locator('[data-testid="reset-console"]').click()
         self.page.locator('[data-testid="play-mode"]').click()
         metrics = self.page.evaluate("""
@@ -8785,20 +9133,21 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.mouse.up()
 
     def test_console_reset_and_exit_controls(self):
-        self.open_audio_drawer()
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="hardware-diagnostics"]').click()
         self.assertTrue(self.page.locator('[data-testid="console-panel"]').is_visible())
         self.assertEqual(self.page.locator('[data-testid="reset-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="copy-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="exit-console"]').count(), 1)
         self.assertEqual(self.page.locator('[data-testid="exit-console"]').inner_text(), "Collapse")
-        self.assertFalse(self.page.locator('[data-testid="diagnostic-log"]').is_visible())
-        self.page.locator('[data-testid="test-audio"]').click()
-        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('audio')")
+        self.assertTrue(self.page.locator('[data-testid="diagnostic-log"]').is_visible())
         self.page.locator('[data-testid="audio-diag"]').click()
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"diagnostic-log\"]').textContent.includes('audio')")
         expanded_height = self.page.locator('[data-testid="diagnostic-log"]').bounding_box()["height"]
         self.assertGreaterEqual(expanded_height, 180)
+        self.page.once("dialog", lambda dialog: dialog.accept())
         self.page.locator('[data-testid="reset-console"]').click()
-        self.assertIn("reset", self.page.locator('[data-testid="diagnostic-log"]').inner_text())
+        self.assertEqual(self.page.locator('[data-testid="diagnostic-log"]').inner_text(), "Ready.")
         self.page.locator('[data-testid="exit-console"]').click()
         self.assertTrue(self.page.locator('[data-testid="console-panel"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="diagnostic-log"]').is_visible())

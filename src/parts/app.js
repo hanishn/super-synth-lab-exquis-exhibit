@@ -948,6 +948,7 @@
   var heldScopeUntil = 0;
   var currentPath = [];
   var currentExerciseEvents = [];
+  var currentLightFrame = [];
   var pendingGripAttempts = null;
   var pendingGripTimer = null;
   var GRIP_COLLECTION_GRACE_MS = 80;
@@ -962,7 +963,9 @@
   var lastExquisLegacyKeepaliveLogAt = 0;
   var exquisLegacyNoteMapSent = false;
   var exquisSyncSuppressUntil = 0;
+  var exquisUserKeyModeAuthorityUntil = 0;
   var exquisKeyModeSyncTimers = [];
+  var lastExquisPadPalette = {};
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
@@ -1305,6 +1308,12 @@
   window.__exquisDebugBuildVoiceLeadingTransition = buildVoiceLeadingTransition;
   window.__exquisDebugBuildExerciseLifecycleEvents = buildDebugExerciseLifecycleEvents;
   window.__exquisDebugEvaluateGrip = evaluateGripAttempt;
+  window.__exquisLightDebug = {
+    currentFrame: function() { return { pads: currentLightFrame.map(function(pad) { return Object.assign({}, pad); }) }; },
+    hardwareFrame: function() { return currentLightFrame.map(function(pad) { return { padId: pad.padId, midi: pad.midi, role: pad.role, isTarget: pad.isTarget, paletteIndex: lightFramePaletteIndex(pad) }; }); },
+    paletteRgbFor: function(pad) { return lightFramePaletteRgb(pad, getScale()); },
+    intervalHue: intervalHue
+  };
 
   function mod(n, m) {
     return ((n % m) + m) % m;
@@ -1418,6 +1427,10 @@
   }
 
   function updateTonicFromHardwareRoot(rootPc, source) {
+    if (state.exquisSyncEnabled && Date.now() < exquisUserKeyModeAuthorityUntil) {
+      logEvent('midi', 'Exquis sync ignored stale root readback during local key/mode update');
+      return;
+    }
     cancelPendingExquisKeyModeSync();
     var incomingPc = mod(rootPc, 12);
     exquisSyncSuppressUntil = Date.now() + 250;
@@ -1431,6 +1444,10 @@
   }
 
   function updateScaleFromHardwareNumber(scaleNumber, source) {
+    if (state.exquisSyncEnabled && Date.now() < exquisUserKeyModeAuthorityUntil) {
+      logEvent('midi', 'Exquis sync ignored stale scale readback during local key/mode update');
+      return;
+    }
     cancelPendingExquisKeyModeSync();
     var scaleId = scaleIdForExquisNumber(scaleNumber);
     exquisSyncSuppressUntil = Date.now() + 250;
@@ -3910,6 +3927,7 @@
   }
 
   function resetConsole() {
+    if (!window.confirm('Clear the visible diagnostics log? This cannot be undone.')) return;
     logs = [];
     pendingLogs = [];
     if (logFlushTimer) {
@@ -3948,6 +3966,9 @@
 
   function expandConsole() {
     if (els.practiceTools) els.practiceTools.open = true;
+    if (state.workspace === 'studio' && els.midiCoachSection && els.consolePanel) {
+      els.midiCoachSection.appendChild(els.consolePanel);
+    }
     if (els.consolePanel) {
       els.consolePanel.hidden = false;
       els.consolePanel.classList.add('expanded');
@@ -5242,6 +5263,185 @@
     return cell ? cell.id.replace('-octave', '') : '';
   }
 
+  var SCALE_HUE_ROOT = 120;
+  var EXQUIS_PALETTE_OFF = 1;
+  var EXQUIS_PALETTE_HUE_START = 16;
+  var EXQUIS_PALETTE_ROOT = 28;
+
+  function intervalHue(interval, scale) {
+    var normalized = mod(interval, 12);
+    var intervals = scale && scale.intervals ? scale.intervals : getScale().intervals;
+    var degreeIndex = intervals.indexOf(normalized);
+    if (degreeIndex >= 0) {
+      return mod(SCALE_HUE_ROOT + Math.round(degreeIndex * 360 / intervals.length), 360);
+    }
+    return mod(SCALE_HUE_ROOT + Math.round(normalized * 360 / 12), 360);
+  }
+
+  function hueToExquisRgb(hue, brightness) {
+    var saturation = 0.85;
+    var chroma = brightness * saturation;
+    var hueSector = mod(hue, 360) / 60;
+    var secondary = chroma * (1 - Math.abs(mod(hueSector, 2) - 1));
+    var red = 0;
+    var green = 0;
+    var blue = 0;
+    if (hueSector < 1) {
+      red = chroma;
+      green = secondary;
+    } else if (hueSector < 2) {
+      red = secondary;
+      green = chroma;
+    } else if (hueSector < 3) {
+      green = chroma;
+      blue = secondary;
+    } else if (hueSector < 4) {
+      green = secondary;
+      blue = chroma;
+    } else if (hueSector < 5) {
+      red = secondary;
+      blue = chroma;
+    } else {
+      red = chroma;
+      blue = secondary;
+    }
+    var match = brightness - chroma;
+    return [
+      Math.round((red + match) * 127),
+      Math.round((green + match) * 127),
+      Math.round((blue + match) * 127)
+    ];
+  }
+
+  function exquisHuePalettePayload(scale) {
+    var payload = [EXQUIS_PALETTE_OFF, 0x00, 0x00, 0x00];
+    for (var reservedIndex = EXQUIS_PALETTE_OFF + 1; reservedIndex < EXQUIS_PALETTE_HUE_START; reservedIndex++) {
+      payload.push(0x00, 0x00, 0x00);
+    }
+    for (var interval = 0; interval < 12; interval++) {
+      var rgb = hueToExquisRgb(intervalHue(interval, scale), 0.75);
+      payload.push(rgb[0], rgb[1], rgb[2]);
+    }
+    var rootRgb = hueToExquisRgb(SCALE_HUE_ROOT, 1);
+    payload.push(rootRgb[0], rootRgb[1], rootRgb[2]);
+    return payload;
+  }
+
+  function lightFramePaletteRgb(pad, scale) {
+    return hueToExquisRgb(intervalHue(pad.interval, scale), pad.isRoot ? 1 : 0.75);
+  }
+
+  function lightFrameMeridianPosition(cell, cells) {
+    var minX = Infinity;
+    var maxX = -Infinity;
+    var minY = Infinity;
+    var maxY = -Infinity;
+    for (var i = 0; i < cells.length; i++) {
+      minX = Math.min(minX, cells[i].x);
+      maxX = Math.max(maxX, cells[i].x);
+      minY = Math.min(minY, cells[i].y);
+      maxY = Math.max(maxY, cells[i].y);
+    }
+    return {
+      axisDistance: Math.abs(cell.y - (minY + maxY) / 2),
+      crossAxisDistance: Math.abs(cell.x - (minX + maxX) / 2)
+    };
+  }
+
+  function canonicalLightCellIdsByMidi(cells) {
+    var candidatesByMidi = {};
+    cells.forEach(function(cell) {
+      (candidatesByMidi[cell.midi] || (candidatesByMidi[cell.midi] = [])).push(cell);
+    });
+    return Object.keys(candidatesByMidi).reduce(function(canonicalByMidi, midi) {
+      var candidates = candidatesByMidi[midi];
+      candidates.sort(function(a, b) {
+        var aPosition = lightFrameMeridianPosition(a, cells);
+        var bPosition = lightFrameMeridianPosition(b, cells);
+        return aPosition.axisDistance - bPosition.axisDistance || aPosition.crossAxisDistance - bPosition.crossAxisDistance || a.id.localeCompare(b.id);
+      });
+      canonicalByMidi[midi] = cellKey(candidates[0]);
+      return canonicalByMidi;
+    }, {});
+  }
+
+  function buildPadLightFrame(cells, options) {
+    var scale = options.scale;
+    var targetByKey = options.targetByKey || {};
+    var pathById = options.pathById || {};
+    var litPracticeById = options.litPracticeById || {};
+    var targetOrderByKey = options.targetOrderByKey || {};
+    var pathIndexById = options.pathIndexById || {};
+    var pathMidiById = options.pathMidiById || {};
+    var fingerById = options.fingerById || {};
+    var canonicalCellIdByMidi = canonicalLightCellIdsByMidi(cells);
+    var targetByMidi = {};
+    var targetOrderByMidi = {};
+    var pathByMidi = {};
+    var practiceByMidi = {};
+    var pathIndexByMidi = {};
+    var pathMidiByMidi = {};
+    var fingerByMidi = {};
+    cells.forEach(function(cell) {
+      var cellId = cellKey(cell);
+      var key = cellId + ':' + cell.midi;
+      if (targetByKey[key]) targetByMidi[cell.midi] = true;
+      if (targetOrderByKey[key]) targetOrderByMidi[cell.midi] = targetOrderByKey[key];
+      if (pathById[cellId]) pathByMidi[cell.midi] = true;
+      if (litPracticeById[cellId]) practiceByMidi[cell.midi] = true;
+      if (typeof pathIndexById[cellId] === 'number') pathIndexByMidi[cell.midi] = pathIndexById[cellId];
+      if (typeof pathMidiById[cellId] === 'number') pathMidiByMidi[cell.midi] = pathMidiById[cellId];
+      if (fingerById[cellId]) fingerByMidi[cell.midi] = fingerById[cellId];
+    });
+    return cells.map(function(cell) {
+      var cellId = cell.id.replace('-octave', '');
+      var isCanonical = canonicalCellIdByMidi[cell.midi] === cellId;
+      var heldInfo = getHeldInfoForCell(cell);
+      var isTarget = isCanonical && !!targetByMidi[cell.midi];
+      var isRoot = isCanonical && cell.pc === state.tonicPc;
+      var isPath = isCanonical && !!pathByMidi[cell.midi];
+      var isScale = options.isPractice && options.view === 'practice'
+        ? isPath
+        : (isCanonical && isScalePc(cell.pc, scale));
+      var isHardwareLit = isCanonical && options.isPractice && options.view === 'practice' && !!practiceByMidi[cell.midi];
+      var isMismatch = !!state.mismatched[cellId];
+      var role = isMismatch ? 'mismatch'
+        : (heldInfo.level > 0 ? 'held'
+          : (isTarget ? 'target'
+            : (isRoot ? 'root'
+              : (isPath ? 'path'
+                : ((isScale || isHardwareLit) ? 'scale' : 'off')))));
+      return {
+        cellId: cellId,
+        midi: cell.midi,
+        pc: cell.pc,
+        padId: exquisLegacyPadId(cell),
+        interval: mod(cell.pc - state.tonicPc, 12),
+        hue: intervalHue(cell.pc - state.tonicPc, scale),
+        role: role,
+        isCanonical: isCanonical,
+        isRoot: isRoot,
+        isScale: isScale || isHardwareLit,
+        isHardwareLit: isHardwareLit,
+        isPath: isPath,
+        pathIndex: isCanonical && isPath ? pathIndexByMidi[cell.midi] : undefined,
+        pathMidi: isCanonical && isPath ? pathMidiByMidi[cell.midi] : undefined,
+        finger: isCanonical && isPath ? fingerByMidi[cell.midi] : '',
+        isTarget: isTarget,
+        targetIndex: isCanonical && isTarget ? targetOrderByMidi[cell.midi] : 0,
+        isHeld: heldInfo.level > 0,
+        isMismatch: isMismatch
+      };
+    });
+  }
+
+  function lightFrameByCellMidi(frame) {
+    return frame.reduce(function(index, pad) {
+      index[pad.cellId + ':' + pad.midi] = pad;
+      return index;
+    }, {});
+  }
+
   function expectedCell() {
     var event = expectedExerciseEvent();
     if (!event || !event.targets.length) return null;
@@ -5535,6 +5735,7 @@
   }
 
   function scoreSinglePracticeNote(expected, expectedKey, midi) {
+    var advanced = false;
     if (expected && mod(midi, 12) === expected.pc) {
       state.correctCount += 1;
       state.streak += 1;
@@ -5544,6 +5745,7 @@
       setFeedback('Correct: ' + noteLabelFromMidi(midi) + ' matches the current target.', 'good');
       if (state.autoAdvance) {
         state.step += 1;
+        advanced = true;
       }
     } else if (expected) {
       state.missCount += 1;
@@ -5551,6 +5753,7 @@
       state.mismatched[expectedKey] = { expectedMidi: expected.midi, receivedMidi: midi, at: state.lastMidiAt };
       setFeedback('Not this one: heard ' + noteLabelFromMidi(midi) + ', target is ' + noteLabelFromMidi(expected.midi) + '.', 'bad');
     }
+    return advanced;
   }
 
   function resolvePendingGripAttempt(event) {
@@ -5559,13 +5762,17 @@
     pendingGripTimer = null;
     var result = evaluateGripAttempt(event, pendingGripAttempts.attempts);
     pendingGripAttempts = null;
+    var advanced = false;
     if (result.accepted) {
       state.correctCount += 1;
       state.streak += 1;
       recordRepertoireLoop(event);
       var declaredOption = event.fingering.alternatives.filter(function(option) { return option.id === state.gripFingeringOption; })[0];
       setFeedback('Correct grip: ' + event.targets.map(function(target) { return noteLabelFromMidi(target.midi); }).join(' + ') + '.' + (declaredOption ? ' Declared ' + declaredOption.label + ' fingering.' : ''), 'good');
-      if (state.autoAdvance) state.step += 1;
+      if (state.autoAdvance) {
+        state.step += 1;
+        advanced = true;
+      }
     } else {
       state.missCount += 1;
       state.streak = 0;
@@ -5573,6 +5780,7 @@
       setFeedback('Grip not accepted: ' + detail + '.', 'bad');
     }
     render();
+    if (advanced) syncExquisPracticePadFrame();
   }
 
   function queueGripPracticeNote(event, attempt) {
@@ -5655,7 +5863,9 @@
       setFeedback('Play mode: ' + noteLabelFromMidi(midi) + ' is sounding freely.', 'live');
     } else if (expectedEvent && expectedEvent.type === 'grip') {
       queueGripPracticeNote(expectedEvent, { midi: midi, cellId: hitCell ? hitCell.id : '', at: state.lastMidiAt });
-    } else scoreSinglePracticeNote(expected, expectedKey, midi);
+    } else {
+      var advancedPracticeStep = scoreSinglePracticeNote(expected, expectedKey, midi);
+    }
 
     if (midiHitTimer) window.clearTimeout(midiHitTimer);
     midiHitTimer = window.setTimeout(function() {
@@ -5933,12 +6143,12 @@
   }
 
   function beginOfficialKeyModeTransaction(reason) {
-    return sendOfficialSettingsDeveloperMode(true, (reason || 'native-keymode') + ' developer-mode pads+settings/sound=0x11');
+    return sendOfficialPadsDeveloperMode(true, (reason || 'native-keymode') + ' developer-mode pads=0x01');
   }
 
   function endOfficialKeyModeTransaction(reason) {
-    if (state.exquisDialListenEnabled) return true;
-    return sendOfficialSettingsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
+    if (state.exquisSyncEnabled || state.exquisDialListenEnabled) return true;
+    return sendOfficialPadsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
   }
 
   function sendRawMidi(bytes, reason) {
@@ -6066,6 +6276,22 @@
     return true;
   }
 
+  function probeExquisRgbPad() {
+    if (!midiOutput || !midiOutput.send) {
+      state.exquisSyncStatus = 'RGB pad test: no MIDI output';
+      render();
+      return;
+    }
+    cancelPendingExquisKeyModeSync();
+    sendRawMidi(buildExquisSysex(0x00, [EXQUIS_DEVELOPER_PADS_MASK]), 'Exquis official RGB pad test developer-mode pads=0x01');
+    window.setTimeout(function() {
+      sendRawMidi(buildExquisSysex(0x04, [0, 0x7F, 0x00, 0x7F, 0x00]), 'Exquis official RGB pad test pad=0 magenta');
+      state.exquisSyncStatus = 'Official pad color test active: bottom-left pad is magenta';
+      logEvent('midi', 'Official RGB pad test sent one Developer Mode direct LED color write for pad=0 RGB=127,0,127 fx=0; edge controls remain native');
+      render();
+    }, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
+  }
+
   function probeExquisHardware() {
     if (!midiOutput) {
       state.exquisSyncStatus = 'Exquis probe: no MIDI output';
@@ -6138,20 +6364,48 @@
   }
 
   function scheduleExquisPadColors(delayMs) {
-    var cells = makeGrid().slice().sort(function(a, b) { return exquisLegacyPadId(a) - exquisLegacyPadId(b); });
-    logEvent('midi', 'Exquis sync send pad-colors root=' + getTonicName() + ' scale=' + state.scaleId + ' count=' + cells.length);
+    var pads = currentLightFrame.slice().sort(function(a, b) { return a.padId - b.padId; });
+    if (!pads.length) {
+      pads = buildPadLightFrame(makeGrid(), {
+        scale: getScale(),
+        isPractice: state.mode === 'practice',
+        view: state.view
+      }).sort(function(a, b) { return a.padId - b.padId; });
+    }
+    logEvent('midi', 'Exquis sync send pad-colors root=' + getTonicName() + ' scale=' + state.scaleId + ' count=' + pads.length);
     scheduleExquisKeyModeSync(function() {
-      sendExquisSysex(0x02, [1, 0x00, 0x00, 0x00, 0x38, 0x1D, 0x41, 0x7F, 0x5F, 0x3F], 'pad-palette off/scale/root');
+      sendExquisSysex(0x02, exquisHuePalettePayload(getScale()), 'pad-palette off/root-relative-hues');
     }, delayMs);
-    cells.forEach(function(cell, index) {
-      var key = els.keyboard ? els.keyboard.querySelector('[data-cell-id="' + cell.id + '"]') : null;
-      var isVisibleTonic = key && key.classList.contains('tonic') && !key.classList.contains('dimmed');
-      var isVisibleTarget = key && (key.classList.contains('current-grip-target') || ((key.classList.contains('hardware-lit') || key.classList.contains('in-path') || key.classList.contains('in-scale')) && !key.classList.contains('dimmed')));
-      var color = isVisibleTonic ? [0x7F, 0x5F, 0x3F] : (isVisibleTarget ? [0x38, 0x1D, 0x41] : [0x00, 0x00, 0x00]);
-      var paletteIndex = color[0] === 0x7F ? 3 : (color[0] === 0x38 ? 2 : 1);
+    pads.forEach(function(pad, index) {
+      var paletteIndex = lightFramePaletteIndex(pad);
       scheduleExquisKeyModeSync(function() {
-        sendRawMidi([0xBF, exquisLegacyPadId(cell), paletteIndex], '');
+        sendRawMidi([0xBF, pad.padId, paletteIndex], '');
+        lastExquisPadPalette[pad.padId] = paletteIndex;
       }, delayMs + (index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
+    });
+  }
+
+  function lightFramePaletteIndex(pad) {
+    return pad.isRoot
+      ? EXQUIS_PALETTE_ROOT
+      : (pad.isScale
+        ? EXQUIS_PALETTE_HUE_START + pad.interval
+        : EXQUIS_PALETTE_OFF);
+  }
+
+  function syncExquisPracticePadFrame() {
+    if (!state.exquisSyncEnabled || !midiOutput || !currentLightFrame.length) return;
+    var changedPads = currentLightFrame.filter(function(pad) {
+      return lastExquisPadPalette[pad.padId] !== lightFramePaletteIndex(pad);
+    });
+    if (!changedPads.length) return;
+    logEvent('midi', 'Exquis practice light frame changed=' + changedPads.length);
+    changedPads.sort(function(a, b) { return a.padId - b.padId; }).forEach(function(pad, index) {
+      scheduleExquisKeyModeSync(function() {
+        var paletteIndex = lightFramePaletteIndex(pad);
+        sendRawMidi([0xBF, pad.padId, paletteIndex], '');
+        lastExquisPadPalette[pad.padId] = paletteIndex;
+      }, (index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
     });
   }
 
@@ -6181,6 +6435,7 @@
   function syncExquisKeyModeToHardware() {
     if (!state.exquisSyncEnabled) return;
     cancelPendingExquisKeyModeSync();
+    lastExquisPadPalette = {};
     beginOfficialKeyModeTransaction('key/mode sync');
     state.exquisCustomScaleActive = true;
     scheduleExquisKeyModeSync(sendExquisRoot, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
@@ -6194,8 +6449,15 @@
     var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT + 1);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x06, [], 'request-root-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x07, [], 'request-scale-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
+    scheduleExquisKeyModeSync(function() { endOfficialKeyModeTransaction('key/mode sync'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
     state.exquisSyncStatus = 'Exquis sync: active ' + getTonicName() + ' ' + getScale().name + ' custom scale';
     render();
+  }
+
+  function syncExquisKeyModeFromUiChange() {
+    if (!state.exquisSyncEnabled) return;
+    exquisUserKeyModeAuthorityUntil = Date.now() + 1400;
+    syncExquisKeyModeToHardware();
   }
 
   function handleExquisSysex(data) {
@@ -6247,6 +6509,7 @@
 
   function disableExquisSync() {
     cancelPendingExquisKeyModeSync();
+    lastExquisPadPalette = {};
     if (exquisLegacySyncTimer) {
       window.clearTimeout(exquisLegacySyncTimer);
       exquisLegacySyncTimer = null;
@@ -6593,6 +6856,12 @@
     var currentGripTargetsByKey = {};
     var currentGripFingerByCell = {};
     var currentGripTargetNotes = [];
+    var currentTargetByKey = {};
+    if (isPracticeMode && currentEvent && currentEvent.targets) {
+      currentEvent.targets.forEach(function(target) {
+        currentTargetByKey[target.cellId + ':' + target.midi] = true;
+      });
+    }
     if (isPracticeMode && currentEvent && currentEvent.type === 'grip') {
       currentEvent.targets.forEach(function(target, index) {
         currentGripTargetsByKey[target.cellId + ':' + target.midi] = index + 1;
@@ -6722,17 +6991,30 @@
       bracket.style.top = Math.round(minTargetY - 14) + 'px';
       bracket.style.width = Math.round(maxTargetX - minTargetX + 28) + 'px';
       bracket.style.height = Math.round(maxTargetY - minTargetY + 28) + 'px';
-      els.keyboard.appendChild(bracket);
     }
+    currentLightFrame = buildPadLightFrame(cells, {
+      scale: scale,
+      isPractice: isPracticeMode,
+      view: state.view,
+      targetByKey: currentTargetByKey,
+      targetOrderByKey: currentGripTargetsByKey,
+      pathById: pathById,
+      pathIndexById: pathIndexById,
+      pathMidiById: pathMidiById,
+      fingerById: fingerById,
+      litPracticeById: litPracticeById
+    });
+    var lightFrameByKey = lightFrameByCellMidi(currentLightFrame);
     for (i = 0; i < cells.length; i++) {
       var cell = cells[i];
-      var inPath = !!pathById[cell.id];
-      var displayMidi = isPracticeMode && inPath && typeof pathMidiById[cell.id] === 'number' ? pathMidiById[cell.id] : cell.midi;
-      var hardwareLit = isPracticeMode && state.view === 'practice' && !!litPracticeById[cell.id];
-      var inScale = state.view === 'map' ? false : (isPracticeMode && state.view === 'practice' ? inPath : isScalePc(cell.pc, scale));
-      var isTonic = cell.pc === state.tonicPc;
-      var isCurrent = isPracticeMode && current && current.id.replace('-octave', '') === cell.id;
-      var currentGripTargetIndex = currentGripTargetsByKey[cell.id + ':' + cell.midi] || 0;
+      var lightPad = lightFrameByKey[cell.id + ':' + cell.midi];
+      var inPath = !!(lightPad && lightPad.isPath);
+      var displayMidi = isPracticeMode && inPath && typeof lightPad.pathMidi === 'number' ? lightPad.pathMidi : cell.midi;
+      var hardwareLit = !!(lightPad && lightPad.isHardwareLit);
+      var inScale = !!(lightPad && lightPad.isScale && state.view !== 'map');
+      var isTonic = !!(lightPad && lightPad.isRoot);
+      var isCurrent = !!(isPracticeMode && current && lightPad && lightPad.isCanonical && current.midi === cell.midi);
+      var currentGripTargetIndex = lightPad ? lightPad.targetIndex : 0;
       var isCurrentGripTarget = currentGripTargetIndex > 0;
       var heldInfo = getHeldInfoForCell(cell);
       var heldLevel = heldInfo.level;
@@ -6745,6 +7027,7 @@
       if (isTonic) classes.push('tonic');
       if (isCurrent) classes.push('current');
       if (isCurrentGripTarget) classes.push('current-grip-target');
+      if (lightPad && lightPad.isTarget) classes.push('light-target');
       if (isPracticeMode && state.view === 'calibration' && isCurrent) classes.push('calibration-target');
       if (heldLevel > 0 && heldInfo.exact) classes.push('midi-held');
       if (state.rawMidiFlash && state.activeMidiCellIds[cell.id]) classes.push('midi-hit');
@@ -6767,7 +7050,12 @@
       key.setAttribute('data-cell-id', cell.id);
       key.setAttribute('data-midi', String(displayMidi));
       key.setAttribute('data-pc', String(cell.pc));
-      if (typeof pathIndexById[cell.id] === 'number') key.setAttribute('data-path-index', String(pathIndexById[cell.id]));
+      if (lightPad) {
+        key.setAttribute('data-light-role', lightPad.role);
+        key.setAttribute('data-interval', String(lightPad.interval));
+        key.style.setProperty('--pad-hue', String(lightPad.hue) + 'deg');
+      }
+      if (lightPad && typeof lightPad.pathIndex === 'number') key.setAttribute('data-path-index', String(lightPad.pathIndex));
       if (rootCell) {
         key.setAttribute('data-chain-offset', String(chainOffset(cell, rootCell)));
         key.setAttribute('data-chain-lane', hardwareLit ? String(litPracticeById[cell.id]) : chainLane(cell, rootCell));
@@ -6794,9 +7082,7 @@
         };
       })(cell));
       key.innerHTML = '<span class="key-label"><span class="note">' + cell.label + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
-      if (isCurrentGripTarget) {
-        key.insertAdjacentHTML('beforeend', '<svg class="chord-target-hex-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polygon class="chord-target-hex-underlay" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon><polygon class="chord-target-hex-stroke" points="50,3 97,25 97,75 50,97 3,75 3,25"></polygon></svg>');
-      }
+      if (isTonic) key.insertAdjacentHTML('beforeend', '<span class="root-marker" aria-hidden="true">R</span>');
       if (isPracticeMode && isCurrentGripTarget && state.view === 'practice') {
         var chordFinger = document.createElement('span');
         chordFinger.className = 'finger chord-finger';
@@ -6806,13 +7092,13 @@
       } else if (isPracticeMode && inPath && state.view === 'practice' && !(currentEvent && currentEvent.type === 'grip')) {
         var degree = document.createElement('span');
         degree.className = 'degree-badge';
-        degree.textContent = String((pathIndexById[cell.id] || 0) + 1);
-        degree.setAttribute('aria-label', 'Step ' + String((pathIndexById[cell.id] || 0) + 1));
+        degree.textContent = String((lightPad.pathIndex || 0) + 1);
+        degree.setAttribute('aria-label', 'Step ' + String((lightPad.pathIndex || 0) + 1));
         key.appendChild(degree);
         var finger = document.createElement('span');
         finger.className = 'finger sequence-finger';
-        finger.textContent = fingerShortName(fingerById[cell.id]);
-        finger.setAttribute('aria-label', 'Sequence finger ' + fingerDisplayName(fingerById[cell.id]));
+        finger.textContent = fingerShortName(lightPad.finger);
+        finger.setAttribute('aria-label', 'Sequence finger ' + fingerDisplayName(lightPad.finger));
         key.appendChild(finger);
       }
       els.keyboard.appendChild(key);
@@ -7001,6 +7287,9 @@
     if (els.nativeProbeExquis) {
       els.nativeProbeExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
     }
+    if (els.rgbPadTestExquis) {
+      els.rgbPadTestExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
+    }
     if (els.dialListen) {
       els.dialListen.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
       els.dialListen.textContent = state.exquisDialListenEnabled ? 'Stop Dial' : 'Dial Listen';
@@ -7050,26 +7339,20 @@
       els.workspaceNav.addEventListener('click', function(event) {
         var button = event.target.closest('button[data-workspace]');
         if (!button) return;
-        state.workspace = button.dataset.workspace;
-        placeWorkspaceControls();
-        render();
+        setWorkspace(button.dataset.workspace);
       });
     }
     if (els.startLibrarySession) {
       els.startLibrarySession.addEventListener('click', function() {
-        state.workspace = 'practice';
-        placeWorkspaceControls();
-        render();
+        setWorkspace('practice');
       });
     }
     els.tonic.addEventListener('change', function() {
       state.tonicPc = parseInt(els.tonic.value, 10) || 0;
       state.rootCellId = '';
       state.step = 0;
-      if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
-        syncExquisKeyModeToHardware();
-      }
       render();
+      syncExquisKeyModeFromUiChange();
     });
     els.root.addEventListener('change', function() {
       state.rootCellId = els.root.value;
@@ -7079,10 +7362,8 @@
     els.scale.addEventListener('change', function() {
       state.scaleId = els.scale.value;
       state.step = 0;
-      if (state.exquisSyncEnabled && Date.now() > exquisSyncSuppressUntil) {
-        syncExquisKeyModeToHardware();
-      }
       render();
+      syncExquisKeyModeFromUiChange();
     });
     els.legacyMap.addEventListener('change', function() {
       state.legacyMap = els.legacyMap.value || 'bottom_left';
@@ -7340,17 +7621,17 @@
     els.next.addEventListener('click', function() {
       state.step += 1;
       render();
+      syncExquisPracticePadFrame();
     });
     els.prev.addEventListener('click', function() {
       state.step -= 1;
       render();
+      syncExquisPracticePadFrame();
     });
     els.playStep.addEventListener('click', playCurrent);
     if (els.dashboardHearTarget) els.dashboardHearTarget.addEventListener('click', playCurrent);
     if (els.dashboardOpenSetup) els.dashboardOpenSetup.addEventListener('click', function() {
-      state.workspace = 'setup';
-      placeWorkspaceControls();
-      render();
+      setWorkspace('setup');
     });
     els.coachNextAction.addEventListener('click', function() {
       if (state.feedbackKind === 'good' && state.mode === 'practice') {
@@ -7367,6 +7648,7 @@
     els.syncExquis.addEventListener('click', toggleExquisSync);
     els.probeExquis.addEventListener('click', probeExquisHardware);
     els.nativeProbeExquis.addEventListener('click', probeExquisNativeWrites);
+    els.rgbPadTestExquis.addEventListener('click', probeExquisRgbPad);
     els.dialListen.addEventListener('click', toggleExquisDialListen);
     els.hardwareDiagnostics.addEventListener('click', expandConsole);
     els.audioDiag.addEventListener('click', function() {
@@ -7447,7 +7729,15 @@
     } else {
       restoreWorkspaceControl('hardwareTools', els.hardwareTools);
       restoreWorkspaceControl('practiceTools', els.practiceTools);
+      restoreWorkspaceControl('consolePanel', els.consolePanel);
     }
+  }
+
+  function setWorkspace(workspace) {
+    state.workspace = workspace;
+    placeWorkspaceControls();
+    render();
+    if (advancedPracticeStep) syncExquisPracticePadFrame();
   }
 
   function init() {
@@ -7473,23 +7763,23 @@
       studioTabs: document.querySelector('[data-testid="studio-tabs"]'),
       soundTabs: document.querySelector('[data-testid="sound-tabs"]'),
       studioTitle: document.getElementById('studioTitle'),
-      studioDescription: document.querySelector('.studio-workspace .workspace-screen-header p:last-child'),
+      studioDescription: document.getElementById('studioDescription'),
       connectionGate: document.getElementById('connectionGate'),
       enableMidiGate: document.getElementById('enableMidiGate'),
       continueWithoutMidi: document.getElementById('continueWithoutMidi'),
       coachToggle: document.getElementById('coachToggle'),
       sidePanel: document.querySelector('.side-panel'),
-      libraryWorkspace: document.getElementById('libraryWorkspace'),
-      studioWorkspace: document.getElementById('studioWorkspace'),
+      libraryWorkspace: document.querySelector('[data-testid="library-workspace"]'),
+      studioWorkspace: document.querySelector('[data-testid="studio-workspace"]'),
       setupWorkspace: document.querySelector('[data-testid="setup-workspace"]'),
       libraryControlsSlot: document.getElementById('libraryControlsSlot'),
       studioControlsSlot: document.getElementById('studioControlsSlot'),
       setupControlsSlot: document.getElementById('setupControlsSlot'),
       sessionSetup: document.querySelector('[data-testid="session-setup"]'),
       startLibrarySession: document.getElementById('startLibrarySession'),
-      setupDrawerBody: document.querySelector('.setup-drawer-body'),
       practiceTools: document.querySelector('[data-testid="practice-tools"]'),
       hardwareTools: document.querySelector('[data-testid="hardware-tools"]'),
+      midiCoachSection: document.querySelector('[data-testid="midi-coach-section"]'),
       progressionVoicingPanel: document.getElementById('progressionVoicingPanel'),
       progressionGlobalNoteCount: document.getElementById('progressionGlobalNoteCount'),
       progressionGlobalInversion: document.getElementById('progressionGlobalInversion'),
@@ -7574,6 +7864,7 @@
       syncExquis: document.getElementById('syncExquis'),
       probeExquis: document.getElementById('probeExquis'),
       nativeProbeExquis: document.getElementById('nativeProbeExquis'),
+      rgbPadTestExquis: document.getElementById('rgbPadTestExquis'),
       dialListen: document.getElementById('dialListen'),
       hardwareDiagnostics: document.getElementById('hardwareDiagnostics'),
       exquisSyncStatus: document.getElementById('exquisSyncStatus'),
@@ -7589,10 +7880,8 @@
       copyConsole: document.getElementById('copyConsole'),
       exitConsole: document.getElementById('exitConsole')
     };
-    els.libraryWorkspace = document.querySelector('[data-testid="library-workspace"]');
-    els.studioWorkspace = document.querySelector('[data-testid="studio-workspace"]');
-    els.setupWorkspace = document.querySelector('[data-testid="setup-workspace"]');
     rememberWorkspaceHome('sessionSetup', els.sessionSetup);
+    rememberWorkspaceHome('consolePanel', els.consolePanel);
     rememberWorkspaceHome('workflow', els.practiceWorkflowControls);
     rememberWorkspaceHome('progressionVoicing', els.progressionVoicingPanel);
     rememberWorkspaceHome('repertoireSection', els.repertoireSectionPanel);
@@ -7640,9 +7929,6 @@
     render();
     window.requestAnimationFrame(function() {
       render();
-    });
-    window.addEventListener('resize', function() {
-      window.requestAnimationFrame(render);
     });
     drawAudioScope();
   }

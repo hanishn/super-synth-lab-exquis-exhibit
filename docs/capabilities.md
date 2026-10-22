@@ -1,6 +1,6 @@
 # Exquis Fingering Lab Capabilities
 
-Version: `0.1.27`
+Version: `0.1.28`
 
 This exhibit is a visual practice tool for the Intuitive Instruments Exquis. It is intentionally separated into versioned parts and built into standalone `index.html` and `dist/index.html` outputs by `build.py`.
 
@@ -19,6 +19,18 @@ Current SSLI-derived parts:
 Local code is allowed only where Exquis-specific teaching behavior is not already present in SSLI.
 
 ## Current Capabilities
+
+### Expressive Light Language
+
+The exhibit projects one semantic light frame to both the rendered Exquis surface and the connected hardware. A light frame is calculated from musical context and teaching state, never inferred from DOM classes. Each pad has an explicit role: off, scale member, root, path member, current target, held, or mismatch.
+
+The default **Guided** presentation uses an evenly spaced hue cycle across the notes of the selected scale octave. The selected root is green; every remaining scale degree advances by one equal hue step, and the octave returns to green. The color layout moves correctly when the key changes; non-scale chromatic intervals use the same evenly spaced hue metric. Color communicates musical identity. Guidance remains separately legible through luminance, outlines, labels, and motion: a single next note uses a slow pulse, and every member of a simultaneous chord target pulses in phase while retaining the shared chord bracket and finger labels.
+
+State priority is explicit: mismatch/calibration failure remains visible first; held pressure adds luminance without masking a target; current target or chord membership adds a high-contrast ring and pulse; root retains its stable green identity; scale/path colors remain visible beneath these overlays. The system must not encode a required action through color alone. Reduced-motion mode replaces pulse with a persistent double ring.
+
+The physical Exquis receives stable semantic pad frames only. Root/scale changes use the existing official key/mode transaction; exercise-step changes use a coalesced pad-frame update and never replay the full transaction. The app must not attempt a full-device hardware pulse: the existing command cadence cannot update all 61 pads fast enough for reliable animation. Hardware target emphasis is enabled only when a validated palette entry/protocol supports it; otherwise native root/scale illumination remains accurate while the UI supplies animated guidance.
+
+Non-goals for this capability are changing musical scoring, MIDI routing, note mapping, audio behavior, or exercise timing. The light frame is a visual and hardware-output projection of existing practice state.
 
 ### Exquis Layout Model
 

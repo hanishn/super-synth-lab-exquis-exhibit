@@ -345,6 +345,143 @@ input {
   display: none;
 }
 
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] [data-testid="hardware-tools"] {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-3);
+}
+
+@media (min-width: 1001px) {
+  .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 0.92fr);
+    grid-template-areas:
+      "heading heading"
+      "connection diagnostics"
+      "sync advanced"
+      "activity advanced";
+    gap: 10px 16px;
+    align-items: start;
+  }
+
+  .studio-workspace .midi-coach-section > h2 {
+    grid-area: heading;
+    margin: 0;
+  }
+
+  .studio-workspace [aria-labelledby="hardware-connection-heading"] {
+    grid-area: connection;
+  }
+
+  .studio-workspace [aria-labelledby="hardware-diagnostics-heading"] {
+    grid-area: diagnostics;
+  }
+
+  .studio-workspace .advanced-hardware-research {
+    grid-area: advanced;
+  }
+
+  .studio-workspace #exquisSyncStatus {
+    grid-area: sync;
+  }
+
+  .studio-workspace #midiActivity {
+    grid-area: activity;
+  }
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) {
+  display: block;
+  position: relative;
+  padding-right: 499px;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) > h2,
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) .hardware-control-help {
+  display: none;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) .hardware-control-group {
+  gap: 4px;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) > :not(.console-panel) {
+  max-width: 100%;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: auto;
+  width: 485px;
+  max-height: calc(100vh - 132px);
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded .console-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded .console-actions button {
+  min-width: 0;
+  padding-inline: 8px;
+  font-size: 11px;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded #diagnosticLog {
+  flex: 0 0 clamp(190px, 34vh, 280px);
+  min-height: 190px;
+  max-height: 280px;
+}
+
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] [data-testid="hardware-tools"] > summary {
+  display: none;
+}
+
+.studio-workspace .hardware-control-group {
+  display: grid;
+  gap: 8px;
+}
+
+.studio-workspace .hardware-control-group h3,
+.studio-workspace .hardware-control-group p {
+  margin: 0;
+}
+
+.hardware-control-help {
+  color: var(--muted);
+}
+
+.advanced-hardware-research {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.advanced-hardware-research > summary {
+  cursor: pointer;
+  color: #fff1a8;
+  font-weight: 850;
+}
+
+.hardware-control-warning {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid rgba(246, 198, 91, 0.56);
+  border-radius: 6px;
+  background: rgba(246, 198, 91, 0.09);
+  color: #fff1a8;
+  font-size: 12px;
+}
+
+.studio-workspace .midi-picker,
+.studio-workspace #midiDevices {
+  display: block !important;
+}
+
 .studio-workspace {
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
@@ -372,7 +509,7 @@ input {
   font-size: clamp(22px, 2.5vw, 30px);
 }
 
-.studio-workspace .workspace-screen-header p:last-child {
+.studio-workspace #studioDescription {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: center;
@@ -482,7 +619,7 @@ input {
   margin: 0;
 }
 
-.setup-controls-slot .setup-drawer-body {
+.setup-controls-slot .setup-controls-body {
   display: grid;
   gap: 12px;
 }
@@ -691,74 +828,6 @@ input {
   .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-controls {
     display: none;
   }
-}
-
-.session-setup > summary {
-  min-height: 42px;
-  padding: 10px 14px;
-  border: 1px solid rgba(117, 167, 255, 0.72);
-  border-radius: 8px;
-  background: #25364a;
-  color: #eef6ff;
-  cursor: pointer;
-  font-weight: 800;
-  list-style: none;
-}
-
-.session-setup > summary::-webkit-details-marker {
-  display: none;
-}
-
-.session-setup > summary::after {
-  content: "⌄";
-  margin-left: 9px;
-}
-
-.session-setup[open] > summary::after {
-  content: "⌃";
-}
-
-.setup-drawer-body {
-  display: none;
-}
-
-.session-setup[open] .setup-drawer-body {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  display: grid;
-  gap: 10px;
-  width: min(980px, calc(100vw - 32px));
-  max-height: min(620px, calc(100vh - 100px));
-  padding: 14px;
-  overflow: auto;
-  border: 1px solid rgba(117, 167, 255, 0.48);
-  border-radius: 10px;
-  background: #182128;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.52);
-}
-
-.setup-drawer-body .controls-grid,
-.setup-drawer-body .practice-workflow-controls {
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  width: 100%;
-}
-
-.setup-drawer-body .controls-grid > *,
-.setup-drawer-body .practice-workflow-controls > * {
-  grid-column: auto !important;
-  min-width: 0 !important;
-}
-
-.setup-drawer-body .mode-switch,
-.setup-drawer-body .exercise-switch,
-.setup-drawer-body .surface-controls {
-  grid-column: span 2 !important;
-}
-
-.setup-drawer-body .control-break::before {
-  display: none;
 }
 
 .brand-block h1,
@@ -1818,7 +1887,7 @@ input[type="range"]:focus-visible {
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   background: var(--key);
   border: 0;
-  color: var(--text);
+  color: #dce4ec;
   transform: translate(-50%, -50%);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
@@ -1841,28 +1910,50 @@ input[type="range"]:focus-visible {
 }
 
 .key.in-scale {
-  background: color-mix(in srgb, var(--scale-key) 58%, #1d252c);
-  color: #f4f1ff;
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 88%, #1d252c);
+  color: #0b1016;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
 .key.hardware-lit {
-  background: color-mix(in srgb, var(--scale-key) 50%, #1d252c);
-  color: #f4f1ff;
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 82%, #1d252c);
+  color: #0b1016;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .key.in-path {
-  background: color-mix(in srgb, #4d7cff 58%, #17202a);
-  color: #f7fbff;
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 78%) 94%, #17202a);
+  color: #0b1016;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .key.tonic {
-  background: var(--tonic-key);
+  background: hsl(120deg 100% 60%);
   color: #17191c;
   text-shadow: none;
 }
 
+.root-marker {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  z-index: 3;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #101418;
+  color: #f8fbff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  transform: translateX(-50%);
+}
+
 .key.current {
-  background: #fff1a8 !important;
+  background: color-mix(in srgb, hsl(var(--pad-hue, 120deg) 100% 68%) 90%, #fff) !important;
   color: #121417;
   outline: 5px solid rgba(242, 109, 109, 0.95);
   outline-offset: 4px;
@@ -1890,6 +1981,22 @@ input[type="range"]:focus-visible {
   z-index: 3;
   outline: none;
   box-shadow: none;
+}
+
+.key.light-target {
+  animation: exquis-target-breathe 1s ease-in-out infinite;
+  border: 0;
+  box-shadow: none;
+  z-index: 8;
+}
+
+@keyframes exquis-target-breathe {
+  0%, 100% {
+    filter: brightness(0.25) saturate(1.04);
+  }
+  50% {
+    filter: brightness(1.2) saturate(1.14);
+  }
 }
 
 .chord-target-hex-outline {
@@ -1950,57 +2057,54 @@ input[type="range"]:focus-visible {
 
 .key.midi-hit {
   opacity: 1 !important;
-  background: #3f6fa9 !important;
-  outline: 3px solid #f6c65b;
+  outline: 3px solid rgba(255, 255, 255, 0.98);
   outline-offset: 2px;
-  box-shadow: 0 0 22px rgba(164, 216, 255, 0.95);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.72);
   z-index: 5;
 }
 
 .key.midi-held {
   opacity: 1 !important;
-  background: color-mix(in srgb, var(--active-key) var(--midi-level, 70%), #1f72c8) !important;
-  color: #101418;
-  outline: calc(2px + var(--midi-pressure, 0.4) * 4px) solid rgba(180, 232, 255, 0.98);
+  outline: calc(2px + var(--midi-pressure, 0.4) * 4px) solid rgba(255, 255, 255, 0.98);
   outline-offset: 2px;
-  box-shadow: 0 0 calc(10px + var(--midi-pressure, 0.4) * 32px) rgba(112, 197, 255, 0.95);
+  box-shadow: 0 0 calc(8px + var(--midi-pressure, 0.4) * 24px) rgba(255, 255, 255, 0.82);
   z-index: 7;
+}
+
+.key.light-target.midi-hit,
+.key.light-target.midi-held {
+  box-shadow: none;
 }
 
 .key.midi-held-pitch {
   opacity: 1 !important;
-  background: color-mix(in srgb, #dcefff var(--midi-level, 55%), #294b7a) !important;
-  color: #101418;
-  outline: 2px solid rgba(190, 229, 255, 0.82);
+  outline: 2px solid rgba(255, 255, 255, 0.82);
   outline-offset: 2px;
-  box-shadow: 0 0 calc(6px + var(--midi-pressure, 0.35) * 20px) rgba(164, 216, 255, 0.62);
+  box-shadow: 0 0 calc(6px + var(--midi-pressure, 0.35) * 20px) rgba(255, 255, 255, 0.62);
   z-index: 6;
 }
 
 .key.midi-pitch {
   opacity: 1 !important;
-  background: #25466f !important;
-  outline: 2px solid rgba(117, 167, 255, 0.9);
+  outline: 2px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
-  box-shadow: 0 0 18px rgba(117, 167, 255, 0.55);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.55);
   z-index: 5;
 }
 
 .key.midi-last {
   opacity: 1 !important;
-  background: #4f4122 !important;
-  outline: 2px solid rgba(246, 198, 91, 0.78);
+  outline: 2px solid rgba(255, 255, 255, 0.62);
   outline-offset: 2px;
-  box-shadow: 0 0 16px rgba(246, 198, 91, 0.55);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.42);
   z-index: 5;
 }
 
 .key.midi-last-pitch {
   opacity: 1 !important;
-  background: #203b5d !important;
-  outline: 1px solid rgba(117, 167, 255, 0.72);
+  outline: 1px solid rgba(255, 255, 255, 0.72);
   outline-offset: 2px;
-  box-shadow: 0 0 12px rgba(117, 167, 255, 0.38);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.38);
   z-index: 5;
 }
 
@@ -2015,7 +2119,10 @@ input[type="range"]:focus-visible {
 }
 
 .key.mismatch {
+  outline: 3px solid rgba(242, 109, 109, 0.96);
+  outline-offset: 3px;
   box-shadow: 0 0 0 3px rgba(242, 109, 109, 0.7);
+  z-index: 9;
 }
 
 .key.dimmed {
@@ -2060,12 +2167,12 @@ input[type="range"]:focus-visible {
 
 .note {
   font-weight: 800;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .octave {
-  color: var(--muted);
-  font-size: 10px;
+  color: inherit;
+  font-size: 12px;
 }
 
 .finger {
@@ -2462,7 +2569,10 @@ input[type="range"]:focus-visible {
 
 .legacy-map-picker span,
 .legacy-light-picker span {
-  display: none;
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .legacy-map-picker select,
@@ -2512,14 +2622,14 @@ input[type="range"]:focus-visible {
 
 .console-actions {
   display: grid;
-  grid-template-columns: 68px 44px 44px 58px;
+  grid-template-columns: repeat(4, max-content);
   gap: 3px;
   white-space: nowrap;
 }
 
 .console-actions button {
   min-height: 25px;
-  font-size: 11px;
+  font-size: 10px;
   padding-inline: 4px;
   pointer-events: auto;
 }
@@ -2786,6 +2896,49 @@ input[type="range"]:focus-visible {
 }
 
 @media (max-height: 780px) and (min-width: 1001px) {
+  .studio-workspace {
+    gap: 4px;
+    padding: 10px 20px;
+  }
+
+  .studio-workspace .workspace-screen-header .eyebrow {
+    display: none;
+  }
+
+  .studio-workspace .workspace-screen-header h2 {
+    font-size: 24px;
+  }
+
+  .studio-workspace #studioDescription {
+    font-size: 12px;
+  }
+
+  .studio-workspace .studio-tabs {
+    margin-top: 0;
+  }
+
+  .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] [data-testid="hardware-tools"] {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .studio-workspace .midi-coach-section > h2 {
+    margin: 4px 0;
+  }
+
+  .studio-workspace .hardware-control-group {
+    gap: 4px;
+  }
+
+  .studio-workspace .midi-coach-section #exquisSyncStatus,
+  .studio-workspace .midi-coach-section #midiActivity {
+    margin: 5px 0;
+  }
+
+  .studio-workspace .advanced-hardware-research {
+    padding-top: 6px;
+  }
+
   #scopeReadout,
   #currentDegree {
     display: none;
@@ -2825,6 +2978,8 @@ input[type="range"]:focus-visible {
   width: auto;
   margin: 0;
   overflow: hidden;
+}
+
 }
 
 @media (min-width: 1200px) {
@@ -2921,4 +3076,25 @@ input[type="range"]:focus-visible {
     grid-column: span 2 !important;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .key.light-target {
+    animation: none !important;
+    filter: brightness(1.16) saturate(1.1);
+  }
+}
+
+@media (max-width: 1000px) {
+  .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) {
+    padding-right: 0;
+  }
+
+  .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded {
+    position: relative;
+    top: auto;
+    grid-column: 1;
+    grid-row: auto;
+    width: 100%;
+    max-height: 52vh;
+  }
 }

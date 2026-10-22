@@ -1,6 +1,6 @@
 # Expressive Light Language UAT
 
-Expected build: `Build 1940`.
+Expected build: `Build 1949`.
 
 ## UI Color Wheel
 
@@ -12,7 +12,7 @@ Expected build: `Build 1940`.
 
 ## Next-Note Guidance
 
-1. In the left-side **Practice family** control, select `Technique`; select `Root to octave` in the **Exercise** control.
+1. In **Exercises**, select `Technique`; select `Root to octave` in the **Exercise** control.
 2. Inspect the current target pad on the central play surface. The target pad retains its interval color, has the visible `TARGET` marker, and uses a slow expanding glow.
 3. Use the right-side **Practice Coach** panel's step control to advance once. Confirm the former target no longer pulses and exactly the newly selected target pad pulses.
 4. Press the current target through the Exquis or on-screen pad. Confirm the central play surface advances the pulse to the next target without leaving a stale target pulse.
@@ -31,8 +31,10 @@ Expected build: `Build 1940`.
 2. Return to the **Practice** workspace and select `C Major`, then `F Major`, then `C Minor` with a two-second pause after each selection.
 3. Confirm the physical Exquis pad layout matches the selected root and scale on the central play surface, with no unrelated extra pads lit.
 4. Leave the device untouched for 60 seconds. Confirm the Exquis pads do not turn black, revert, or adopt an earlier key/scale layout.
-5. Advance a practice step and a progression chord. Confirm the UI target animation moves immediately. The current firmware adapter intentionally keeps physical pads on stable root/scale colors; the app must not attempt a slow full-surface blink animation.
-6. Disconnect and reconnect the Exquis, then use **Reconnect Exquis** in Studio **Hardware**. Confirm the physical pad layout restores to the current UI root and scale.
+5. In **Exercises**, select `Technique` and `Root to octave`. Confirm only the current target pad pulses on the physical Exquis while retaining its note color.
+6. Press **Next** once. Confirm the former physical target stops pulsing and only the newly selected target pulses.
+7. In **Exercises**, select **Progressions → Starter → Pop I-IV-vi-V**. Confirm every pad in the current chord pulses on the physical Exquis while retaining its individual note color.
+8. Disconnect and reconnect the Exquis, then use **Reconnect Exquis** in Studio **Hardware**. Confirm the physical pad layout restores to the current UI root and scale.
 
 ## Studio Diagnostics
 

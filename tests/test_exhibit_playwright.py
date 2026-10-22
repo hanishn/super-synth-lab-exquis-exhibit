@@ -2710,7 +2710,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
-        self.page.wait_for_timeout(1600)
+        self.page.wait_for_timeout(2400)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
         self.assertIn([176, 122, 0], sent)
@@ -2773,6 +2773,77 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertIn("custom-scale=dorian", log)
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], self.page.evaluate("() => window.__mockExquisOutput.sent"))
+
+    def test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.select_option('[data-testid="exercise-family-select"]', "technique")
+        self.page.select_option('[data-testid="exercise-select"]', "root_octave")
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.wait_for_timeout(2200)
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        self.page.wait_for_timeout(300)
+        targets_before = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame().filter((pad) => pad.isTarget).map((pad) => pad.padId)")
+        self.assertEqual(len(targets_before), 1)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        for pad_id in targets_before:
+            self.assertIn([175, pad_id, 63], sent)
+
+        before_advance = len(sent)
+        self.page.locator('[data-testid="next-step"]').click()
+        targets_after = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame().filter((pad) => pad.isTarget).map((pad) => pad.padId)")
+        self.assertNotEqual(targets_after, targets_before)
+        self.page.wait_for_timeout(1000)
+        updates = self.page.evaluate("(count) => window.__mockExquisOutput.sent.slice(count)", before_advance)
+        for pad_id in targets_before:
+            self.assertIn([175, pad_id, 0], updates)
+        for pad_id in targets_after:
+            self.assertIn([175, pad_id, 63], updates)
+
+    def test_regression_exquis_sync_pulses_every_current_chord_target(self):
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
+        self.page.select_option('[data-testid="exercise-select"]', "c_major_progression")
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.wait_for_timeout(2200)
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        self.page.wait_for_timeout(300)
+        chord_targets = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame().filter((pad) => pad.isTarget).map((pad) => pad.padId)")
+        self.assertEqual(len(chord_targets), 3)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        for pad_id in chord_targets:
+            self.assertIn([175, pad_id, 63], sent)
 
     def test_regression_exquis_rgb_pad_probe_uses_official_pad_only_direct_led_protocol(self):
         self.page.evaluate("""
@@ -9746,6 +9817,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
         self.page.locator('[data-testid="workspace-library"]').click()
         self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'library')
+        self.assertEqual(self.page.locator('[data-testid="workspace-library"]').inner_text(), 'Exercises')
         self.assertTrue(self.page.locator('[data-testid="library-workspace"]').is_visible())
         self.assertFalse(self.page.locator('.stage-panel').is_visible())
         self.assertFalse(self.page.locator('.side-panel').is_visible())

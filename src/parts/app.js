@@ -966,6 +966,7 @@
   var exquisUserKeyModeAuthorityUntil = 0;
   var exquisKeyModeSyncTimers = [];
   var lastExquisPadPalette = {};
+  var lastExquisPadEffect = {};
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
@@ -6383,6 +6384,13 @@
         lastExquisPadPalette[pad.padId] = paletteIndex;
       }, delayMs + (index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
     });
+    pads.forEach(function(pad, index) {
+      var effect = lightFrameEffect(pad);
+      scheduleExquisKeyModeSync(function() {
+        sendRawMidi([0xAF, pad.padId, effect], '');
+        lastExquisPadEffect[pad.padId] = effect;
+      }, delayMs + (pads.length + index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
+    });
   }
 
   function lightFramePaletteIndex(pad) {
@@ -6393,19 +6401,31 @@
         : EXQUIS_PALETTE_OFF);
   }
 
+  function lightFrameEffect(pad) {
+    return pad.isTarget ? 0x3F : 0x00;
+  }
+
   function syncExquisPracticePadFrame() {
     if (!state.exquisSyncEnabled || !midiOutput || !currentLightFrame.length) return;
-    var changedPads = currentLightFrame.filter(function(pad) {
+    var changedPalettePads = currentLightFrame.filter(function(pad) {
       return lastExquisPadPalette[pad.padId] !== lightFramePaletteIndex(pad);
     });
-    if (!changedPads.length) return;
-    logEvent('midi', 'Exquis practice light frame changed=' + changedPads.length);
-    changedPads.sort(function(a, b) { return a.padId - b.padId; }).forEach(function(pad, index) {
+    var effectPads = currentLightFrame.slice().sort(function(a, b) { return a.padId - b.padId; });
+    if (!changedPalettePads.length && !effectPads.length) return;
+    logEvent('midi', 'Exquis practice light frame palette-changed=' + changedPalettePads.length + ' effects-refreshed=' + effectPads.length);
+    changedPalettePads.sort(function(a, b) { return a.padId - b.padId; }).forEach(function(pad, index) {
       scheduleExquisKeyModeSync(function() {
         var paletteIndex = lightFramePaletteIndex(pad);
         sendRawMidi([0xBF, pad.padId, paletteIndex], '');
         lastExquisPadPalette[pad.padId] = paletteIndex;
-      }, (index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
+      }, (index * 2 + 1) * EXQUIS_LED_COMMAND_GAP_MS);
+    });
+    effectPads.forEach(function(pad, index) {
+      scheduleExquisKeyModeSync(function() {
+        var effect = lightFrameEffect(pad);
+        sendRawMidi([0xAF, pad.padId, effect], '');
+        lastExquisPadEffect[pad.padId] = effect;
+      }, (changedPalettePads.length * 2 + index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
     });
   }
 
@@ -6436,6 +6456,7 @@
     if (!state.exquisSyncEnabled) return;
     cancelPendingExquisKeyModeSync();
     lastExquisPadPalette = {};
+    lastExquisPadEffect = {};
     beginOfficialKeyModeTransaction('key/mode sync');
     state.exquisCustomScaleActive = true;
     scheduleExquisKeyModeSync(sendExquisRoot, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
@@ -6446,7 +6467,7 @@
     scheduleExquisKeyModeSync(function() { refreshExquisDisplay('refresh-before-pad-colors'); }, refreshDelay);
     var ledStartDelay = EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6;
     scheduleExquisPadColors(ledStartDelay);
-    var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT + 1);
+    var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT * 2 + 1);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x06, [], 'request-root-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x07, [], 'request-scale-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
     scheduleExquisKeyModeSync(function() { endOfficialKeyModeTransaction('key/mode sync'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
@@ -6510,6 +6531,7 @@
   function disableExquisSync() {
     cancelPendingExquisKeyModeSync();
     lastExquisPadPalette = {};
+    lastExquisPadEffect = {};
     if (exquisLegacySyncTimer) {
       window.clearTimeout(exquisLegacySyncTimer);
       exquisLegacySyncTimer = null;

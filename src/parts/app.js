@@ -1352,8 +1352,12 @@
   var EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK = 0x10;
   var EXQUIS_DEVELOPER_DIAL_LISTEN_MASK = EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_ENCODERS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK;
   var EXQUIS_DEVELOPER_LEGACY_PROBE_MASK = 0x20;
-  var EXQUIS_KEY_MODE_COMMAND_GAP_MS = 45;
-  var EXQUIS_LED_COMMAND_GAP_MS = 12;
+  // Official writes are serialized to preserve packet order, but the original
+  // conservative governor made a full 61-pad frame feel disconnected from the
+  // UI. These values keep transaction ordering while bringing a complete sync
+  // under roughly three quarters of a second on current Exquis firmware.
+  var EXQUIS_KEY_MODE_COMMAND_GAP_MS = 18;
+  var EXQUIS_LED_COMMAND_GAP_MS = 4;
   var EXQUIS_PAD_COUNT = 61;
 
   function clamp7Bit(value) {
@@ -5536,7 +5540,7 @@
   function isNotationRailLayout() {
     // The physical Exquis needs nearly a kilopixel of central stage width.
     // Rails only appear when the viewport can provide that without collision.
-    return window.matchMedia && window.matchMedia('(min-width: 1600px)').matches;
+    return window.matchMedia && window.matchMedia('(min-width: 1260px)').matches;
   }
 
   function notationCanvasWidth() {
@@ -5729,13 +5733,18 @@
 
   // Adapted from SSLI's familiar white/black-key vocabulary: it is a compact
   // reference, never a second input surface or scoring authority.
-  function renderPracticePianoReference(events, currentEvent, isPracticeMode) {
+  function renderPracticePianoReference(events, currentEvent, isPracticeMode, lightFrame) {
     var container = els.practicePianoReference;
     if (!container) return;
     container.hidden = !isPracticeMode;
     clearChildren(container);
     if (!isPracticeMode || (currentEvent && currentEvent.musicalIntent && currentEvent.musicalIntent.concealTargets)) return;
     var activeMidis = (currentEvent && currentEvent.targets || []).map(function(target) { return target.midi; });
+    var heldMidis = Object.keys(state.heldNotes).map(function(key) { return state.heldNotes[key]; }).filter(Boolean).map(function(held) { return held.midi; });
+    var canonicalLightByMidi = (lightFrame || []).filter(function(pad) { return pad.isCanonical; }).reduce(function(index, pad) {
+      index[pad.midi] = pad;
+      return index;
+    }, {});
     var allMidis = events.reduce(function(all, event) { return all.concat((event.targets || []).map(function(target) { return target.midi; })); }, []);
     var upcoming = allMidis.filter(function(midi) { return activeMidis.indexOf(midi) < 0; });
     var baseMidi = Math.floor(((allMidis.length ? Math.min.apply(null, allMidis) : 48) - 2) / 12) * 12;
@@ -5746,23 +5755,37 @@
     for (var whiteIndex = 0; whiteIndex < whiteMidis.length; whiteIndex++) {
       var midi = whiteMidis[whiteIndex];
       var key = document.createElement('span');
-      key.className = 'reference-piano-key reference-piano-white' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
-      key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
+      var pad = canonicalLightByMidi[midi];
+      var keyState = activeMidis.indexOf(midi) >= 0 ? ' is-current' : (heldMidis.indexOf(midi) >= 0 ? ' is-held' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
+      key.className = 'reference-piano-key reference-piano-white' + (pad && pad.isScale ? ' reference-piano-colored' : '') + keyState;
+      if (pad) {
+        key.style.setProperty('--reference-rgb', lightFramePaletteRgb(pad, getScale()).join(','));
+        key.style.setProperty('--reference-hue', String(pad.hue) + 'deg');
+      }
       key.textContent = mod(midi, 12) === 0 ? noteName(midi) + octave(midi) : '';
       key.setAttribute('data-testid', 'practice-piano-key');
       key.setAttribute('data-midi', String(midi));
+      if (pad) key.setAttribute('data-light-role', pad.role);
+      key.setAttribute('aria-pressed', heldMidis.indexOf(midi) >= 0 ? 'true' : 'false');
       container.appendChild(key);
     }
     for (var blackMidi = baseMidi; blackMidi <= endMidi; blackMidi++) if ([1, 3, 6, 8, 10].indexOf(mod(blackMidi, 12)) >= 0) {
       var previousWhite = whiteMidis.filter(function(whiteMidi) { return whiteMidi < blackMidi; }).length;
       var midi = blackMidi;
       var key = document.createElement('span');
-      key.className = 'reference-piano-key reference-piano-black' + (activeMidis.indexOf(midi) >= 0 ? ' is-current' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
+      var pad = canonicalLightByMidi[midi];
+      var keyState = activeMidis.indexOf(midi) >= 0 ? ' is-current' : (heldMidis.indexOf(midi) >= 0 ? ' is-held' : (upcoming.indexOf(midi) >= 0 ? ' is-upcoming' : ''));
+      key.className = 'reference-piano-key reference-piano-black' + (pad && pad.isScale ? ' reference-piano-colored' : '') + keyState;
       key.style.left = 'calc(' + ((previousWhite - 0.28) / whiteMidis.length * 100) + '% - 10px)';
-      key.style.setProperty('--piano-hue', String(intervalHue(mod(midi, 12) - state.tonicPc, getScale())));
+      if (pad) {
+        key.style.setProperty('--reference-rgb', lightFramePaletteRgb(pad, getScale()).join(','));
+        key.style.setProperty('--reference-hue', String(pad.hue) + 'deg');
+      }
       key.textContent = '';
       key.setAttribute('data-testid', 'practice-piano-key');
       key.setAttribute('data-midi', String(midi));
+      if (pad) key.setAttribute('data-light-role', pad.role);
+      key.setAttribute('aria-pressed', heldMidis.indexOf(midi) >= 0 ? 'true' : 'false');
       container.appendChild(key);
     }
   }
@@ -5798,6 +5821,19 @@
 
   function getKeyboardAvailableSpace() {
     if (!els || !els.keyboard) return { width: 0, height: 0 };
+    var device = els.keyboard.closest('.exquis-device');
+    // Side rails turn the device into one grid cell. Measuring the outer stage
+    // here made the keyboard borrow both rails' width and paint over notation.
+    if (device && isNotationRailLayout()) {
+      var deviceBox = device.getBoundingClientRect();
+      var railTop = els.edgeTopControls && els.edgeTopControls.closest ? els.edgeTopControls.closest('.edge-controls-top') : null;
+      var railBottom = els.edgeBottomControls && els.edgeBottomControls.closest ? els.edgeBottomControls.closest('.edge-controls-bottom') : null;
+      var reservedHeight = (railTop ? railTop.getBoundingClientRect().height : 0) + (railBottom ? railBottom.getBoundingClientRect().height : 0);
+      return {
+        width: Math.max(0, deviceBox.width - 20),
+        height: Math.max(0, deviceBox.height - reservedHeight - 20)
+      };
+    }
     var stage = els.keyboard.closest('.stage-panel');
     var header = stage ? stage.querySelector('.stage-header') : null;
     if (!stage || !stage.getBoundingClientRect) return { width: 0, height: 0 };
@@ -5837,7 +5873,7 @@
   function getKeyboardScale(baseWidth, baseHeight) {
     var available = getKeyboardAvailableSpace();
     if (!available.width || !available.height) return 1;
-    var minScale = state.orientation === 'vertical' ? 0.52 : 0.72;
+    var minScale = state.orientation === 'vertical' ? 0.52 : (isNotationRailLayout() ? 0.58 : 0.72);
     var maxScale = state.workspace === 'practice' && state.orientation === 'horizontal' ? 2.5 : 1.9;
     return Math.max(minScale, Math.min(maxScale, available.width / baseWidth, available.height / baseHeight));
   }
@@ -7194,7 +7230,6 @@
     var currentStepIndex = state.step;
     currentEvent = expectedExerciseEvent();
     renderPracticeNotation(currentExerciseEvents, currentEvent, isPracticeMode);
-    renderPracticePianoReference(currentExerciseEvents, currentEvent, isPracticeMode);
     var currentGripTargetsByKey = {};
     var currentGripFingerByCell = {};
     var currentGripTargetNotes = [];
@@ -7346,6 +7381,10 @@
       fingerById: fingerById,
       litPracticeById: litPracticeById
     });
+    // The reference keyboard shares this canonical light frame with the
+    // hex surface, so UI presses and physical MIDI show the same pitch colors
+    // and held state rather than a separate, stale exercise-only rendering.
+    renderPracticePianoReference(currentExerciseEvents, currentEvent, isPracticeMode, currentLightFrame);
     var lightFrameByKey = lightFrameByCellMidi(currentLightFrame);
     for (i = 0; i < cells.length; i++) {
       var cell = cells[i];

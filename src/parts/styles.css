@@ -1936,8 +1936,11 @@ input[type="range"]:focus-visible {
 .reference-piano-key { position: relative; display: flex; align-items: flex-end; justify-content: center; box-sizing: border-box; font-size: 11px; font-weight: 850; }
 .reference-piano-white { flex: 1 1 0; padding-bottom: 3px; border-right: 1px solid #1a2230; background: linear-gradient(180deg, #eff5ff, #9eafc5); color: #172030; }
 .reference-piano-black { position: absolute; top: 0; z-index: 2; width: 20px; height: 29px; padding-bottom: 2px; border: 1px solid #06080c; border-radius: 0 0 3px 3px; background: linear-gradient(180deg, #303d4e, #080b10); color: #d7e6f5; }
+.reference-piano-key.reference-piano-colored.reference-piano-white { background: linear-gradient(180deg, hsl(var(--reference-hue) 88% 76%), hsl(var(--reference-hue) 68% 58%)); color: #091018; }
+.reference-piano-key.reference-piano-colored.reference-piano-black { background: linear-gradient(180deg, hsl(var(--reference-hue) 74% 47%), hsl(var(--reference-hue) 62% 25%)); }
 .reference-piano-key.is-upcoming { box-shadow: inset 0 -6px 0 #7fa8d8; }
 .reference-piano-key.is-current { background: #ffd166; color: #10141a; box-shadow: inset 0 0 0 2px #fff5c6, 0 0 12px rgba(255, 209, 102, 0.72); }
+.reference-piano-key.is-held { box-shadow: inset 0 0 0 3px #f7fbff, 0 0 16px rgba(255,255,255,0.92); filter: brightness(1.18) saturate(1.12); z-index: 4; }
 
 @media (max-width: 1000px) {
   .practice-piano-reference { height: 44px; }
@@ -3209,9 +3212,9 @@ input[type="range"]:focus-visible {
   .notation-roll-rail { min-height: 82px; }
 }
 
-@media (min-width: 1900px) {
+@media (min-width: 1260px) {
   .app-shell[data-workspace="practice"] .practice-surface {
-    grid-template-columns: clamp(280px, 18vw, 340px) minmax(1120px, 1fr) clamp(280px, 18vw, 340px);
+    grid-template-columns: clamp(230px, 18vw, 300px) minmax(700px, 1fr) clamp(230px, 18vw, 300px);
     grid-template-rows: minmax(0, 1fr);
     gap: 10px;
   }

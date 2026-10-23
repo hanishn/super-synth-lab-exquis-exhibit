@@ -2718,7 +2718,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
-        self.page.wait_for_timeout(2400)
+        self.page.wait_for_timeout(850)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
         self.assertIn([176, 122, 0], sent)
@@ -2916,15 +2916,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(all(color not in {'rgb(0, 0, 0)', 'rgba(0, 0, 0, 0)'} for color in colors))
         self.assertIn('E Major', staff.get_attribute('aria-label'))
 
-    def test_practice_notation_preserves_the_play_surface_on_normal_desktop(self):
+    def test_practice_notation_uses_visible_side_rails_on_normal_desktop(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()
         roll = self.page.locator('[data-testid="piano-roll-notation"]').bounding_box()
         device = self.page.locator('[data-testid="exquis-device"]').bounding_box()
         surface = self.page.locator('[data-testid="practice-surface"]').bounding_box()
-        self.assertLess(staff['x'] + staff['width'], roll['x'])
-        self.assertGreaterEqual(staff['y'], device['y'] + device['height'])
-        self.assertGreaterEqual(roll['y'], device['y'] + device['height'])
+        self.assertLessEqual(staff['x'] + staff['width'], device['x'])
+        self.assertGreaterEqual(roll['x'], device['x'] + device['width'])
+        self.assertLess(abs(staff['y'] - roll['y']), 32)
         self.assertLessEqual(device['x'] + device['width'], surface['x'] + surface['width'] + 1)
         self.assertGreater(staff['y'], surface['y'], 'notation lives beside, not above, the play surface')
         self.assertAlmostEqual(device['y'], surface['y'], delta=1)
@@ -2942,6 +2942,18 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.page.locator('[data-testid="practice-piano-key"].is-current').get_attribute('data-midi'),
             self.page.locator('[data-testid="piano-roll-note"].notation-active').get_attribute('data-midi')
         )
+
+    def test_practice_piano_reference_mirrors_live_exquis_color_and_held_state(self):
+        colored = self.page.locator('[data-testid="practice-piano-key"].reference-piano-colored')
+        self.assertGreater(colored.count(), 8)
+        key = self.page.locator('[data-testid="exquis-key"].in-path').nth(1)
+        midi = key.get_attribute('data-midi')
+        key.dispatch_event('pointerdown')
+        reference = self.page.locator('[data-testid="practice-piano-key"][data-midi="' + midi + '"]')
+        self.assertEqual(reference.get_attribute('aria-pressed'), 'true')
+        self.assertNotEqual(reference.evaluate("node => getComputedStyle(node).getPropertyValue('--reference-rgb')"), '')
+        key.dispatch_event('pointerup')
+        self.assertEqual(reference.get_attribute('aria-pressed'), 'false')
 
     def test_practice_notation_uses_side_rails_only_when_the_full_device_fits(self):
         self.page.set_viewport_size({"width": 1920, "height": 1080})

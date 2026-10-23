@@ -148,6 +148,42 @@
       prompt: 'Return to the centered root between every scale tone so the hand keeps its home reference.'
     },
     {
+      id: 'scale_descending',
+      name: 'Octave to root',
+      family: 'technique',
+      prompt: 'Descend the same inner-chain scale path from the octave back to the centered root.'
+    },
+    {
+      id: 'octave_round_trip',
+      name: 'Round trip',
+      family: 'technique',
+      prompt: 'Ascend to the octave, turn cleanly, and return without losing the Exquis hand shape.'
+    },
+    {
+      id: 'thirds_ladder',
+      name: 'Thirds ladder',
+      family: 'technique',
+      prompt: 'Pair each scale degree with its third. Keep the hand compact while the interval climbs.'
+    },
+    {
+      id: 'fourths_ladder',
+      name: 'Fourths ladder',
+      family: 'technique',
+      prompt: 'Pair each scale degree with its fourth, using the Exquis geometry to keep the leap relaxed.'
+    },
+    {
+      id: 'triad_outline',
+      name: 'Triad outline',
+      family: 'technique',
+      prompt: 'Outline 1-3-5-3, then move the same shape through the scale.'
+    },
+    {
+      id: 'three_note_sequences',
+      name: 'Three-note sequences',
+      family: 'technique',
+      prompt: 'Play overlapping 1-2-3 sequences up the scale for even, repeatable finger motion.'
+    },
+    {
       id: 'dorian_i_iv_vamp',
       name: 'Dorian i-IV vamp',
       family: 'progressions',
@@ -208,10 +244,46 @@
       prompt: 'Press the root and third together as one compact interval grip.'
     },
     {
+      id: 'minor_third',
+      name: 'Minor third',
+      family: 'shapes',
+      prompt: 'Press the root and minor third together as one compact interval grip.'
+    },
+    {
+      id: 'perfect_fifth',
+      name: 'Perfect fifth',
+      family: 'shapes',
+      prompt: 'Press the root and fifth together. Learn the stable two-button fifth shape.'
+    },
+    {
+      id: 'major_sixth',
+      name: 'Major sixth',
+      family: 'shapes',
+      prompt: 'Press the root and sixth together, keeping the wider grip balanced.'
+    },
+    {
       id: 'major_triad',
       name: 'Major triad',
       family: 'shapes',
       prompt: 'Press the root, third, and fifth together as one compact grip.'
+    },
+    {
+      id: 'minor_triad',
+      name: 'Minor triad',
+      family: 'shapes',
+      prompt: 'Press the root, minor third, and fifth together as one compact grip.'
+    },
+    {
+      id: 'diminished_triad',
+      name: 'Diminished triad',
+      family: 'shapes',
+      prompt: 'Press the compact diminished triad shape together, listening for its tense color.'
+    },
+    {
+      id: 'augmented_triad',
+      name: 'Augmented triad',
+      family: 'shapes',
+      prompt: 'Press the symmetric augmented triad shape together, keeping all three voices even.'
     },
     {
       id: 'harmony_triad',
@@ -262,6 +334,18 @@
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     },
     {
+      id: 'ear_minor_second',
+      name: 'Hear a minor second',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_major_second',
+      name: 'Hear a major second',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
       id: 'ear_major_third',
       name: 'Hear a major third',
       family: 'ear',
@@ -278,6 +362,42 @@
       name: 'Hear a perfect fifth',
       family: 'ear',
       prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_tritone',
+      name: 'Hear a tritone',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_minor_sixth',
+      name: 'Hear a minor sixth',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_major_sixth',
+      name: 'Hear a major sixth',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_minor_seventh',
+      name: 'Hear a minor seventh',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_major_seventh',
+      name: 'Hear a major seventh',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
+    },
+    {
+      id: 'ear_octave',
+      name: 'Hear an octave',
+      family: 'ear',
+      prompt: 'Hear the interval, then find and press the matching two-button shape together.'
     }
   ];
   var EXERCISE_FAMILIES = [
@@ -288,10 +408,30 @@
     { id: 'ear', name: 'Ear training' }
   ];
   var HEARD_INTERVAL_FIXTURES = {
+    ear_minor_second: { quality: 'minor-second', semitones: 1 },
+    ear_major_second: { quality: 'major-second', semitones: 2 },
     ear_minor_third: { quality: 'minor-third', semitones: 3 },
     ear_major_third: { quality: 'major-third', semitones: 4 },
     ear_perfect_fourth: { quality: 'perfect-fourth', semitones: 5 },
-    ear_perfect_fifth: { quality: 'perfect-fifth', semitones: 7 }
+    ear_tritone: { quality: 'tritone', semitones: 6 },
+    ear_perfect_fifth: { quality: 'perfect-fifth', semitones: 7 },
+    ear_minor_sixth: { quality: 'minor-sixth', semitones: 8 },
+    ear_major_sixth: { quality: 'major-sixth', semitones: 9 },
+    ear_minor_seventh: { quality: 'minor-seventh', semitones: 10 },
+    ear_major_seventh: { quality: 'major-seventh', semitones: 11 },
+    ear_octave: { quality: 'octave', semitones: 12 }
+  };
+  var SHAPE_INTERVAL_FIXTURES = {
+    major_third: { quality: 'major-third', semitones: 4 },
+    minor_third: { quality: 'minor-third', semitones: 3 },
+    perfect_fifth: { quality: 'perfect-fifth', semitones: 7 },
+    major_sixth: { quality: 'major-sixth', semitones: 9 }
+  };
+  var SHAPE_TRIAD_FIXTURES = {
+    major_triad: 'major',
+    minor_triad: 'minor',
+    diminished_triad: 'diminished',
+    augmented_triad: 'augmented'
   };
   var ROW_COUNTS = [6, 5, 6, 5, 6, 5, 6, 5, 6, 5, 6];
   var CELL_W = 48.49742261192856;
@@ -4514,6 +4654,51 @@
     return pathCell;
   }
 
+  function appendPathCell(path, cell) {
+    if (cell) path.push(clonePathCell(cell));
+  }
+
+  function buildThirdsLadderPath(basePath) {
+    var path = [];
+    for (var i = 0; i + 2 < basePath.length; i++) {
+      appendPathCell(path, basePath[i]);
+      appendPathCell(path, basePath[i + 2]);
+    }
+    if (basePath.length > 1) appendPathCell(path, basePath[basePath.length - 1]);
+    return path;
+  }
+
+  function buildFourthsLadderPath(basePath) {
+    var path = [];
+    for (var i = 0; i + 3 < basePath.length; i++) {
+      appendPathCell(path, basePath[i]);
+      appendPathCell(path, basePath[i + 3]);
+    }
+    if (basePath.length > 1) appendPathCell(path, basePath[basePath.length - 1]);
+    return path;
+  }
+
+  function buildTriadOutlinePath(basePath) {
+    var path = [];
+    for (var i = 0; i + 4 < basePath.length; i++) {
+      appendPathCell(path, basePath[i]);
+      appendPathCell(path, basePath[i + 2]);
+      appendPathCell(path, basePath[i + 4]);
+      appendPathCell(path, basePath[i + 2]);
+    }
+    return path;
+  }
+
+  function buildThreeNoteSequencePath(basePath) {
+    var path = [];
+    for (var i = 0; i + 2 < basePath.length; i++) {
+      appendPathCell(path, basePath[i]);
+      appendPathCell(path, basePath[i + 1]);
+      appendPathCell(path, basePath[i + 2]);
+    }
+    return path;
+  }
+
   function getPracticePath(cells, scale) {
     var basePath = buildRootToOctavePath(cells, scale);
     if (state.exerciseId === 'two_octaves') {
@@ -4535,6 +4720,16 @@
       }
       return returns;
     }
+    if (state.exerciseId === 'scale_descending') return basePath.slice().reverse().map(clonePathCell);
+    if (state.exerciseId === 'octave_round_trip' && basePath.length > 1) {
+      var roundTrip = basePath.map(clonePathCell);
+      for (var k = basePath.length - 2; k >= 0; k--) appendPathCell(roundTrip, basePath[k]);
+      return roundTrip;
+    }
+    if (state.exerciseId === 'thirds_ladder') return buildThirdsLadderPath(basePath);
+    if (state.exerciseId === 'fourths_ladder') return buildFourthsLadderPath(basePath);
+    if (state.exerciseId === 'triad_outline') return buildTriadOutlinePath(basePath);
+    if (state.exerciseId === 'three_note_sequences') return buildThreeNoteSequencePath(basePath);
     return basePath;
   }
 
@@ -4911,6 +5106,46 @@
       sections: [
         { id: 'chorus', name: 'Chorus', progressionId: 'major_12_bar_blues' }
       ]
+    },
+    {
+      id: 'repertoire_jazz_turnaround',
+      name: 'Jazz turnaround',
+      style: 'Jazz',
+      tempo: 112,
+      sections: [
+        { id: 'changes', name: 'Changes', progressionId: 'c_major_ii_v_i' },
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
+      ]
+    },
+    {
+      id: 'repertoire_minor_resolution',
+      name: 'Minor resolution',
+      style: 'Cinematic minor',
+      tempo: 72,
+      sections: [
+        { id: 'cadence', name: 'Cadence', progressionId: 'minor_i_iv_v_i' },
+        { id: 'descent', name: 'Descent', progressionId: 'minor_i_bVII_bVI_bVII' }
+      ]
+    },
+    {
+      id: 'repertoire_modal_groove',
+      name: 'Modal groove',
+      style: 'Modal',
+      tempo: 92,
+      sections: [
+        { id: 'dorian', name: 'Dorian vamp', progressionId: 'dorian_i_iv_vamp' },
+        { id: 'phrygian', name: 'Phrygian color', progressionId: 'phrygian_i_bII_vamp' }
+      ]
+    },
+    {
+      id: 'repertoire_circle_workout',
+      name: 'Circle workout',
+      style: 'Functional harmony',
+      tempo: 68,
+      sections: [
+        { id: 'circle', name: 'Circle', progressionId: 'major_circle_of_fifths' },
+        { id: 'cadence', name: 'Cadence', progressionId: 'c_major_progression' }
+      ]
     }
   ];
 
@@ -5270,6 +5505,29 @@
     };
   }
 
+  function buildIntervalGripExerciseEvent(id, interval, path, options) {
+    options = options || {};
+    if (!interval || !path.length) return null;
+    var root = path[0];
+    var target = bestCellForTarget(makeGrid(), mod(root.midi + interval.semitones, 12), root.midi + interval.semitones, root, null);
+    var gripCells = target && target.midi === root.midi + interval.semitones ? [root, target] : [];
+    if (!gripCells.length) return null;
+    var intent = { type: options.intentType || 'interval', quality: interval.quality };
+    if (options.concealTargets) {
+      intent.type = 'heard-interval';
+      intent.promptMidis = gripCells.map(function(cell) { return cell.midi; });
+      intent.concealTargets = true;
+    }
+    return createGripExerciseEvent({
+      id: id,
+      musicalIntent: intent,
+      targets: gripCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
+      fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: exquisChordFingerPattern(gripCells.length)[index] }; }),
+      sourceCell: clonePathCell(gripCells[0]),
+      sourceCells: gripCells.map(clonePathCell)
+    });
+  }
+
   function buildPracticeExerciseEvents(path, fingers) {
     var repertoireSelection = selectedRepertoireSection();
     if (repertoireSelection) {
@@ -5294,19 +5552,14 @@
       return progression ? progression.events : [];
     }
     var heardInterval = HEARD_INTERVAL_FIXTURES[state.exerciseId];
-    if (heardInterval && path.length) {
-      var heardRoot = path[0];
-      var heardTarget = bestCellForTarget(makeGrid(), mod(heardRoot.midi + heardInterval.semitones, 12), heardRoot.midi + heardInterval.semitones, heardRoot, null);
-      var heardCells = heardTarget && heardTarget.midi === heardRoot.midi + heardInterval.semitones ? [heardRoot, heardTarget] : [];
-      if (!heardCells.length) return [];
-      return [createGripExerciseEvent({
-        id: state.exerciseId,
-        musicalIntent: { type: 'heard-interval', quality: heardInterval.quality, promptMidis: heardCells.map(function(cell) { return cell.midi; }), concealTargets: true },
-        targets: heardCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
-        fingerAssignments: heardCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: exquisChordFingerPattern(heardCells.length)[index] }; }),
-        sourceCell: clonePathCell(heardCells[0]),
-        sourceCells: heardCells.map(clonePathCell)
-      })];
+    if (heardInterval) {
+      var heardFixture = buildIntervalGripExerciseEvent(state.exerciseId, heardInterval, path, { concealTargets: true });
+      return heardFixture ? [heardFixture] : [];
+    }
+    var shapeInterval = SHAPE_INTERVAL_FIXTURES[state.exerciseId];
+    if (shapeInterval) {
+      var intervalFixture = buildIntervalGripExerciseEvent(state.exerciseId, shapeInterval, path);
+      return intervalFixture ? [intervalFixture] : [];
     }
     if (state.exerciseId === 'voice_leading' && path.length) {
       var transition = buildVoiceLeadingTransition({
@@ -5338,16 +5591,15 @@
       });
       return harmonyFixture ? [harmonyFixture] : [];
     }
-    if ((state.exerciseId === 'major_third' || state.exerciseId === 'major_triad') && path.length >= 5) {
-      var gripCells = state.exerciseId === 'major_third' ? [path[0], path[2]] : [path[0], path[2], path[4]];
-      return [createGripExerciseEvent({
+    var shapeTriadQuality = SHAPE_TRIAD_FIXTURES[state.exerciseId];
+    if (shapeTriadQuality && path.length) {
+      var shapeTriad = buildHarmonyGripFixture({
         id: state.exerciseId + ':root-position',
-        musicalIntent: state.exerciseId === 'major_third' ? { type: 'interval', quality: 'major-third' } : { type: 'triad', quality: 'major', inversion: 'root' },
-        targets: gripCells.map(function(cell) { return { cellId: cellKey(cell), midi: cell.midi, pc: cell.pc }; }),
-        fingerAssignments: gripCells.map(function(cell, index) { return { cellId: cellKey(cell), finger: exquisChordFingerPattern(gripCells.length)[index] }; }),
-        sourceCell: clonePathCell(gripCells[0]),
-        sourceCells: gripCells.map(clonePathCell)
-      })];
+        quality: shapeTriadQuality,
+        inversion: 0,
+        rootMidi: path[0].midi
+      });
+      return shapeTriad ? [shapeTriad] : [];
     }
     return path.map(function(cell, index) {
       var targetCellId = cellKey(cell);

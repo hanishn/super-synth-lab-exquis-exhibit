@@ -1261,7 +1261,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
             {"value": "root_octave", "label": "Root to octave"},
             {"value": "two_octaves", "label": "Two octaves"},
             {"value": "inner_ladder", "label": "Inner-chain ladder"},
-            {"value": "root_returns", "label": "Root returns"}
+            {"value": "root_returns", "label": "Root returns"},
+            {"value": "scale_descending", "label": "Octave to root"},
+            {"value": "octave_round_trip", "label": "Round trip"},
+            {"value": "thirds_ladder", "label": "Thirds ladder"},
+            {"value": "fourths_ladder", "label": "Fourths ladder"},
+            {"value": "triad_outline", "label": "Triad outline"},
+            {"value": "three_note_sequences", "label": "Three-note sequences"}
         ], dorian_options)
         self.page.select_option('[data-testid="scale-select"]', 'ionian')
         ionian_options = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => ({ value: element.value, label: element.textContent }))")
@@ -1273,6 +1279,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             {"value": "technique", "label": "Technique"},
             {"value": "shapes", "label": "Shapes"},
             {"value": "progressions", "label": "Progressions"},
+            {"value": "repertoire", "label": "Repertoire"},
             {"value": "ear", "label": "Ear training"}
         ], families)
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
@@ -1291,6 +1298,62 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(self.page.locator('[data-testid="exercise-select"] option').evaluate_all("elements => elements.map((element) => element.value)"), progression_options)
         self.page.select_option('[data-testid="exercise-select"]', 'dorian_i_iv_vamp')
         self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'progressions')
+
+    def test_non_progression_families_are_expanded_and_emit_valid_playable_events(self):
+        expected_minimums = {
+            'technique': 10,
+            'shapes': 10,
+            'ear': 12,
+            'repertoire': 6,
+        }
+        for family, minimum in expected_minimums.items():
+            with self.subTest(family=family):
+                self.page.select_option('[data-testid="exercise-family-select"]', family)
+                exercise_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
+                self.assertGreaterEqual(len(exercise_ids), minimum, exercise_ids)
+                snapshots = self.page.evaluate("""ids => ids.map((exerciseId) => {
+                  const select = document.querySelector('[data-testid="exercise-select"]');
+                  select.value = exerciseId;
+                  select.dispatchEvent(new Event('change', { bubbles: true }));
+                  const snapshot = window.__exquisDebugSnapshot();
+                  return { exerciseId, events: snapshot.exerciseEvents };
+                })""", exercise_ids)
+                for snapshot in snapshots:
+                    self.assertGreater(len(snapshot['events']), 0, snapshot)
+                    self.assertTrue(all(event['valid'] and event['targets'] for event in snapshot['events']), snapshot)
+
+    def test_expanded_ear_curriculum_preserves_exact_chromatic_interval_prompts(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
+        fixtures = self.page.evaluate("""() => {
+          const expected = {
+            ear_minor_second: 1, ear_major_second: 2, ear_minor_third: 3, ear_major_third: 4,
+            ear_perfect_fourth: 5, ear_tritone: 6, ear_perfect_fifth: 7, ear_minor_sixth: 8,
+            ear_major_sixth: 9, ear_minor_seventh: 10, ear_major_seventh: 11, ear_octave: 12
+          };
+          return Object.keys(expected).map((exerciseId) => {
+            const select = document.querySelector('[data-testid="exercise-select"]');
+            select.value = exerciseId;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            const event = window.__exquisDebugSnapshot().exerciseEvents[0];
+            return { exerciseId, expected: expected[exerciseId], event };
+          });
+        }""")
+        for fixture in fixtures:
+            event = fixture['event']
+            self.assertTrue(event['valid'], fixture)
+            self.assertTrue(event['musicalIntent']['concealTargets'], fixture)
+            self.assertEqual(event['musicalIntent']['promptMidis'][1] - event['musicalIntent']['promptMidis'][0], fixture['expected'], fixture)
+
+    def test_expanded_shape_curriculum_scores_a_new_triads_from_staff_input(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'shapes')
+        self.page.select_option('[data-testid="exercise-select"]', 'diminished_triad')
+        event = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents[0]")
+        self.assertTrue(event['valid'], event)
+        self.assertEqual(event['musicalIntent']['quality'], 'diminished', event)
+        staff_chord = self.page.locator('[data-testid="staff-event-control"].notation-active')
+        staff_chord.dispatch_event('pointerdown')
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 0 missed')")
+        self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
 
     def test_regression_progressions_open_with_a_major_starter_lesson(self):
         self.page.select_option('[data-testid="scale-select"]', 'dorian')

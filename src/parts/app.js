@@ -1352,12 +1352,13 @@
   var EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK = 0x10;
   var EXQUIS_DEVELOPER_DIAL_LISTEN_MASK = EXQUIS_DEVELOPER_PADS_MASK | EXQUIS_DEVELOPER_ENCODERS_MASK | EXQUIS_DEVELOPER_SETTINGS_SOUND_MASK;
   var EXQUIS_DEVELOPER_LEGACY_PROBE_MASK = 0x20;
-  // Official writes are serialized to preserve packet order, but the original
-  // conservative governor made a full 61-pad frame feel disconnected from the
-  // UI. These values keep transaction ordering while bringing a complete sync
-  // under roughly three quarters of a second on current Exquis firmware.
+  // Exquis needs time to enter pad Developer Mode before it will reliably
+  // consume the following scale and 122 LED writes. Keep this hardware settle
+  // window separate from the normal inter-packet governor: without it some
+  // firmware revisions accept only a tail of the initial LED frame.
+  var EXQUIS_DEVELOPER_MODE_SETTLE_MS = 140;
   var EXQUIS_KEY_MODE_COMMAND_GAP_MS = 18;
-  var EXQUIS_LED_COMMAND_GAP_MS = 4;
+  var EXQUIS_LED_COMMAND_GAP_MS = 8;
   var EXQUIS_PAD_COUNT = 61;
 
   function clamp7Bit(value) {
@@ -6813,13 +6814,14 @@
     // effects come last so no old target pulse can outlive a new light frame.
     beginOfficialKeyModeTransaction('key/mode sync');
     state.exquisCustomScaleActive = true;
-    scheduleExquisKeyModeSync(sendExquisRoot, EXQUIS_KEY_MODE_COMMAND_GAP_MS);
-    scheduleExquisKeyModeSync(sendExquisScale, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
-    scheduleExquisKeyModeSync(selectExquisCustomScale, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
-    scheduleExquisKeyModeSync(sendExquisCustomScaleDegrees, EXQUIS_KEY_MODE_COMMAND_GAP_MS * 4);
-    var refreshDelay = EXQUIS_KEY_MODE_COMMAND_GAP_MS * 5;
+    var setupDelay = EXQUIS_DEVELOPER_MODE_SETTLE_MS;
+    scheduleExquisKeyModeSync(sendExquisRoot, setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
+    scheduleExquisKeyModeSync(sendExquisScale, setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
+    scheduleExquisKeyModeSync(selectExquisCustomScale, setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
+    scheduleExquisKeyModeSync(sendExquisCustomScaleDegrees, setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 4);
+    var refreshDelay = setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 5;
     scheduleExquisKeyModeSync(function() { refreshExquisDisplay('refresh-before-pad-colors'); }, refreshDelay);
-    var ledStartDelay = EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6;
+    var ledStartDelay = setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6;
     scheduleExquisPadColors(ledStartDelay);
     var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT * 2 + 1);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x06, [], 'request-root-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);

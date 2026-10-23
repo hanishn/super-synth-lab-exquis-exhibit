@@ -7,7 +7,7 @@ diagnostic-only and must never drive normal sync. The implementation lives in
 ## Transaction
 
 1. Enable Developer Mode for pads only: `F0 00 21 7E 7F 00 01 F7`.
-2. Send root, custom-scale-list, scale index, and custom-scale degrees.
+2. Wait 140 ms for pad Developer Mode to settle, then send root, custom-scale-list, scale index, and custom-scale degrees.
 3. Write the official RGB palette with command `02`.
 4. Set pad palette entries with channel-16 CC: `BF <pad-id> <palette-index>`.
 5. Set effects with channel-16 poly aftertouch: `AF <pad-id> <effect>`.
@@ -18,6 +18,11 @@ frame cache, then sends palette assignments before effects. That order prevents
 an old pulse from surviving a new root/scale or practice step. Readbacks occur
 only after the LED frame, so their diagnostics describe the transaction that was
 actually sent.
+
+The Developer-Mode settle window and 8 ms LED packet governor are compatibility
+timing, not animation. A physical Exquis observation showed that starting the
+frame immediately after the setup SysEx could leave only part of the initial
+pad map lit. Do not reduce either timing value without a target-firmware UAT.
 
 Pads are `0..60`, bottom-left to top-right. Palette index `1` is off; `16..27` are root-relative note hues; `28` is the brighter root. Current targets use `3F` (pulsate to black). Every practice transition rewrites all pad effects so stale pulses cannot persist.
 

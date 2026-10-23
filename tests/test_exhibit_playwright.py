@@ -2736,7 +2736,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.select_option('[data-testid="tonic-select"]', "5")
         self.page.select_option('[data-testid="scale-select"]', "dorian")
-        self.page.wait_for_timeout(850)
+        self.page.wait_for_timeout(1600)
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertEqual(self.page.evaluate("() => window.__sysexRequests[0].sysex"), True)
         self.assertIn([176, 122, 0], sent)

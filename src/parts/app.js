@@ -5556,16 +5556,16 @@
     if (concealed) return { concealed: true, events: [], lowMidi: 0, highMidi: 0 };
     // Side rails have room for a legible current/next phrase, not six tiny
     // notes. The mobile top strip keeps the wider six-step overview.
-    var windowSize = Math.min(8, events.length);
-    var start = events.length ? mod(state.step, events.length) : 0;
+    // Staff and roll are a stable map of the entire exercise. The active
+    // marker moves; the phrase itself never rolls away under the learner.
     var projected = [];
-    for (var offset = 0; offset < windowSize; offset++) {
-      var source = events[mod(start + offset, events.length)] || {};
+    for (var eventIndex = 0; eventIndex < events.length; eventIndex++) {
+      var source = events[eventIndex] || {};
       var midis = (source.targets || []).map(function(target) { return target.midi; }).filter(function(midi) { return typeof midi === 'number'; }).sort(function(a, b) { return a - b; });
       projected.push({
-        index: mod(start + offset, events.length),
-        active: offset === 0,
-        completed: false,
+        index: eventIndex,
+        active: eventIndex === state.step,
+        completed: eventIndex < state.step,
         midis: midis,
         degree: source.musicalIntent && source.musicalIntent.degree || '',
         quality: source.musicalIntent && source.musicalIntent.quality || '',
@@ -5616,7 +5616,7 @@
   function renderStaffNotation(projection) {
     var container = els.staffNotation;
     if (!container) return;
-    clearStaffNotation(container, 'Staff notation of current and upcoming practice steps');
+    clearStaffNotation(container, 'Staff notation of the full practice sequence; current step flashes');
     if (projection.concealed) return;
     // Clef selection is exercise-wide, never a function of the moving window:
     // stepping through a phrase must not make the notation jump between clefs.
@@ -5647,7 +5647,11 @@
         var accidental = spellNotationPitch(midi).accidental;
         if (accidental && alteredPcs.indexOf(mod(midi, 12)) === -1) note.addModifier(new VF.Accidental(accidental), index);
       });
-      note.setStyle({ fillStyle: event.active ? '#ffd166' : '#a7c7e7', strokeStyle: event.active ? '#ffd166' : '#a7c7e7' });
+      note._notationColor = event.midis.length
+        ? 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 82% 70%)'
+        : '#a7c7e7';
+      note._notationActive = event.active;
+      note.setStyle({ fillStyle: note._notationColor, strokeStyle: note._notationColor });
       return note;
     });
     // A wide lesson strip earns one phrase-wide stave; narrow side rails split
@@ -5673,7 +5677,15 @@
         node.style.stroke = '#dbe8f4';
         node.style.fill = '#dbe8f4';
       });
-      svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
+      svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', full practice sequence; current step flashes');
+      var renderedNotes = svg.querySelectorAll('.vf-stavenote');
+      notes.forEach(function(note, index) {
+        var node = renderedNotes[index];
+        if (!node) return;
+        node.style.setProperty('--staff-note-color', note._notationColor);
+        node.classList.add('notation-pitch-color');
+        if (note._notationActive) node.classList.add('notation-active');
+      });
       var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
       projection.events.forEach(function(event) {
         event.midis.forEach(function(midi) {
@@ -5684,13 +5696,13 @@
       });
       svg.appendChild(metadata);
     }
-    container.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', current and upcoming practice steps');
+    container.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', full practice sequence; current step flashes');
   }
 
   function renderPianoRollNotation(projection) {
     var svg = els.pianoRollNotation;
     if (!svg) return;
-    var dimensions = clearNotationSvg(svg, 'Piano roll of current and upcoming practice steps');
+    var dimensions = clearNotationSvg(svg, 'Piano roll of the full practice sequence; current step flashes');
     if (projection.concealed) return;
     var canvasWidth = dimensions.width;
     var canvasHeight = dimensions.height;
@@ -5714,8 +5726,9 @@
       event.midis.forEach(function(midi) {
         var noteHeight = Math.max(12, Math.min(26, plotHeight / range * 1.55));
         var y = plotTop + (high - midi) * (plotHeight / range) - noteHeight / 2;
-        var classes = 'roll-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
+        var classes = 'roll-note notation-pitch-color' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
         var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: noteHeight, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
+        note.style.setProperty('--roll-note-color', 'hsl(' + intervalHue(mod(midi, 12) - state.tonicPc, getScale()) + 'deg 82% 70%)');
         note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));
         if (event.active) note.setAttribute('aria-current', 'step');
         svg.appendChild(note);

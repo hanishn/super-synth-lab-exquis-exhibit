@@ -3204,10 +3204,17 @@ input[type="range"]:focus-visible {
 .staff-note.notation-active { fill: #fff1a8; stroke: #f26d6d; stroke-width: 2.3; }
 .staff-note.notation-completed { fill: #62d2a2; }
 .staff-note-label, .roll-note-label { fill: #dce4ec; font: 10px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
-.roll-note { fill: rgba(139, 168, 199, 0.82); stroke: rgba(9, 15, 21, 0.95); stroke-width: 1; }
-.roll-note.notation-active { fill: #fff1a8; stroke: #f26d6d; stroke-width: 2; }
+.roll-note { fill: var(--roll-note-color, rgba(139, 168, 199, 0.82)); stroke: rgba(9, 15, 21, 0.95); stroke-width: 1; }
+.roll-note.notation-active { stroke: #fff5c6; stroke-width: 2.5; }
 .roll-note.notation-completed { fill: #62d2a2; }
 .roll-column-active { fill: rgba(255, 209, 102, 0.18); }
+
+@keyframes notation-current-pulse {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 0.46; filter: brightness(1.7); }
+}
+
+.notation-active { animation: notation-current-pulse 780ms ease-in-out infinite; }
 .notation-concealed {
   align-self: center;
   padding: 12px;
@@ -3286,6 +3293,20 @@ input[type="range"]:focus-visible {
 .staff-notation svg .vf-notehead {
   fill: #dbe8f4 !important;
   stroke: #dbe8f4 !important;
+}
+
+.staff-notation svg .vf-clef path,
+.staff-notation svg .vf-clef { fill: #62d2a2 !important; stroke: #62d2a2 !important; }
+
+.staff-notation svg .vf-keysignature path,
+.staff-notation svg .vf-keysignature { fill: #7fa8d8 !important; stroke: #7fa8d8 !important; }
+
+.staff-notation svg .vf-stavenote.notation-pitch-color path,
+.staff-notation svg .vf-stavenote.notation-pitch-color .vf-notehead,
+.staff-notation svg .vf-stavenote.notation-pitch-color .vf-notehead path,
+.staff-notation svg .vf-stavenote.notation-pitch-color .vf-stem {
+  fill: var(--staff-note-color) !important;
+  stroke: var(--staff-note-color) !important;
 }
 
 .staff-notation svg .vf-notehead path[fill="#ffd166"],

@@ -27,6 +27,7 @@ old text until it happens to match.
 | `fm-worklet-*` (16) | `assets/fm-worklet.js` | Apply the same DX7 correctness rules to the actual worklet. | ordered patch-name assertion plus worklet source checks |
 | `physical-worklet-*` (29) | `assets/physical-worklet.js` | Keep physical-string, modal, bow, pressure, duration, owned note-off, and polyphony behavior aligned with the host API. | physical worklet static/audio tests |
 | `subtractive-*` (3), `synth-worklet-*` (1) | page shell / synth worklet | Prevent low-level velocity/polyphony makeup regressions in sustained engines. | static runtime-patch tests |
+| `phrase-audition-*` (12) | page shell / synth worklet | Use the real-time renderer and an audio-thread release deadline for dense authored songs, so UI work cannot make repeated notes stick. | browser dense-phrase timing and worklet-message regression |
 
 The executable catalog is the named patch lists in `build.py`:
 `SSLI_INDEX_PATCHES`, `SSLI_WORKLET_PATCHES`, `SSLI_FM_MIX_PATCHES`,
@@ -123,6 +124,18 @@ concern and verification family above.
 - `fm-worklet-remove-non-dx7-per-voice-soft-clipper`
 - `fm-worklet-active-voice-makeup-gain`
 - `synth-worklet-active-voice-makeup-gain`
+- `phrase-audition-uses-realtime-ssli-renderer`
+- `phrase-audition-is-treated-as-sequence-for-visual-work`
+- `phrase-audition-forces-realtime-renderer`
+- `phrase-audition-passes-bounded-release-to-worklet`
+- `phrase-audition-includes-bounded-release-in-worklet-message`
+- `phrase-audition-releases-on-the-audio-clock`
+- `phrase-audition-worklet-stores-audio-clock-release`
+- `phrase-audition-worklet-reads-bounded-release`
+- `phrase-audition-worklet-reads-audio-clock-release`
+- `phrase-audition-worklet-sets-audio-clock-release`
+- `phrase-audition-worklet-clamps-release-tail`
+- `phrase-audition-worklet-releases-on-audio-clock`
 - `physical-worklet-pluck-output-family-scale`
 - `physical-worklet-deterministic-pluck-excitation-noise`
 - `physical-worklet-bow-pressure-slope-direction`

@@ -29435,6 +29435,9 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       startTime: 0,
       noteOffTime: -1,
       released: false,
+      // Phrase audition releases against AudioWorklet time, not a delayed
+      // window timer. Negative means this live voice waits for noteOff.
+      autoReleaseTime: -1,
 
       // Oscillator state (up to 3 oscillators per voice)
       // Classic subtractive synths had 2-3 VCOs (voltage-controlled oscillators).
@@ -29555,6 +29558,8 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     var glideTime = data.glideTime || 0;
     var padAftertouch = data.padAftertouch || null;
     var instId = data.instId !== undefined ? data.instId : -1;
+    var requestedReleaseSeconds = typeof data.releaseSeconds === 'number' ? data.releaseSeconds : 0;
+    var phraseAutoRelease = data.phraseAutoRelease === true;
 
     // Per-voice velocity randomization
     var vel = baseVelocity;
@@ -29610,6 +29615,7 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     voice.startTime = currentTime;
     voice.noteOffTime = -1;
     voice.released = false;
+    voice.autoReleaseTime = phraseAutoRelease ? currentTime + Math.max(0, data.duration || 0) : -1;
     voice.velocityGain = vel / 127;
 
     // Wave string to integer map (Change 3)
@@ -29659,6 +29665,11 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       voice.adsr.d = jitteredAdsr.d || 0.1;
       voice.adsr.s = jitteredAdsr.s || 0.7;
       voice.adsr.r = Math.max(MIN_RELEASE, jitteredAdsr.r || 0.2);
+      // Phrase audition supplies a musical post-note-off tail. Clamp only
+      // that explicit request; regular live notes retain the preset release.
+      if (requestedReleaseSeconds > 0) {
+        voice.adsr.r = Math.max(MIN_RELEASE, Math.min(voice.adsr.r, requestedReleaseSeconds));
+      }
     }
 
     // Start envelope
@@ -30081,6 +30092,13 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     for (var v = 0; v < aviLen; v++) {
       var voice = this.voices[avi[v]];
       if (voice.active) {
+        if (!voice.released && voice.autoReleaseTime >= 0 && currentTime >= voice.autoReleaseTime) {
+          voice.released = true;
+          voice.noteOffTime = currentTime;
+          voice.envelopePhase = 'release';
+          voice.envelopeTime = 0;
+          voice.autoReleaseTime = -1;
+        }
         for (var i = 0; i < blockSize; i++) {
           if (voice.startDelaySamples > 0) {
             voice.startDelaySamples--;
@@ -134513,13 +134531,24 @@ SL.screens = (function () {
       if (extraParams.padAftertouch !== undefined) {
         msg.padAftertouch = extraParams.padAftertouch;
       }
+       if (extraParams.releaseSeconds !== undefined) {
+         msg.releaseSeconds = extraParams.releaseSeconds;
+       }
+       if (extraParams.phraseAutoRelease !== undefined) {
+         msg.phraseAutoRelease = extraParams.phraseAutoRelease;
+       }
     }
 
     node.port.postMessage(msg);
 
-    setTimeout(function() {
-      workletNoteOff(midi, id);
-    }, dur * 1000);
+    // Phrase notes carry their endpoint into the worklet. Main-thread timers
+    // can be late under notation/layout work and then release the wrong one
+    // of several repeated pitches; ordinary interactive notes stay unchanged.
+    if (!extraParams || !extraParams.phraseAutoRelease) {
+      setTimeout(function() {
+        workletNoteOff(midi, id);
+      }, dur * 1000);
+    }
   }
 
   function workletNoteOff(midi, instId) {
@@ -141204,8 +141233,11 @@ SL.screens = (function () {
    * @param {number} dur - Duration in seconds
    * @param {number} instId - Instrument index (0-4)
    */
-  function playNoteOnInstrument(midi, dur, instId, noteVel) {
+  function playNoteOnInstrument(midi, dur, instId, noteVel, options) {
     dur = dur || SL.DURATION || 0.4;
+    // Phrase audition has hard musical deadlines. Avoid synchronous
+    // band-limited synthesis once per short note; live callers are unchanged.
+    options = options || {};
 
     var settings = getSettingsForInstrument(instId);
     var instruments = SL.audio.getInstruments();
@@ -141217,7 +141249,8 @@ SL.screens = (function () {
     // Detect if any sequencer (drum or chord) is playing — used to skip
     // expensive visual feedback and force workvar synthesis mode
     var anySeqPlaying = (SL.sequencer && SL.sequencer.isPlaying && SL.sequencer.isPlaying())
-      || (SL.chordSeq && SL.chordSeq.isPlaying && SL.chordSeq.isPlaying());
+      || (SL.chordSeq && SL.chordSeq.isPlaying && SL.chordSeq.isPlaying())
+      || options.realtimePhrase === true;
 
     // Pre-computed engine availability booleans for dispatch
     var isFmReady = SL.fm && SL.fm.noteOn;
@@ -141465,7 +141498,9 @@ SL.screens = (function () {
     // to avoid main-thread synthesis. bandlimited computes waveforms sample-by-sample
     // (e.g. 1.3M samples × 48 harmonics per note), blocking the event loop for seconds.
     var m;
-    if (_cachedMethodEl) {
+    if (options.realtimePhrase) {
+      m = SL.audio.isWorkletAvailable() ? 'worklet' : 'oscillator';
+    } else if (_cachedMethodEl) {
       if (anySeqPlaying && _cachedMethodEl.value === 'bandlimited') {
         if (SL.audio.isWorkletAvailable()) {
           m = 'worklet';
@@ -141540,6 +141575,12 @@ SL.screens = (function () {
 
         // Build extra params for worklet
         var extraParams = {};
+        if (typeof options.releaseSeconds === 'number') {
+          extraParams.releaseSeconds = options.releaseSeconds;
+        }
+        if (options.realtimePhrase === true) {
+          extraParams.phraseAutoRelease = true;
+        }
 
         // Glide: only for Bass (0) and Lead (1) instruments
         if (instId === 0 || instId === 1) {

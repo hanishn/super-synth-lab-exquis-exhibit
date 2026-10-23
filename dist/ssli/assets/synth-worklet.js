@@ -266,6 +266,9 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       startTime: 0,
       noteOffTime: -1,
       released: false,
+      // Phrase audition releases against AudioWorklet time, not a delayed
+      // window timer. Negative means this live voice waits for noteOff.
+      autoReleaseTime: -1,
 
       // Oscillator state (up to 3 oscillators per voice)
       // Classic subtractive synths had 2-3 VCOs (voltage-controlled oscillators).
@@ -386,6 +389,8 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     var glideTime = data.glideTime || 0;
     var padAftertouch = data.padAftertouch || null;
     var instId = data.instId !== undefined ? data.instId : -1;
+    var requestedReleaseSeconds = typeof data.releaseSeconds === 'number' ? data.releaseSeconds : 0;
+    var phraseAutoRelease = data.phraseAutoRelease === true;
 
     // Per-voice velocity randomization
     var vel = baseVelocity;
@@ -441,6 +446,7 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     voice.startTime = currentTime;
     voice.noteOffTime = -1;
     voice.released = false;
+    voice.autoReleaseTime = phraseAutoRelease ? currentTime + Math.max(0, data.duration || 0) : -1;
     voice.velocityGain = vel / 127;
 
     // Wave string to integer map (Change 3)
@@ -490,6 +496,11 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
       voice.adsr.d = jitteredAdsr.d || 0.1;
       voice.adsr.s = jitteredAdsr.s || 0.7;
       voice.adsr.r = Math.max(MIN_RELEASE, jitteredAdsr.r || 0.2);
+      // Phrase audition supplies a musical post-note-off tail. Clamp only
+      // that explicit request; regular live notes retain the preset release.
+      if (requestedReleaseSeconds > 0) {
+        voice.adsr.r = Math.max(MIN_RELEASE, Math.min(voice.adsr.r, requestedReleaseSeconds));
+      }
     }
 
     // Start envelope
@@ -912,6 +923,13 @@ class SynthWorkletProcessor extends AudioWorkletProcessor {
     for (var v = 0; v < aviLen; v++) {
       var voice = this.voices[avi[v]];
       if (voice.active) {
+        if (!voice.released && voice.autoReleaseTime >= 0 && currentTime >= voice.autoReleaseTime) {
+          voice.released = true;
+          voice.noteOffTime = currentTime;
+          voice.envelopePhase = 'release';
+          voice.envelopeTime = 0;
+          voice.autoReleaseTime = -1;
+        }
         for (var i = 0; i < blockSize; i++) {
           if (voice.startDelaySamples > 0) {
             voice.startDelaySamples--;

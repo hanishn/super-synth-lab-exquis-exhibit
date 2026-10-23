@@ -65,6 +65,14 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("function playNote", self.bundle)
         self.assertIn("SSLI_VENDOR", self.bundle)
 
+    def test_song_audition_never_rewinds_the_full_score_cursor_per_note(self):
+        app = (ROOT / "src" / "parts" / "app.js").read_text(encoding="utf-8")
+        self.assertIn(
+            "updateRenderedFullScorePlaybackState(song, projection, { suppressCursor: true })",
+            app,
+        )
+        self.assertIn("if (!options.suppressCursor && scoreRenderer && scoreRenderer.cursor)", app)
+
     def test_expressive_light_language_is_built_with_reduced_motion_fallback(self):
         self.assertIn("function buildPadLightFrame", self.bundle)
         self.assertIn("window.__exquisLightDebug", self.bundle)

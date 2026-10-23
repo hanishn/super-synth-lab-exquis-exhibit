@@ -189,6 +189,7 @@
         <button id="nextStep" type="button" aria-label="Next note" data-testid="next-step">Next</button>
         <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
         <button id="auditionSong" type="button" aria-label="Audition the full song melody" data-testid="audition-song" hidden>Audition melody</button>
+        <button id="stopAuditionSong" type="button" aria-label="Stop the song melody audition" data-testid="stop-audition-song" hidden>Stop</button>
       </div>
     </div>
     <div id="practicePianoReference" class="practice-piano-reference" data-testid="practice-piano-reference" aria-label="Piano reference"></div>
@@ -209,7 +210,7 @@
           <div id="scoreNotation" class="score-notation" data-testid="score-notation" role="img" aria-label="Full engraved score" hidden></div>
         </aside>
         <aside id="notationRollRail" class="notation-rail notation-roll-rail">
-          <div class="notation-rail-heading"><p class="eyebrow">Pitch map</p><p>Full sequence · current flashes</p></div>
+          <div class="notation-rail-heading"><p class="eyebrow">Pitch map</p><p id="pianoRollWindowLabel" data-testid="piano-roll-window-label">Full sequence · current flashes</p></div>
           <svg id="pianoRollNotation" class="piano-roll-notation" data-testid="piano-roll-notation" role="img" aria-label="Piano roll for the current practice sequence"></svg>
         </aside>
       </section>

@@ -51,6 +51,27 @@ rather than a fixed-rate diagnostic preview.
 `melody` is a sequence of semitone offsets from the selected root (0–24). The
 loader rejects malformed packs and never fetches or transmits their contents.
 
+### Multi-section songs
+
+For a full song, use ordered `sections` instead of one manually concatenated
+phrase. Each section has an `id`, learner-facing `name`, `melody`, and optional
+`durationsBeats`. The loader normalizes those sections into one canonical event
+stream, so practice, audition, the score map, and the piano/Exquis surfaces
+cover the complete song in the same order. If a top-level `melody` is also
+provided, it must exactly equal the concatenated sections; this catches a
+score or audition silently stopping after one section.
+
+```json
+"sections": [
+  { "id": "verse", "name": "Verse", "melody": [0, 2, 4, 2], "durationsBeats": [1, 1, 1, 1] },
+  { "id": "chorus", "name": "Chorus", "melody": [7, 7, 4, 0], "durationsBeats": [0.5, 0.5, 1, 2] }
+]
+```
+
+Section-local durations must match that section's note count. When omitted,
+they default to eighth-note timing; a top-level `durationsBeats`, when used,
+must cover the complete flattened melody.
+
 ## Complete scores and MIDI
 
 `scoreMusicXml` is optional, but it is the required source for a complete,

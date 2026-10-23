@@ -1,11 +1,27 @@
 import json
+import functools
+import http.server
 import subprocess
+import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def authored_song_melody(song):
+    """Return the one normalized sequence used by every song-pack consumer."""
+    if 'melody' in song:
+        return song['melody']
+    return [note for section in song.get('sections', []) for note in section['melody']]
+
+
+def authored_song_durations(song):
+    if 'durationsBeats' in song:
+        return song['durationsBeats']
+    return [duration for section in song.get('sections', []) for duration in section.get('durationsBeats', [0.5] * len(section['melody']))]
 
 
 try:
@@ -16,6 +32,8 @@ except Exception:  # pragma: no cover - makes static test runs possible without 
 
 class PlaywrightExhibitTests(unittest.TestCase):
     STATED_FAILURE_REGRESSIONS = {
+        "custom_song_audition_must_hit_authored_note_on_deadlines": "test_song_audition_uses_authored_durations_at_actual_ssli_note_on",
+        "just_cant_get_enough_dense_audition_must_not_jam": "test_local_just_cant_get_enough_audition_uses_realtime_ssli_for_dense_notes",
         "default_rotation_button_must_read_rotate_180": "test_regression_default_rotation_button_reads_rotate_180",
         "default_exquis_layout_must_be_horizontal_corrected_180": "test_regression_default_exquis_layout_is_horizontal_corrected_180",
         "default_horizontal_must_not_be_off_by_180": "test_regression_default_horizontal_is_not_off_by_180",
@@ -1443,10 +1461,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
             # rootMidi is the physical Exquis pad address; rootCellId is the
             # printed musical pad it resolves to. These are deliberately not
             # conventional chromatic-MIDI equivalents.
-            'Take On Me': (9, 'ionian', 45, 'r5c0'),
-            'Just Can\u2019t Get Enough': (7, 'ionian', 55, 'r2c0'),
-            'Don\u2019t You (Forget About Me)': (4, 'ionian', 52, 'r3c0'),
-            'Everybody Wants to Rule the World': (2, 'ionian', 50, 'r4c2'),
+            'Take On Me': (9, 'ionian', 33, 'r9c2'),
+            'Just Can\u2019t Get Enough': (7, 'ionian', 43, 'r6c2'),
+            'Don\u2019t You (Forget About Me)': (4, 'ionian', 40, 'r7c2'),
+            'Everybody Wants to Rule the World': (2, 'ionian', 38, 'r7c0'),
         }
 
         self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
@@ -1471,13 +1489,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
             )
             self.page.select_option('[data-testid="exercise-select"]', value=option_value)
             snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
-            self.assertEqual(len(snapshot['exerciseEvents']), len(song['melody']), song['title'])
+            melody = authored_song_melody(song)
+            self.assertEqual(len(snapshot['exerciseEvents']), len(melody), (song['title'], snapshot))
             self.assertTrue(all(event['valid'] for event in snapshot['exerciseEvents']), song['title'])
             self.assertEqual(snapshot['tonicPc'], song['keyTonicPc'])
             self.assertEqual(snapshot['scaleId'], song['keyScaleId'])
             self.assertEqual(snapshot['rootCellId'], expected_profiles[song['title']][3])
-            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['midi'], song['rootMidi'] + song['melody'][0])
-            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['pc'], (song['keyTonicPc'] + song['melody'][0]) % 12)
+            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['midi'], song['rootMidi'] + melody[0])
+            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['pc'], (song['keyTonicPc'] + melody[0]) % 12)
             expected_scale_pcs = {(song['keyTonicPc'] + interval) % 12 for interval in (0, 2, 4, 5, 7, 9, 11)}
             lit_pcs = self.page.locator('[data-testid="exquis-key"].hardware-lit').evaluate_all(
                 "keys => keys.map(key => Number(key.dataset.pc))"
@@ -1488,12 +1507,20 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.assertEqual(snapshot['fxPresetId'], song['fxPresetId'])
             self.assertTrue(self.page.locator('[data-testid="piano-roll-notation"]').is_visible())
             self.assertTrue(self.page.locator('[data-testid="practice-piano-reference"]').is_visible())
+            if len(melody) > 24:
+                roll_window_before = self.page.locator('[data-testid="piano-roll-window-label"]').inner_text()
+                self.assertIn('Measures ', roll_window_before)
+                self.assertLess(
+                    self.page.locator('[data-testid="piano-roll-note"]').count(),
+                    len(melody),
+                    'long songs must use the readable roll window, not overlap every event'
+                )
             if song.get('scoreMusicXml'):
                 self.page.wait_for_selector('[data-testid="full-score-svg"]')
                 self.assertTrue(self.page.locator('[data-testid="score-notation"]').is_visible())
                 self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
-                self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_visible())
-                self.assertEqual(self.page.locator('.full-score-pitch-color').count(), len(song['melody']))
+                self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_hidden())
+                self.assertEqual(self.page.locator('.full-score-pitch-color').count(), len(melody))
                 self.assertIn('Measures ', self.page.locator('[data-testid="score-window-readout"]').inner_text())
                 input_surface = self.page.locator('[data-testid="full-score-event-control"]').first
             else:
@@ -1511,18 +1538,185 @@ class PlaywrightExhibitTests(unittest.TestCase):
             visual_path = ROOT / '.tmp' / 'actual-private-song-visuals' / (visual_name + '-practice.png')
             visual_path.parent.mkdir(parents=True, exist_ok=True)
             self.page.screenshot(path=str(visual_path), full_page=True)
+            if song['title'].startswith('Just'):
+                roll_window_before = self.page.locator('[data-testid="piano-roll-window-label"]').inner_text()
+                for _ in range(17):
+                    self.page.locator('[data-testid="next-step"]').click()
+                roll_window_after = self.page.locator('[data-testid="piano-roll-window-label"]').inner_text()
+                self.assertNotEqual(roll_window_after, roll_window_before)
+                self.page.screenshot(path=str(visual_path.with_name(visual_name + '-later-window.png')), full_page=True)
+
+    def test_song_audition_uses_authored_durations_at_actual_ssli_note_on(self):
+        """Audio-engine entry, not cursor paint, is the song timing contract."""
+        song = {
+            'title': 'Audition Timing Fixture', 'artist': 'Test fixture',
+            'soundPresetId': 'subtractive::PWM Pad', 'fxPresetId': 'dry',
+            'tempoBpm': 240, 'durationsBeats': [0.5, 1, 0.5, 2],
+            'melody': [0, 2, 4, 7]
+        }
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'audition-timing.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': [song]}).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Audition Timing Fixture'))")
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Audition Timing Fixture')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        self.page.evaluate("""() => {
+          window.__songAuditionEngineCalls = [];
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = {
+            presets: { apply() { window.__songAuditionEngineCalls.push({ type: 'preset', at: performance.now() }); } },
+            audio: {
+              getCurrentInstrument() { return 0; }, getInstruments() { return [instrument]; },
+              getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+              playNoteOnInstrument(midi, duration, inst, velocity, options) { window.__songAuditionEngineCalls.push({ type: 'note', midi, duration, inst, velocity, options, at: performance.now() }); },
+              initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {},
+              freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+            }
+          };
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 4", timeout=4000)
+        trace = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace")
+        self.assertEqual([entry['midi'] for entry in trace], [48, 50, 52, 55])
+        self.assertEqual([entry['backend'] for entry in trace], ['ssli'] * 4)
+        self.assertTrue(all(abs(entry['timingErrorMs']) <= 65 for entry in trace), trace)
+        self.assertTrue(all(call['options']['realtimePhrase'] and 0.012 <= call['options']['releaseSeconds'] <= 0.032 for call in self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type === 'note')")))
+        self.assertEqual(
+            [round(entry['durationSeconds'], 3) for entry in trace],
+            [0.117, 0.242, 0.117, 0.492],
+        )
+        intervals = [trace[index + 1]['calledAtMs'] - trace[index]['calledAtMs'] for index in range(3)]
+        self.assertTrue(all(abs(actual - expected) <= 28 for actual, expected in zip(intervals, [125, 250, 125])), (intervals, trace))
+        self.assertEqual(len(self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type === 'preset')")), 1)
+
+    def test_song_audition_stop_button_and_song_selection_cancel_transport(self):
+        """Stopping or selecting another song must cancel future phrase callbacks."""
+        songs = [
+            {
+                'title': 'Long audition A', 'artist': 'Test fixture', 'tempoBpm': 40,
+                'durationsBeats': [4, 4, 4, 4], 'melody': [0, 2, 4, 5]
+            },
+            {
+                'title': 'Long audition B', 'artist': 'Test fixture', 'tempoBpm': 40,
+                'durationsBeats': [4, 4, 4, 4], 'melody': [7, 5, 4, 2]
+            },
+        ]
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'audition-stop.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': songs}).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).filter(option => option.textContent.includes('Long audition')).length === 2")
+        option_values = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).filter(option => option.textContent.includes('Long audition')).map(option => option.value)"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_values[0])
+        self.page.evaluate("""() => {
+          window.__songAuditionEngineCalls = [];
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = { presets: { apply() {} }, audio: {
+            getCurrentInstrument() { return 0; }, getInstruments() { return [instrument]; },
+            getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+            playNoteOnInstrument(midi, duration, inst, velocity, options) { window.__songAuditionEngineCalls.push({ type: 'note', midi, duration, options }); },
+            workletAllNotesOff() { window.__songAuditionEngineCalls.push({ type: 'worklet-stop' }); },
+            stopAllSustained() { window.__songAuditionEngineCalls.push({ type: 'sustain-stop' }); },
+            initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {},
+            freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+            getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+          }};
+        }""")
+        audition = self.page.locator('[data-testid="audition-song"]')
+        stop = self.page.locator('[data-testid="stop-audition-song"]')
+        audition.click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 1")
+        self.assertTrue(stop.is_visible())
+        self.assertTrue(audition.is_disabled())
+        visual_path = ROOT / '.tmp' / 'audition-stop-control.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+        stop_calls_before_button_stop = self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type.endsWith('stop')).length")
+        stop.click()
+        self.assertTrue(stop.is_hidden())
+        self.assertFalse(audition.is_disabled())
+        stopped_count = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace.length")
+        self.page.wait_for_timeout(450)
+        self.assertEqual(self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace.length"), stopped_count)
+        self.assertEqual(
+            self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type.endsWith('stop')).length"),
+            stop_calls_before_button_stop + 2,
+        )
+
+        audition.click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 1")
+        stop_calls_before_song_switch = self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type.endsWith('stop')).length")
+        self.page.select_option('[data-testid="exercise-select"]', value=option_values[1])
+        self.assertTrue(stop.is_hidden())
+        switched_count = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace.length")
+        self.page.wait_for_timeout(450)
+        self.assertEqual(self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace.length"), switched_count)
+        self.assertEqual(
+            self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type.endsWith('stop')).length"),
+            stop_calls_before_song_switch + 2,
+        )
+
+    def test_multi_section_song_auditions_the_complete_canonical_event_stream(self):
+        """No consumer may stop at the first named song section."""
+        song = {
+            'title': 'Multi-section audition fixture', 'artist': 'Test fixture',
+            'tempoBpm': 240,
+            'sections': [
+                {'id': 'verse', 'name': 'Verse', 'melody': [0, 2, 4], 'durationsBeats': [0.5, 0.5, 1]},
+                {'id': 'chorus', 'name': 'Chorus', 'melody': [7, 5, 0], 'durationsBeats': [1, 0.5, 1]}
+            ]
+        }
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'multi-section-audition.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': [song]}).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Multi-section audition fixture'))")
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Multi-section audition fixture')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        self.assertEqual(len(self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")), 6)
+        self.assertIn('Verse', self.page.locator('[data-testid="notation-step-label"]').inner_text())
+        visual_path = ROOT / '.tmp' / 'multi-section-song-visual.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+        self.page.evaluate("""() => {
+          window.__songAuditionEngineCalls = [];
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = { presets: { apply() {} }, audio: {
+            getCurrentInstrument() { return 0; }, getInstruments() { return [instrument]; },
+            getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+            playNoteOnInstrument(midi, duration, inst, velocity, options) { window.__songAuditionEngineCalls.push({ midi, duration, options }); },
+            initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {}, freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+            getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+          }};
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 6", timeout=4000)
+        trace = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace")
+        self.assertEqual([entry['midi'] for entry in trace], [48, 50, 52, 55, 53, 48])
+        self.assertEqual([round(entry['durationSeconds'], 3) for entry in trace], [0.117, 0.117, 0.242, 0.242, 0.117, 0.242])
+        self.assertTrue(all(entry['backend'] == 'ssli' for entry in trace), trace)
 
     @unittest.skipUnless(
         (ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json').exists(),
         'local private song pack is not installed',
     )
-    def test_local_everybody_wants_audition_uses_recording_tempo_not_import_grid_tempo(self):
+    def test_local_everybody_wants_audition_reaches_audio_engine_on_recording_grid(self):
         pack_path = ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json'
         pack = json.loads(pack_path.read_text(encoding='utf-8'))
         song = next(song for song in pack['songs'] if song['title'] == 'Everybody Wants to Rule the World')
-        # The source MIDI stores a 170 BPM half-beat grid; the recording is
-        # practiced at 112 BPM, making each authored half beat ~268 ms.
-        self.assertEqual(song['tempoBpm'], 112)
+        # The extracted lead preserves its authored 170 BPM half-beat grid.
+        self.assertEqual(song['tempoBpm'], 170)
         self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
         self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
         self.page.wait_for_function(
@@ -1534,21 +1728,153 @@ class PlaywrightExhibitTests(unittest.TestCase):
         )
         self.page.select_option('[data-testid="exercise-select"]', value=option_value)
         self.page.evaluate("""() => {
-          const readout = document.querySelector('[data-testid="step-readout"]');
-          window.__auditionTimeline = [];
-          let prior = readout.textContent;
-          new MutationObserver(() => {
-            if (readout.textContent !== prior) {
-              prior = readout.textContent;
-              window.__auditionTimeline.push({ step: prior, at: performance.now() });
+          window.__songAuditionEngineCalls = [];
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = {
+            presets: { apply() { window.__songAuditionEngineCalls.push({ type: 'preset', at: performance.now() }); } },
+            audio: {
+              getCurrentInstrument() { return 0; },
+              getInstruments() { return [instrument]; },
+              getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+              playNoteOnInstrument(midi, duration, inst, velocity, options) {
+                window.__songAuditionEngineCalls.push({ type: 'note', midi, duration, inst, velocity, options, at: performance.now() });
+              },
+              initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {},
+              freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+              getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
             }
-          }).observe(readout, { childList: true, characterData: true, subtree: true });
+          };
         }""")
         self.page.locator('[data-testid="audition-song"]').click()
-        self.page.wait_for_function("() => window.__auditionTimeline.length >= 3", timeout=3000)
-        timeline = self.page.evaluate("() => window.__auditionTimeline.slice(0, 3)")
-        intervals = [timeline[index + 1]['at'] - timeline[index]['at'] for index in range(2)]
-        self.assertTrue(all(210 <= interval <= 340 for interval in intervals), intervals)
+        melody = authored_song_melody(song)
+        durations = authored_song_durations(song)
+        observed_count = min(16, len(melody))
+        self.page.wait_for_function(
+            "expected => window.__exquisDebugSnapshot().songAuditionTrace.length >= expected",
+            arg=observed_count, timeout=7000,
+        )
+        trace = self.page.evaluate("expected => window.__exquisDebugSnapshot().songAuditionTrace.slice(0, expected)", observed_count)
+        calls = self.page.evaluate("expected => window.__songAuditionEngineCalls.filter(call => call.type === 'note').slice(0, expected)", observed_count)
+        self.assertEqual(len(trace), observed_count, trace)
+        self.assertEqual(len(calls), observed_count, calls)
+        self.assertEqual([entry['midi'] for entry in trace], [song['rootMidi'] + interval for interval in melody[:observed_count]])
+        self.assertTrue(all(entry['backend'] == 'ssli' for entry in trace), trace)
+        self.assertTrue(all(call['options']['realtimePhrase'] and 0.012 <= call['options']['releaseSeconds'] <= 0.032 for call in calls), calls)
+        self.assertTrue(all(abs(entry['timingErrorMs']) <= 65 for entry in trace), trace)
+        expected_durations = [max(0.08, (beats * 60000 / song['tempoBpm'] - 8) / 1000) for beats in durations[:observed_count]]
+        self.assertEqual([round(entry['durationSeconds'], 3) for entry in trace], [round(value, 3) for value in expected_durations])
+        actual_intervals = [trace[index + 1]['calledAtMs'] - trace[index]['calledAtMs'] for index in range(len(trace) - 1)]
+        expected_intervals = [beats * 60000 / song['tempoBpm'] for beats in durations[:observed_count - 1]]
+        self.assertTrue(all(abs(actual - expected) <= 45 for actual, expected in zip(actual_intervals, expected_intervals)), (actual_intervals, expected_intervals, trace))
+        self.assertEqual(len(self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type === 'preset')")), 1)
+
+    @unittest.skipUnless(
+        (ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json').exists(),
+        'local private song pack is not installed',
+    )
+    def test_local_just_cant_get_enough_audition_uses_realtime_ssli_for_dense_notes(self):
+        pack_path = ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json'
+        pack = json.loads(pack_path.read_text(encoding='utf-8'))
+        song = next(song for song in pack['songs'] if song['title'].startswith('Just'))
+        self.assertLessEqual(min(authored_song_durations(song)), 0.25)
+        # file:// frames have opaque origins and cannot exercise the embedded
+        # runtime's public API. Serve this test through one local origin, as
+        # the deployed exhibit is, so the parent talks to actual SSLI.
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.addCleanup(server_thread.join, 2)
+        self.page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
+        self.page.locator('[data-testid="continue-without-midi"]').click()
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Just'))")
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Just')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        self.page.wait_for_function("""() => {
+          const frame = document.getElementById('ssliEngineFrame');
+          return !!(frame && frame.contentWindow && frame.contentWindow.SynthLab
+            && frame.contentWindow.SynthLab.audio && frame.contentWindow.SynthLab.audio.playNoteOnInstrument);
+        }""", timeout=15000)
+        self.page.evaluate("""() => {
+          const runtime = document.getElementById('ssliEngineFrame').contentWindow;
+          window.__densePhraseCalls = [];
+          window.__densePhraseWorkletCalls = [];
+          window.__densePhrasePresetCalls = [];
+          const context = runtime.SynthLab.audio.getCtx();
+          const instrument = runtime.SynthLab.audio.getInstruments()[0];
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 1024;
+          instrument.masterOutput.connect(analyser);
+          window.__densePhraseRmsSamples = [];
+          window.__densePhraseTailRms = () => {
+            const samples = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(samples);
+            return Math.sqrt(samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length);
+          };
+          window.__densePhraseRmsTimer = setInterval(() => {
+            window.parent.__densePhraseRmsSamples.push(window.parent.__densePhraseTailRms());
+          }, 40);
+          const original = runtime.SynthLab.audio.playNoteOnInstrument.bind(runtime.SynthLab.audio);
+          const originalWorklet = runtime.SynthLab.audio.workletNoteOn.bind(runtime.SynthLab.audio);
+          const originalPresetApply = runtime.SynthLab.presets.apply.bind(runtime.SynthLab.presets);
+          runtime.SynthLab.presets.apply = function() {
+            window.parent.__densePhrasePresetCalls.push(window.parent.performance.now());
+            return originalPresetApply.apply(this, arguments);
+          };
+          runtime.SynthLab.audio.playNoteOnInstrument = function(midi, duration, inst, velocity, options) {
+            const result = original(midi, duration, inst, velocity, options);
+            const active = runtime.SynthLab.audio.getActiveOscillators && runtime.SynthLab.audio.getActiveOscillators();
+            window.parent.__densePhraseCalls.push({ type: 'note', midi, duration, inst, velocity, options, at: window.parent.performance.now(), activeVoices: active && typeof active.size === 'number' ? active.size : null });
+            return result;
+          };
+          runtime.SynthLab.audio.workletNoteOn = function(options) {
+            window.parent.__densePhraseWorkletCalls.push({ midi: options.midi, duration: options.dur, releaseSeconds: options.extraParams && options.extraParams.releaseSeconds, phraseAutoRelease: options.extraParams && options.extraParams.phraseAutoRelease });
+            return originalWorklet(options);
+          };
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        melody = authored_song_melody(song)
+        durations = authored_song_durations(song)
+        # This is the full authored song, not an opening-phrase proxy. The
+        # reported failure progressively worsens as the transport accumulates
+        # work, so acceptance must reach its final note.
+        observed_count = len(melody)
+        self.page.wait_for_function(
+            "expected => window.__exquisDebugSnapshot().songAuditionTrace.length >= expected",
+            arg=observed_count, timeout=58000,
+        )
+        trace = self.page.evaluate("expected => window.__exquisDebugSnapshot().songAuditionTrace.slice(0, expected)", observed_count)
+        calls = self.page.evaluate("expected => window.__densePhraseCalls.filter(call => call.type === 'note').slice(0, expected)", observed_count)
+        self.assertEqual(len(trace), observed_count, trace)
+        self.assertEqual([entry['midi'] for entry in trace], [song['rootMidi'] + interval for interval in melody[:observed_count]])
+        self.assertTrue(all(entry['backend'] == 'ssli' and abs(entry['timingErrorMs']) <= 65 for entry in trace), trace)
+        self.assertTrue(all(call['options']['realtimePhrase'] and 0.012 <= call['options']['releaseSeconds'] <= 0.032 for call in calls), calls)
+        worklet_calls = self.page.evaluate("() => window.__densePhraseWorkletCalls")
+        worklet_calls = worklet_calls[:observed_count]
+        self.assertEqual(len(worklet_calls), observed_count, worklet_calls)
+        expected_releases = [min(0.032, max(0.012, (beats * 60000 / song['tempoBpm'] - 8) / 1000 * 0.18)) for beats in durations[:observed_count]]
+        self.assertEqual([round(call['releaseSeconds'], 4) for call in worklet_calls], [round(value, 4) for value in expected_releases])
+        self.assertTrue(all(0.012 <= call['releaseSeconds'] <= 0.032 for call in worklet_calls), worklet_calls)
+        self.assertTrue(all(call['phraseAutoRelease'] is True for call in worklet_calls), worklet_calls)
+        active_voice_counts = [call['activeVoices'] for call in calls if call['activeVoices'] is not None]
+        self.assertTrue(active_voice_counts, calls)
+        self.assertLessEqual(max(active_voice_counts), 24, active_voice_counts)
+        rms_samples = self.page.evaluate("() => { clearInterval(window.__densePhraseRmsTimer); return window.__densePhraseRmsSamples.slice(); }")
+        self.assertGreater(max(rms_samples, default=0), 0.002, rms_samples)
+        expected_durations = [max(0.08, (beats * 60000 / song['tempoBpm'] - 8) / 1000) for beats in durations[:observed_count]]
+        expected_intervals = [beats * 60000 / song['tempoBpm'] for beats in durations[:observed_count - 1]]
+        actual_intervals = [trace[index + 1]['calledAtMs'] - trace[index]['calledAtMs'] for index in range(len(trace) - 1)]
+        self.assertTrue(all(abs(actual - expected) <= 45 for actual, expected in zip(actual_intervals, expected_intervals)), (actual_intervals, expected_intervals, trace))
+        # Selection may have pre-applied the preset before this probe wraps
+        # `apply`; either way, the audition itself must never add per-note
+        # applications to the real-time transport.
+        self.assertLessEqual(len(self.page.evaluate("() => window.__densePhrasePresetCalls")), 1)
 
     def test_song_pack_renders_a_complete_musicxml_score_with_the_vendor_engraver(self):
         musicxml = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -1576,7 +1902,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         visible_measures = self.page.locator('[data-testid="full-score-svg"] .vf-measure').evaluate_all(
             "measures => measures.filter(measure => getComputedStyle(measure).display !== 'none').length"
         )
-        self.assertLessEqual(visible_measures, 2)
+        self.assertLessEqual(visible_measures, 3)
         self.page.set_viewport_size({"width": 1366, "height": 768})
         self.page.wait_for_timeout(100)
         layout = self.page.evaluate("""() => {
@@ -1592,14 +1918,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertGreaterEqual(layout['roll']['x'], layout['device']['x'] + layout['device']['width'] - 1, layout)
         self.assertGreaterEqual(layout['device']['y'], layout['surface']['y'] - 1, layout)
         self.assertLessEqual(layout['device']['y'] + layout['device']['height'], layout['surface']['y'] + layout['surface']['height'] + 1, layout)
-        self.page.locator('[data-testid="score-view-toggle"]').click()
-        self.page.wait_for_function("() => document.querySelector('[data-testid=\"score-window-readout\"]').textContent.includes('All ')")
-        self.assertEqual(
-            self.page.locator('[data-testid="full-score-svg"] .vf-measure').evaluate_all(
-                "measures => measures.filter(measure => getComputedStyle(measure).display !== 'none').length"
-            ),
-            self.page.locator('[data-testid="full-score-svg"] .vf-measure').count(),
-        )
+        self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_hidden())
+        self.assertIn('Measures ', self.page.locator('[data-testid="score-window-readout"]').inner_text())
         step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
         self.page.locator('[data-testid="full-score-event-control"]').first.dispatch_event('pointerdown')
         self.page.wait_for_function("step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step", arg=step_before)
@@ -3191,6 +3511,39 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertNotEqual(after["target"]["padId"], before["target"]["padId"])
         self.assertIn([175, before["target"]["padId"], 0], after["updates"])
         self.assertIn([175, after["target"]["padId"], 63], after["updates"])
+
+    def test_regression_exquis_practice_idle_reasserts_the_entire_led_frame(self):
+        """A controller LED timeout must not be mistaken for a still-valid JS cache."""
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes) { this.sent.push([...bytes]); }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        self.page.select_option('[data-testid="exercise-select"]', 'root_octave')
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        self.page.wait_for_timeout(2200)
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        expected = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame()")
+        self.assertEqual(len(expected), 61)
+        self.page.evaluate("() => { window.__mockExquisOutput.sent = []; return window.__exquisLightDebug.reassertPracticeFrame(); }")
+        self.page.wait_for_timeout(2200)
+        sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        for pad in expected:
+            self.assertIn([191, pad['padId'], pad['paletteIndex']], sent)
+            self.assertIn([175, pad['padId'], 63 if pad['isTarget'] else 0], sent)
 
     def test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers(self):
         panel = self.page.locator('[data-testid="practice-notation"]')

@@ -34,6 +34,107 @@ class TextPatch:
 
 SSLI_INDEX_PATCHES = [
     TextPatch(
+        name="phrase-audition-uses-realtime-ssli-renderer",
+        before="""  function playNoteOnInstrument(midi, dur, instId, noteVel) {
+    dur = dur || SL.DURATION || 0.4;
+""",
+        after="""  function playNoteOnInstrument(midi, dur, instId, noteVel, options) {
+    dur = dur || SL.DURATION || 0.4;
+    // Phrase audition has hard musical deadlines. Avoid synchronous
+    // band-limited synthesis once per short note; live callers are unchanged.
+    options = options || {};
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-is-treated-as-sequence-for-visual-work",
+        before="""    var anySeqPlaying = (SL.sequencer && SL.sequencer.isPlaying && SL.sequencer.isPlaying())
+      || (SL.chordSeq && SL.chordSeq.isPlaying && SL.chordSeq.isPlaying());
+""",
+        after="""    var anySeqPlaying = (SL.sequencer && SL.sequencer.isPlaying && SL.sequencer.isPlaying())
+      || (SL.chordSeq && SL.chordSeq.isPlaying && SL.chordSeq.isPlaying())
+      || options.realtimePhrase === true;
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-forces-realtime-renderer",
+        before="""    if (_cachedMethodEl) {
+      if (anySeqPlaying && _cachedMethodEl.value === 'bandlimited') {
+        if (SL.audio.isWorkletAvailable()) {
+          m = 'worklet';
+        } else {
+          m = 'oscillator';
+        }
+      } else {
+        m = _cachedMethodEl.value;
+      }
+    }
+""",
+        after="""    if (options.realtimePhrase) {
+      m = SL.audio.isWorkletAvailable() ? 'worklet' : 'oscillator';
+    } else if (_cachedMethodEl) {
+      if (anySeqPlaying && _cachedMethodEl.value === 'bandlimited') {
+        if (SL.audio.isWorkletAvailable()) {
+          m = 'worklet';
+        } else {
+          m = 'oscillator';
+        }
+      } else {
+        m = _cachedMethodEl.value;
+      }
+    }
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-passes-bounded-release-to-worklet",
+        before="""        var extraParams = {};
+""",
+        after="""        var extraParams = {};
+        if (typeof options.releaseSeconds === 'number') {
+          extraParams.releaseSeconds = options.releaseSeconds;
+        }
+        if (options.realtimePhrase === true) {
+          extraParams.phraseAutoRelease = true;
+        }
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-includes-bounded-release-in-worklet-message",
+        before="""      if (extraParams.padAftertouch !== undefined) {
+        msg.padAftertouch = extraParams.padAftertouch;
+      }
+""",
+        after="""      if (extraParams.padAftertouch !== undefined) {
+        msg.padAftertouch = extraParams.padAftertouch;
+      }
+       if (extraParams.releaseSeconds !== undefined) {
+         msg.releaseSeconds = extraParams.releaseSeconds;
+       }
+       if (extraParams.phraseAutoRelease !== undefined) {
+         msg.phraseAutoRelease = extraParams.phraseAutoRelease;
+       }
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-releases-on-the-audio-clock",
+        before="""    node.port.postMessage(msg);
+
+    setTimeout(function() {
+      workletNoteOff(midi, id);
+    }, dur * 1000);
+""",
+        after="""    node.port.postMessage(msg);
+
+    // Phrase notes carry their endpoint into the worklet. Main-thread timers
+    // can be late under notation/layout work and then release the wrong one
+    // of several repeated pitches; ordinary interactive notes stay unchanged.
+    if (!extraParams || !extraParams.phraseAutoRelease) {
+      setTimeout(function() {
+        workletNoteOff(midi, id);
+      }, dur * 1000);
+    }
+""",
+    ),
+    TextPatch(
         name="disable-stale-service-worker",
         before="<script>(function(){if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('SW registration failed:',e);});}})();</script>",
         after="<script>console.info('[SSLI] service worker disabled for Exquis exhibit runtime');</script>",
@@ -2224,6 +2325,58 @@ SSLI_FM_MIX_PATCHES = [
 
 SSLI_SYNTH_WORKLET_PATCHES = [
     TextPatch(
+        name="phrase-audition-worklet-stores-audio-clock-release",
+        before="""      noteOffTime: -1,
+      released: false,
+""",
+        after="""      noteOffTime: -1,
+      released: false,
+      // Phrase audition releases against AudioWorklet time, not a delayed
+      // window timer. Negative means this live voice waits for noteOff.
+      autoReleaseTime: -1,
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-worklet-reads-bounded-release",
+        before="""    var instId = data.instId !== undefined ? data.instId : -1;
+""",
+        after="""    var instId = data.instId !== undefined ? data.instId : -1;
+    var requestedReleaseSeconds = typeof data.releaseSeconds === 'number' ? data.releaseSeconds : 0;
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-worklet-reads-audio-clock-release",
+        before="""    var requestedReleaseSeconds = typeof data.releaseSeconds === 'number' ? data.releaseSeconds : 0;
+""",
+        after="""    var requestedReleaseSeconds = typeof data.releaseSeconds === 'number' ? data.releaseSeconds : 0;
+    var phraseAutoRelease = data.phraseAutoRelease === true;
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-worklet-sets-audio-clock-release",
+        before="""    voice.noteOffTime = -1;
+    voice.released = false;
+    voice.velocityGain = vel / 127;
+""",
+        after="""    voice.noteOffTime = -1;
+    voice.released = false;
+    voice.autoReleaseTime = phraseAutoRelease ? currentTime + Math.max(0, data.duration || 0) : -1;
+    voice.velocityGain = vel / 127;
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-worklet-clamps-release-tail",
+        before="""      voice.adsr.r = Math.max(MIN_RELEASE, jitteredAdsr.r || 0.2);
+""",
+        after="""      voice.adsr.r = Math.max(MIN_RELEASE, jitteredAdsr.r || 0.2);
+      // Phrase audition supplies a musical post-note-off tail. Clamp only
+      // that explicit request; regular live notes retain the preset release.
+      if (requestedReleaseSeconds > 0) {
+        voice.adsr.r = Math.max(MIN_RELEASE, Math.min(voice.adsr.r, requestedReleaseSeconds));
+      }
+""",
+    ),
+    TextPatch(
         name="synth-worklet-active-voice-makeup-gain",
         before="""    // Generate audio for each active voice only
     for (var v = 0; v < aviLen; v++) {
@@ -2265,6 +2418,22 @@ SSLI_SYNTH_WORKLET_PATCHES = [
         }
       }
     }
+""",
+    ),
+    TextPatch(
+        name="phrase-audition-worklet-releases-on-audio-clock",
+        before="""      if (voice.active) {
+        for (var i = 0; i < blockSize; i++) {
+""",
+        after="""      if (voice.active) {
+        if (!voice.released && voice.autoReleaseTime >= 0 && currentTime >= voice.autoReleaseTime) {
+          voice.released = true;
+          voice.noteOffTime = currentTime;
+          voice.envelopePhase = 'release';
+          voice.envelopeTime = 0;
+          voice.autoReleaseTime = -1;
+        }
+        for (var i = 0; i < blockSize; i++) {
 """,
     ),
 ]

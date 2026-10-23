@@ -1,0 +1,10 @@
+{
+  "format": "ssli-song-pack/v1",
+  "songs": [
+    {
+      "title": "My authorized melody",
+      "attribution": "Source, license, and/or your own authorship record",
+      "melody": [0, 2, 4, 7, 4, 2, 0, 0]
+    }
+  ]
+}

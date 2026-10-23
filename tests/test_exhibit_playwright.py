@@ -1383,6 +1383,27 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_function("step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step", arg=step_before)
         self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
 
+    def test_song_pack_loader_adds_a_local_authorized_song_without_network_access(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'my-authorized.ssli-songpack.json',
+            'mimeType': 'application/json',
+            'buffer': json.dumps({
+                'format': 'ssli-song-pack/v1',
+                'songs': [{
+                    'title': 'My Authorized Melody',
+                    'attribution': 'User-provided authorization',
+                    'melody': [0, 2, 4, 7, 4, 2, 0, 0]
+                }]
+            }).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent === 'My Authorized Melody')")
+        self.assertIn('Loaded 1 authorized song', self.page.locator('[data-testid="song-library-status"]').inner_text())
+        self.page.select_option('[data-testid="exercise-select"]', label='My Authorized Melody')
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual([event['targets'][0]['midi'] for event in events], [48, 50, 52, 55, 52, 50, 48, 48])
+        self.assertTrue(all(event['valid'] for event in events), events)
+
     def test_regression_progressions_open_with_a_major_starter_lesson(self):
         self.page.select_option('[data-testid="scale-select"]', 'dorian')
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')

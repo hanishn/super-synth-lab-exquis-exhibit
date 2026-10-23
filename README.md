@@ -94,6 +94,7 @@ Omit `--limit` and `--one-per-category` for acceptance sweeps.
 - `docs/exquis-midi.md` — official hardware protocol and lighting contract.
 - `docs/practice-curriculum.md` — curriculum rationale and exercise-family engineering contract.
 - `docs/songs-rights.md` — public-domain Songs provenance and commercial-use maintenance rule.
+- `docs/song-packs.md` — separately distributed, locally loaded song-pack format.
 - `docs/uat-expressive-lighting.md` — hardware-lighting acceptance script.
 - `docs/source-provenance.md` — vendored SSLI and Exquis sources.
 

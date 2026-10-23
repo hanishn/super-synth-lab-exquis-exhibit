@@ -1206,6 +1206,8 @@
     repertoireSectionId: '',
     repertoireTempo: 0,
     repertoireMastery: {},
+    loadedSongs: [],
+    songLibraryStatus: 'Built-in public-domain studies ready. Load authorized packs to add your own repertoire.',
     heldNotes: {},
     channelNotes: {},
     correctCount: 0,
@@ -5180,10 +5182,44 @@
   }
 
   function songLessonForId(id) {
-    for (var i = 0; i < SONG_LESSONS.length; i++) {
-      if (SONG_LESSONS[i].id === id) return SONG_LESSONS[i];
+    var songs = allSongLessons();
+    for (var i = 0; i < songs.length; i++) {
+      if (songs[i].id === id) return songs[i];
     }
     return null;
+  }
+
+  function allSongLessons() {
+    return SONG_LESSONS.concat(state.loadedSongs || []);
+  }
+
+  function validateSongPackSong(song, sourceName) {
+    if (!song || typeof song.title !== 'string' || !song.title.trim()) throw new Error(sourceName + ': each song needs a title');
+    if (!Array.isArray(song.melody) || song.melody.length < 4 || !song.melody.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; })) throw new Error(sourceName + ': ' + song.title + ' needs 4–24-semitone melody offsets');
+    return {
+      id: 'loaded_song_' + sourceName.replace(/[^a-z0-9]+/gi, '_').toLowerCase() + '_' + song.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase(),
+      name: song.title.trim(),
+      origin: typeof song.attribution === 'string' && song.attribution.trim() ? song.attribution.trim() : 'User-authorized local song pack',
+      melody: song.melody.slice()
+    };
+  }
+
+  function loadSongPackText(text, sourceName) {
+    var pack;
+    try { pack = JSON.parse(text); } catch (error) { throw new Error(sourceName + ': invalid JSON'); }
+    if (!pack || pack.format !== 'ssli-song-pack/v1' || !Array.isArray(pack.songs)) throw new Error(sourceName + ': expected ssli-song-pack/v1 with a songs array');
+    var incoming = pack.songs.map(function(song) { return validateSongPackSong(song, sourceName); });
+    var byId = {};
+    allSongLessons().forEach(function(song) { byId[song.id] = true; });
+    incoming.forEach(function(song) {
+      if (byId[song.id]) throw new Error(sourceName + ': duplicate song ' + song.name);
+      byId[song.id] = true;
+    });
+    state.loadedSongs = state.loadedSongs.concat(incoming);
+    state.songLibraryStatus = 'Loaded ' + String(incoming.length) + ' authorized song' + (incoming.length === 1 ? '' : 's') + ' from ' + sourceName + '.';
+    state.exerciseFamily = 'songs';
+    renderExerciseOptions();
+    render();
   }
 
   function selectedRepertoireSection() {
@@ -7523,7 +7559,7 @@
 
   function exercisesForSelectedFamily() {
     if (state.exerciseFamily === 'songs') {
-      return SONG_LESSONS.map(function(song) {
+      return allSongLessons().map(function(song) {
         return {
           id: song.id,
           name: song.name,
@@ -7649,6 +7685,12 @@
     if (els.repertoireSectionSummary) {
       els.repertoireSectionSummary.textContent = selection.section.name + ' · ' + String(repertoireTempo(selection)) + ' BPM · ' + String(completedLoops) + ' completed loop' + (completedLoops === 1 ? '' : 's');
     }
+  }
+
+  function renderSongLibraryControls(active) {
+    if (!els.songLibraryPanel) return;
+    els.songLibraryPanel.hidden = !active;
+    if (active && els.songLibraryStatus) els.songLibraryStatus.textContent = state.songLibraryStatus;
   }
 
   function render() {
@@ -8017,6 +8059,7 @@
     }
     renderProgressionVoicingControls(currentExerciseEvents, chordPractice);
     renderRepertoireSectionControls(repertoirePractice);
+    renderSongLibraryControls(songPractice);
     if (els.progressionGenreControl) els.progressionGenreControl.hidden = state.exerciseFamily !== 'progressions';
     if (els.octaveControl) els.octaveControl.hidden = chordPractice;
     if (els.rootControl) els.rootControl.hidden = chordPractice;
@@ -8312,6 +8355,20 @@
       });
     }
     if (els.repertoireCountIn) els.repertoireCountIn.addEventListener('click', playRepertoireCountIn);
+    if (els.songPackInput) {
+      els.songPackInput.addEventListener('change', function() {
+        Array.prototype.forEach.call(els.songPackInput.files || [], function(file) {
+          var reader = new FileReader();
+          reader.onload = function() {
+            try { loadSongPackText(String(reader.result || ''), file.name); }
+            catch (error) { state.songLibraryStatus = error.message; render(); }
+          };
+          reader.onerror = function() { state.songLibraryStatus = file.name + ': could not read file'; render(); };
+          reader.readAsText(file);
+        });
+        els.songPackInput.value = '';
+      });
+    }
     if (els.progressionGlobalNoteCount) {
       els.progressionGlobalNoteCount.addEventListener('change', function() {
         state.progressionVoicing.noteCount = parseInt(els.progressionGlobalNoteCount.value, 10) || 3;
@@ -8623,6 +8680,9 @@
       repertoireSectionSummary: document.getElementById('repertoireSectionSummary'),
       repertoireTempo: document.getElementById('repertoireTempo'),
       repertoireCountIn: document.getElementById('repertoireCountIn'),
+      songLibraryPanel: document.getElementById('songLibraryPanel'),
+      songPackInput: document.getElementById('songPackInput'),
+      songLibraryStatus: document.getElementById('songLibraryStatus'),
       practiceTitle: document.getElementById('practiceTitle'),
       octaveControl: document.getElementById('octaveControl'),
       rootControl: document.getElementById('rootControl'),
@@ -8728,6 +8788,7 @@
     rememberWorkspaceHome('workflow', els.practiceWorkflowControls);
     rememberWorkspaceHome('progressionVoicing', els.progressionVoicingPanel);
     rememberWorkspaceHome('repertoireSection', els.repertoireSectionPanel);
+    rememberWorkspaceHome('songLibrary', els.songLibraryPanel);
     rememberWorkspaceHome('hardwareTools', els.hardwareTools);
     rememberWorkspaceHome('practiceTools', els.practiceTools);
     placeWorkspaceControls();

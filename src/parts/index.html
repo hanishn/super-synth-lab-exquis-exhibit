@@ -90,6 +90,11 @@
         <div class="exercise-buttons" id="exerciseButtons" data-testid="exercise-buttons"></div>
         <select id="exerciseSelect" data-testid="exercise-select"></select>
       </fieldset>
+      <label class="practice-control song-library-panel" id="songLibraryPanel" data-testid="song-library-panel" hidden>
+        <span>Load song pack</span>
+        <input id="songPackInput" type="file" accept="application/json,.json,.ssli-songpack.json" multiple data-testid="song-pack-input">
+        <small id="songLibraryStatus" data-testid="song-library-status"></small>
+      </label>
       <label class="practice-control fingering-control" id="fingeringControl" data-testid="fingering-control">
         <span>Finger Pattern</span>
         <select id="strategySelect" data-testid="strategy-select"></select>

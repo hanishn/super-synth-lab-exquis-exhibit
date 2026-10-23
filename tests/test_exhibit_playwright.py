@@ -2946,6 +2946,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLessEqual(device['x'] + device['width'], surface['x'] + surface['width'] + 1)
         self.assertGreater(staff['y'], surface['y'], 'notation lives beside, not above, the play surface')
         self.assertAlmostEqual(device['y'], surface['y'], delta=1)
+        roll_metrics = self.page.locator('[data-testid="piano-roll-notation"]').evaluate("""svg => {
+          const viewBox = svg.viewBox.baseVal;
+          const active = svg.querySelector('.roll-column-active');
+          return { viewBoxHeight: viewBox.height, renderedHeight: svg.getBoundingClientRect().height, activeHeight: Number(active.getAttribute('height')) };
+        }""")
+        self.assertGreater(roll_metrics['viewBoxHeight'], 300)
+        self.assertGreater(roll_metrics['activeHeight'], roll_metrics['viewBoxHeight'] * 0.7)
 
     def test_practice_piano_reference_tracks_real_target_range_and_active_note(self):
         keys = self.page.locator('[data-testid="practice-piano-key"]')

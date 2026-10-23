@@ -5589,13 +5589,22 @@
     return node;
   }
 
+  function notationCanvasDimensions(svg) {
+    var width = notationCanvasWidth();
+    var renderedWidth = Math.max(1, svg && svg.clientWidth || width);
+    var renderedHeight = Math.max(104, svg && svg.clientHeight || 104);
+    return { width: width, height: Math.max(104, Math.round(width * renderedHeight / renderedWidth)) };
+  }
+
   function clearNotationSvg(svg, label) {
     if (!svg) return;
     clearChildren(svg);
-    svg.setAttribute('viewBox', '0 0 ' + notationCanvasWidth() + ' 104');
+    var dimensions = notationCanvasDimensions(svg);
+    svg.setAttribute('viewBox', '0 0 ' + dimensions.width + ' ' + dimensions.height);
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     svg.setAttribute('aria-label', label);
     svg.appendChild(notationSvgElement('title', {}, label));
+    return dimensions;
   }
 
   function clearStaffNotation(container, label) {
@@ -5681,23 +5690,30 @@
   function renderPianoRollNotation(projection) {
     var svg = els.pianoRollNotation;
     if (!svg) return;
-    clearNotationSvg(svg, 'Piano roll of current and upcoming practice steps');
+    var dimensions = clearNotationSvg(svg, 'Piano roll of current and upcoming practice steps');
     if (projection.concealed) return;
+    var canvasWidth = dimensions.width;
+    var canvasHeight = dimensions.height;
+    // The roll owns its whole rail: derive its musical coordinate system from
+    // the rendered aspect ratio instead of letterboxing a 104px-tall sketch.
+    var plotTop = 28;
+    var plotBottom = canvasHeight - 26;
+    var plotHeight = Math.max(72, plotBottom - plotTop);
     var low = projection.lowMidi - 2;
     var high = projection.highMidi + 2;
     var range = Math.max(5, high - low);
     for (var midi = low; midi <= high; midi++) {
-      var y = 16 + (high - midi) * (66 / range);
-      svg.appendChild(notationSvgElement('line', { x1: 42, y1: y, x2: notationCanvasWidth() - 10, y2: y, class: 'roll-grid-line' + (mod(midi, 12) === 0 ? ' roll-c-line' : '') }));
+      var y = plotTop + (high - midi) * (plotHeight / range);
+      svg.appendChild(notationSvgElement('line', { x1: 42, y1: y, x2: canvasWidth - 10, y2: y, class: 'roll-grid-line' + (mod(midi, 12) === 0 ? ' roll-c-line' : '') }));
       if (mod(midi, 12) === 0) svg.appendChild(notationSvgElement('text', { x: 3, y: y + 3, class: 'roll-axis-label' }, 'C' + octave(midi)));
     }
     projection.events.forEach(function(event, eventOffset) {
-      var columnWidth = (notationCanvasWidth() - 50) / Math.max(1, projection.events.length);
+      var columnWidth = (canvasWidth - 50) / Math.max(1, projection.events.length);
       var x = 46 + eventOffset * columnWidth;
-      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: 12, width: columnWidth - 3, height: 74, rx: 4, class: 'roll-column-active' }));
+      if (event.active) svg.appendChild(notationSvgElement('rect', { x: x - 3, y: plotTop - 10, width: columnWidth - 3, height: plotHeight + 20, rx: 4, class: 'roll-column-active' }));
       event.midis.forEach(function(midi) {
-        var noteHeight = Math.max(10, Math.min(16, 66 / range * 1.55));
-        var y = 16 + (high - midi) * (66 / range) - noteHeight / 2;
+        var noteHeight = Math.max(12, Math.min(26, plotHeight / range * 1.55));
+        var y = plotTop + (high - midi) * (plotHeight / range) - noteHeight / 2;
         var classes = 'roll-note' + (event.active ? ' notation-active' : '') + (event.completed ? ' notation-completed' : '');
         var note = notationSvgElement('rect', { x: x, y: y, width: Math.max(12, columnWidth - 8), height: noteHeight, rx: 2, class: classes, 'data-testid': 'piano-roll-note', 'data-midi': midi, 'data-event-index': event.index });
         note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));

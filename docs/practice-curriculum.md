@@ -12,7 +12,9 @@ recognizable shapes, to hearing, and finally to musical context:
    sixths, and all four basic triad qualities.
 3. **Ear training** asks for a heard interval to be reproduced as an exact,
    simultaneous Exquis grip. Targets remain concealed until the player answers.
-4. **Repertoire** applies the vocabulary as named forms with sections, tempo,
+4. **Songs** turns vetted public-domain melodies into original, single-line
+   Exquis studies with full notation and shared input scoring.
+5. **Repertoire** applies the vocabulary as named forms with sections, tempo,
    count-in, and loop mastery.
 
 ## Evidence informing the scope

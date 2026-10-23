@@ -1279,6 +1279,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             {"value": "technique", "label": "Technique"},
             {"value": "shapes", "label": "Shapes"},
             {"value": "progressions", "label": "Progressions"},
+            {"value": "songs", "label": "Songs"},
             {"value": "repertoire", "label": "Repertoire"},
             {"value": "ear", "label": "Ear training"}
         ], families)
@@ -1353,6 +1354,33 @@ class PlaywrightExhibitTests(unittest.TestCase):
         staff_chord = self.page.locator('[data-testid="staff-event-control"].notation-active')
         staff_chord.dispatch_event('pointerdown')
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"coach-progress\"]').textContent.includes('1 correct / 0 missed')")
+        self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
+
+    def test_songs_family_contains_only_documented_playable_public_domain_studies(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        song_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
+        self.assertEqual(song_ids, [
+            'song_frere_jacques', 'song_ode_to_joy', 'song_auld_lang_syne',
+            'song_oh_susanna', 'song_simple_gifts', 'song_greensleeves'
+        ])
+        snapshots = self.page.evaluate("""ids => ids.map((exerciseId) => {
+          const select = document.querySelector('[data-testid="exercise-select"]');
+          select.value = exerciseId;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          const snapshot = window.__exquisDebugSnapshot();
+          return { exerciseId, events: snapshot.exerciseEvents };
+        })""", song_ids)
+        for snapshot in snapshots:
+            self.assertGreaterEqual(len(snapshot['events']), 16, snapshot)
+            self.assertTrue(all(event['valid'] and event['musicalIntent']['type'] == 'song-melody' for event in snapshot['events']), snapshot)
+
+    def test_song_staff_input_advances_the_public_domain_melody(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.select_option('[data-testid="exercise-select"]', 'song_ode_to_joy')
+        step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
+        staff_note = self.page.locator('[data-testid="staff-event-control"].notation-active')
+        staff_note.dispatch_event('pointerdown')
+        self.page.wait_for_function("step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step", arg=step_before)
         self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
 
     def test_regression_progressions_open_with_a_major_starter_lesson(self):

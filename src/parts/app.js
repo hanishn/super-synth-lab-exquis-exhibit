@@ -404,6 +404,7 @@
     { id: 'technique', name: 'Technique' },
     { id: 'shapes', name: 'Shapes' },
     { id: 'progressions', name: 'Progressions' },
+    { id: 'songs', name: 'Songs' },
     { id: 'repertoire', name: 'Repertoire' },
     { id: 'ear', name: 'Ear training' }
   ];
@@ -1643,6 +1644,15 @@
         prompt: repertoireLesson.style + ' repertoire at ' + String(repertoireLesson.tempo) + ' BPM.'
       };
     }
+    var songLesson = songLessonForId(state.exerciseId);
+    if (songLesson) {
+      return {
+        id: songLesson.id,
+        name: songLesson.name,
+        family: 'songs',
+        prompt: songLesson.origin + ' public-domain melody · original Exquis study.'
+      };
+    }
     return EXERCISES[0];
   }
 
@@ -2500,6 +2510,7 @@
       if (EXERCISES[i].id === exerciseId) return EXERCISES[i].family || 'technique';
     }
     if (getSsliProgressionByExerciseId(exerciseId)) return 'progressions';
+    if (songLessonForId(exerciseId)) return 'songs';
     if (repertoireLessonForId(exerciseId)) return 'repertoire';
     return 'technique';
   }
@@ -5149,9 +5160,28 @@
     }
   ];
 
+  // These are original single-line Exquis studies of public-domain source
+  // melodies. We deliberately ship no lyrics, recordings, or third-party
+  // arrangements; see docs/songs-rights.md for provenance and scope.
+  var SONG_LESSONS = [
+    { id: 'song_frere_jacques', name: 'Frere Jacques', origin: 'Traditional French', melody: [0, 2, 4, 0, 0, 2, 4, 0, 4, 5, 7, 4, 5, 7, 7, 9, 7, 5, 4, 0, 7, 9, 7, 5, 4, 0, 0, 7, 0, 0, 0, 7, 0, 0] },
+    { id: 'song_ode_to_joy', name: 'Ode to Joy', origin: 'Ludwig van Beethoven (1824)', melody: [4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 4, 2, 2, 4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 2, 0, 0] },
+    { id: 'song_auld_lang_syne', name: 'Auld Lang Syne', origin: 'Traditional Scottish', melody: [0, 5, 5, 5, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0, 0, 5, 5, 9, 12, 12, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0] },
+    { id: 'song_oh_susanna', name: 'Oh! Susanna', origin: 'Stephen Foster (1848)', melody: [0, 2, 4, 7, 7, 6, 4, 2, 0, 2, 4, 4, 4, 2, 2, 0, 2, 4, 7, 7, 6, 4, 2, 0] },
+    { id: 'song_simple_gifts', name: 'Simple Gifts', origin: 'Joseph Brackett (1848)', melody: [0, 4, 7, 4, 0, 4, 7, 9, 7, 4, 7, 9, 7, 4, 0, 2, 4, 2, 0] },
+    { id: 'song_greensleeves', name: 'Greensleeves', origin: 'Traditional English', melody: [9, 0, 2, 4, 5, 7, 9, 10, 7, 5, 2, 0, 9, 10, 7, 5, 4, 2, 0] }
+  ];
+
   function repertoireLessonForId(id) {
     for (var i = 0; i < REPERTOIRE_LESSONS.length; i++) {
       if (REPERTOIRE_LESSONS[i].id === id) return REPERTOIRE_LESSONS[i];
+    }
+    return null;
+  }
+
+  function songLessonForId(id) {
+    for (var i = 0; i < SONG_LESSONS.length; i++) {
+      if (SONG_LESSONS[i].id === id) return SONG_LESSONS[i];
     }
     return null;
   }
@@ -5528,7 +5558,37 @@
     });
   }
 
+  function buildSongExerciseEvents(song, fingers) {
+    if (!song || !Array.isArray(song.melody) || !song.melody.length) return [];
+    var cells = makeGrid();
+    var root = selectedRoot(cells);
+    if (!root) return [];
+    var events = [];
+    for (var index = 0; index < song.melody.length; index++) {
+      var offset = song.melody[index];
+      var targetMidi = root.midi + offset;
+      var target = bestCellForTarget(cells, mod(root.pc + offset, 12), targetMidi, root, null);
+      // A song must be completely playable on the displayed Exquis range. Do
+      // not silently substitute another octave or a virtual pad.
+      if (!target || target.midi !== targetMidi) return [];
+      events.push(createNoteExerciseEvent({
+        id: song.id + ':phrase-note:' + index,
+        musicalIntent: { type: 'song-melody', songId: song.id, title: song.name, origin: song.origin },
+        cellId: cellKey(target),
+        midi: target.midi,
+        sourceCell: clonePathCell(target),
+        targets: [{ cellId: cellKey(target), midi: target.midi, pc: target.pc }],
+        fingering: { primary: fingers[index % fingers.length], alternatives: [] },
+        timing: { mode: 'sequential' },
+        remediation: { type: 'repeat-event' }
+      }));
+    }
+    return events;
+  }
+
   function buildPracticeExerciseEvents(path, fingers) {
+    var songLesson = songLessonForId(state.exerciseId);
+    if (songLesson) return buildSongExerciseEvents(songLesson, fingers);
     var repertoireSelection = selectedRepertoireSection();
     if (repertoireSelection) {
       var repertoireFixture = buildProgressionFixture(PROGRESSION_EXERCISE_FIXTURE_IDS[repertoireSelection.section.progressionId] || repertoireSelection.section.progressionId);
@@ -7462,6 +7522,16 @@
   }
 
   function exercisesForSelectedFamily() {
+    if (state.exerciseFamily === 'songs') {
+      return SONG_LESSONS.map(function(song) {
+        return {
+          id: song.id,
+          name: song.name,
+          family: 'songs',
+          prompt: song.origin + ' public-domain melody · original Exquis study.'
+        };
+      });
+    }
     if (state.exerciseFamily === 'repertoire') {
       return REPERTOIRE_LESSONS.map(function(lesson) {
         return {
@@ -7591,6 +7661,7 @@
     var isPracticeMode = state.mode === 'practice';
     var progressionPractice = isPracticeMode && state.exerciseFamily === 'progressions';
     var repertoirePractice = isPracticeMode && state.exerciseFamily === 'repertoire';
+    var songPractice = isPracticeMode && state.exerciseFamily === 'songs';
     var chordPractice = progressionPractice || repertoirePractice;
     renderRootOptions(logicCells);
     if (els.tonic) els.tonic.value = String(state.tonicPc);
@@ -7938,8 +8009,8 @@
       els.coachNextAction.setAttribute('aria-label', lastAttemptAccepted ? 'Continue to the next target' : 'Hear the current target');
     }
     if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
-    if (els.practiceTitle) els.practiceTitle.textContent = repertoirePractice ? 'Repertoire lab' : (progressionPractice ? 'Progression lab' : 'Scale map');
-    if (els.exerciseLegend) els.exerciseLegend.textContent = repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise');
+    if (els.practiceTitle) els.practiceTitle.textContent = songPractice ? 'Songbook' : (repertoirePractice ? 'Repertoire lab' : (progressionPractice ? 'Progression lab' : 'Scale map'));
+    if (els.exerciseLegend) els.exerciseLegend.textContent = songPractice ? 'Public-domain song' : (repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise'));
     if (els.practiceWorkflowControls) {
       els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
       els.practiceWorkflowControls.classList.toggle('repertoire-layout', repertoirePractice);

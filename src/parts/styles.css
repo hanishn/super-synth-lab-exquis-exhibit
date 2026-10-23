@@ -823,11 +823,18 @@ input {
   }
 
   .app-shell[data-workspace="practice"] .stage-header > div:first-child {
-    flex: 1 1 auto;
+    flex: 0 0 clamp(170px, 18vw, 260px);
   }
 
   .app-shell[data-workspace="practice"] .practice-path-strip {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: clamp(240px, 42vw, 680px);
+    justify-content: flex-start;
     margin: 2px 0 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
   }
 
   .app-shell[data-workspace="practice"] .keyboard-horizontal {
@@ -1324,6 +1331,7 @@ input[type="range"]:focus-visible {
 }
 
 .stage-header > div:first-child {
+  flex: 0 0 clamp(170px, 18vw, 260px);
   min-width: 0;
 }
 
@@ -1337,7 +1345,7 @@ input[type="range"]:focus-visible {
 }
 
 .path-chip {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   padding: 2px 6px;
   border: 1px solid rgba(117, 167, 255, 0.32);
@@ -3030,11 +3038,15 @@ input[type="range"]:focus-visible {
 }
 
 .stage-header .practice-path-strip {
-  flex: 1 1 auto;
-  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: clamp(240px, 42vw, 680px);
+  justify-content: flex-start;
   width: auto;
   margin: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 }

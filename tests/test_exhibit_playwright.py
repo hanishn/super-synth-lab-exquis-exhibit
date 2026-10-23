@@ -2992,12 +2992,17 @@ class PlaywrightExhibitTests(unittest.TestCase):
         key.dispatch_event('pointerup')
         self.assertEqual(reference.get_attribute('aria-pressed'), 'false')
 
-    def test_practice_alternate_surfaces_play_and_release_canonical_exquis_notes(self):
-        def assert_surface_holds_and_releases(surface, midi, expected_held=1):
+    def test_practice_all_play_surfaces_share_exquis_hold_and_advance_contract(self):
+        def assert_surface_holds_releases_and_advances(surface, midi, expected_held=1):
+            step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
             surface.dispatch_event('pointerdown')
             self.page.wait_for_function(
                 "([midi, expected]) => document.querySelectorAll('[data-testid=\"exquis-key\"][data-midi=\"' + midi + '\"].midi-held').length >= expected",
                 arg=[midi, expected_held]
+            )
+            self.page.wait_for_function(
+                "step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step",
+                arg=step_before
             )
             self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
             self.page.wait_for_function(
@@ -3005,19 +3010,32 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 arg=midi
             )
 
+        exquis_key = self.page.locator('[data-testid="exquis-key"].current')
+        exquis_midi = exquis_key.get_attribute('data-midi')
+        assert_surface_holds_releases_and_advances(exquis_key, exquis_midi)
+
         piano_key = self.page.locator('[data-testid="practice-piano-key"].is-current')
         piano_midi = piano_key.get_attribute('data-midi')
-        assert_surface_holds_and_releases(piano_key, piano_midi)
+        assert_surface_holds_releases_and_advances(piano_key, piano_midi)
 
         roll_note = self.page.locator('[data-testid="piano-roll-note"].notation-active')
         roll_midi = roll_note.get_attribute('data-midi')
-        assert_surface_holds_and_releases(roll_note, roll_midi)
+        assert_surface_holds_releases_and_advances(roll_note, roll_midi)
+
+        staff_note = self.page.locator('[data-testid="staff-event-control"].notation-active')
+        staff_midi = self.page.locator('[data-testid="staff-note"].notation-active').get_attribute('data-midi')
+        assert_surface_holds_releases_and_advances(staff_note, staff_midi)
 
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
         self.page.select_option('[data-testid="exercise-select"]', 'c_major_progression')
         staff_chord = self.page.locator('[data-testid="staff-event-control"]').first
+        step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
         staff_chord.dispatch_event('pointerdown')
         self.page.wait_for_function("() => document.querySelectorAll('[data-testid=\"exquis-key\"].midi-held').length >= 3")
+        self.page.wait_for_function(
+            "step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step",
+            arg=step_before
+        )
         self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
         self.page.wait_for_function("() => document.querySelectorAll('[data-testid=\"exquis-key\"].midi-held').length === 0")
 

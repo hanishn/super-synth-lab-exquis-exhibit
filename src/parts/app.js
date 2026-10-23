@@ -3897,14 +3897,19 @@
   }
 
   function bindAlternativeSurfaceInput(node, midis, label) {
+    bindUiCellInput(node, midis.map(canonicalInteractiveCellForMidi).filter(Boolean), label);
+  }
+
+  function bindUiCellInput(node, cells, label) {
     if (!node || node.dataset.alternativeSurfaceBound) return;
     node.dataset.alternativeSurfaceBound = 'true';
-    node.setAttribute('role', 'button');
-    node.setAttribute('tabindex', '0');
-    node.setAttribute('aria-label', label);
+    if (node.tagName.toLowerCase() !== 'button') {
+      node.setAttribute('role', 'button');
+      node.setAttribute('tabindex', '0');
+    }
+    if (label) node.setAttribute('aria-label', label);
     var release = function() {};
     var press = function() {
-      var cells = midis.map(canonicalInteractiveCellForMidi).filter(Boolean);
       if (!cells.length || node.dataset.alternativeSurfaceHeld === 'true') return;
       node.dataset.alternativeSurfaceHeld = 'true';
       cells.forEach(function(cell) { pressUiKey(cell, 96); });
@@ -3915,9 +3920,9 @@
         document.removeEventListener('pointerup', release, true);
         document.removeEventListener('pointercancel', release, true);
       };
-      // Render replaces the clicked SVG/keyboard node immediately. Document
-      // capture keeps release ownership alive across that rerender, exactly as
-      // a physical Exquis pad remains held until its matching note-off.
+      // Render replaces the clicked control immediately. Document capture keeps
+      // release ownership alive across that rerender, exactly as a physical
+      // Exquis pad remains held until its matching note-off.
       document.addEventListener('pointerup', release, true);
       document.addEventListener('pointercancel', release, true);
     };
@@ -3953,10 +3958,32 @@
     state.activeMidiCellId = cell.id;
     state.activeMidiPc = cell.pc;
     state.rawMidiFlash = false;
+    state.lastMidiAt = Date.now();
     state.lastMidi = { midi: cell.midi, velocity: pressure, cellId: cell.id };
     scheduleMidiVoiceStart(key, cell.midi, pressure, cell.id);
     logEvent('ui', 'key down ' + noteLabelFromMidi(cell.midi) + ' midi=' + cell.midi);
+    var advancedPracticeStep = scoreUiPracticeNote(cell);
     render();
+    if (advancedPracticeStep) syncExquisPracticePadFrame();
+  }
+
+  // The screen Exquis, staff, piano keyboard, and roll all arrive here. Keep
+  // their practice outcome deliberately identical to a physical MIDI note-on:
+  // a correct target advances, and a complete grip advances only when its final
+  // constituent pitch is pressed inside the grip timing window.
+  function scoreUiPracticeNote(cell) {
+    var expected = expectedCell();
+    var expectedKey = cellKey(expected);
+    var expectedEvent = expectedExerciseEvent();
+    if (state.mode !== 'practice') {
+      setFeedback('Play mode: ' + noteLabelFromMidi(cell.midi) + ' is sounding freely.', 'live');
+      return false;
+    }
+    if (expectedEvent && expectedEvent.type === 'grip') {
+      queueGripPracticeNote(expectedEvent, { midi: cell.midi, cellId: cell.id, at: state.lastMidiAt });
+      return false;
+    }
+    return scoreSinglePracticeNote(expected, expectedKey, cell.midi);
   }
 
   function releaseUiKey(cell) {
@@ -7561,26 +7588,7 @@
         key.setAttribute('data-chain-lane', hardwareLit ? String(litPracticeById[cell.id]) : chainLane(cell, rootCell));
       }
       key.setAttribute('aria-label', cell.label + octave(displayMidi) + (isCurrentGripTarget ? ', chord target ' + currentGripTargetIndex + ' of ' + currentGripCells.length + ', play together with ' + currentGripTargetNotes.join(', ') : ''));
-      key.addEventListener('pointerdown', (function(cellValue) {
-        return function() {
-          pressUiKey(cellValue, 96);
-        };
-      })(cell));
-      key.addEventListener('pointerup', (function(cellValue) {
-        return function() {
-          releaseUiKey(cellValue);
-        };
-      })(cell));
-      key.addEventListener('pointercancel', (function(cellValue) {
-        return function() {
-          releaseUiKey(cellValue);
-        };
-      })(cell));
-      key.addEventListener('pointerleave', (function(cellValue) {
-        return function(event) {
-          if (event.buttons) releaseUiKey(cellValue);
-        };
-      })(cell));
+      bindUiCellInput(key, [cell]);
       key.innerHTML = '<span class="key-label"><span class="note">' + cell.label + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
       if (isTonic) key.insertAdjacentHTML('beforeend', '<span class="root-marker" aria-hidden="true">R</span>');
       if (isPracticeMode && isCurrentGripTarget && state.view === 'practice') {

@@ -366,16 +366,34 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.reload()
         gate = self.page.locator('[data-testid="connection-gate"]')
         primary = self.page.locator('[data-testid="enable-midi-gate"]')
+        sync = self.page.locator('[data-testid="enable-exquis-sync-gate"]')
         bypass = self.page.locator('[data-testid="continue-without-midi"]')
         self.assertTrue(gate.is_visible())
         self.assertTrue(primary.is_visible())
+        self.assertTrue(sync.is_visible())
         self.assertTrue(bypass.is_visible())
-        self.assertGreater(
-            primary.bounding_box()["height"],
-            bypass.bounding_box()["height"],
-        )
+        self.assertEqual(primary.inner_text(), 'MIDI')
+        self.assertEqual(sync.inner_text(), 'MIDI + Exquis Sync')
+        self.assertEqual(bypass.inner_text(), 'No MIDI')
         bypass.click()
         self.assertFalse(gate.is_visible())
+
+    def test_landing_exquis_sync_option_connects_then_starts_sync(self):
+        self.page.reload()
+        self.page.evaluate("""() => {
+          window.__landingSyncInput = { id: 'landing-sync-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__landingSyncOutput = { id: 'landing-sync-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [], send(bytes) { this.sent.push([...bytes]); } };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__landingSyncInput) },
+            outputs: { forEach: (callback) => callback(window.__landingSyncOutput) },
+            onstatechange: null
+          });
+        }""")
+        self.page.locator('[data-testid="enable-exquis-sync-gate"]').click()
+        self.page.wait_for_function("() => window.__landingSyncInput.onmidimessage !== null")
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"sync-exquis\"]').textContent === 'Stop Sync'")
+        self.assertFalse(self.page.locator('[data-testid="connection-gate"]').is_visible())
+        self.assertGreater(self.page.evaluate("() => window.__landingSyncOutput.sent.length"), 0)
 
     def test_regression_embedded_ssli_iframe_does_not_bind_web_midi_directly(self):
         frame = self.page.locator("#ssliEngineFrame")

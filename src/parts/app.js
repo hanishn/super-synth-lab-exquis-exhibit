@@ -7057,6 +7057,33 @@
     els.exercise.value = state.exerciseId;
   }
 
+  function startLandingMidi(syncExquis) {
+    state.launchGateOpen = false;
+    enableMidi();
+    if (!syncExquis) {
+      render();
+      return;
+    }
+    // Web MIDI permissions resolve asynchronously. Wait for the same output
+    // readiness condition used by the hardware control rather than guessing a
+    // fixed delay; sync is never enabled against an absent/permissionless port.
+    var attempts = 0;
+    function enableWhenReady() {
+      if (midiOutput && state.exquisSysexAvailable) {
+        enableExquisSync();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 30) window.setTimeout(enableWhenReady, 40);
+      else {
+        state.exquisSyncStatus = 'Exquis sync: connect an Exquis output with SysEx permission to start sync';
+        render();
+      }
+    }
+    enableWhenReady();
+    render();
+  }
+
   function progressionGenreOptions() {
     return [{ id: 'starter', name: 'Starter repertoire' }].concat(SSLI_PROGRESSION_GROUPS.map(function(group, index) {
       return { id: 'ssli-' + index, name: group.genre };
@@ -7683,9 +7710,12 @@
   function bindEvents() {
     if (els.enableMidiGate) {
       els.enableMidiGate.addEventListener('click', function() {
-        enableMidi();
-        state.launchGateOpen = false;
-        render();
+        startLandingMidi(false);
+      });
+    }
+    if (els.enableExquisSyncGate) {
+      els.enableExquisSyncGate.addEventListener('click', function() {
+        startLandingMidi(true);
       });
     }
     if (els.continueWithoutMidi) {
@@ -8146,6 +8176,7 @@
       studioDescription: document.getElementById('studioDescription'),
       connectionGate: document.getElementById('connectionGate'),
       enableMidiGate: document.getElementById('enableMidiGate'),
+      enableExquisSyncGate: document.getElementById('enableExquisSyncGate'),
       continueWithoutMidi: document.getElementById('continueWithoutMidi'),
       coachToggle: document.getElementById('coachToggle'),
       sidePanel: document.querySelector('.side-panel'),

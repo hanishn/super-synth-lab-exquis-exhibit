@@ -3,10 +3,13 @@
   <section id="connectionGate" class="connection-gate" data-testid="connection-gate" aria-label="Connect your Exquis">
     <div class="connection-gate-card">
       <p class="eyebrow">Exquis Fingering Lab</p>
-      <h2>Connect your Exquis first.</h2>
-      <p>Enable MIDI to light the hardware, hear your playing, and receive live practice feedback.</p>
-      <button id="enableMidiGate" type="button" class="connection-gate-primary" data-testid="enable-midi-gate">Enable MIDI</button>
-      <button id="continueWithoutMidi" type="button" class="connection-gate-secondary" data-testid="continue-without-midi">Explore without Exquis</button>
+      <h2>Choose how to begin.</h2>
+      <p>Connect any MIDI controller, add Exquis key/scale and lighting sync, or explore the lesson without hardware.</p>
+      <div class="connection-gate-choices" role="group" aria-label="Hardware startup mode">
+        <button id="enableMidiGate" type="button" class="connection-gate-primary" data-testid="enable-midi-gate">MIDI</button>
+        <button id="enableExquisSyncGate" type="button" class="connection-gate-sync" data-testid="enable-exquis-sync-gate">MIDI + Exquis Sync</button>
+      </div>
+      <button id="continueWithoutMidi" type="button" class="connection-gate-secondary" data-testid="continue-without-midi">No MIDI</button>
     </div>
   </section>
   <section class="top-panel" aria-label="Practice controls">

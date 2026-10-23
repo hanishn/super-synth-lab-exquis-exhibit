@@ -2452,6 +2452,12 @@ def build() -> dict:
     if vexflow_source.exists():
         shutil.copytree(vexflow_source, ROOT / "vendor" / "vexflow", dirs_exist_ok=True)
         shutil.copytree(vexflow_source, DIST_DIR / "vendor" / "vexflow", dirs_exist_ok=True)
+    # OSMD is the full-score renderer.  Keep the pinned browser bundle local so
+    # MusicXML engraving does not depend on a CDN or change under our feet.
+    osmd_source = VENDOR / "opensheetmusicdisplay"
+    if osmd_source.exists():
+        shutil.copytree(osmd_source, ROOT / "vendor" / "opensheetmusicdisplay", dirs_exist_ok=True)
+        shutil.copytree(osmd_source, DIST_DIR / "vendor" / "opensheetmusicdisplay", dirs_exist_ok=True)
     sync_ssli_runtime(ROOT_SSLI_DIR)
     sync_ssli_runtime(DIST_SSLI_DIR)
     return {

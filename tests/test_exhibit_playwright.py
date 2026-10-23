@@ -1361,8 +1361,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
         song_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
         self.assertEqual(song_ids, [
             'song_frere_jacques', 'song_ode_to_joy', 'song_auld_lang_syne',
-            'song_oh_susanna', 'song_simple_gifts', 'song_greensleeves'
+            'song_oh_susanna', 'song_simple_gifts', 'song_greensleeves',
+            'song_twinkle_twinkle', 'song_mary_had_a_little_lamb', 'song_london_bridge',
+            'song_row_row_row_your_boat', 'song_amazing_grace', 'song_yankee_doodle',
+            'song_jingle_bells', 'song_brahms_lullaby', 'song_can_can',
+            'song_william_tell_overture', 'song_blue_danube'
         ])
+        labels = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.textContent)")
+        self.assertIn('Ode to Joy — Ludwig van Beethoven', labels)
+        self.assertIn('Jingle Bells — James Lord Pierpont', labels)
         snapshots = self.page.evaluate("""ids => ids.map((exerciseId) => {
           const select = document.querySelector('[data-testid="exercise-select"]');
           select.value = exerciseId;
@@ -1393,16 +1400,210 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 'songs': [{
                     'title': 'My Authorized Melody',
                     'attribution': 'User-provided authorization',
+                    'soundPresetId': 'subtractive::PWM Pad',
+                    'fxPresetId': 'retro-synth',
+                    'keyTonicPc': 2,
+                    'keyScaleId': 'ionian',
+                    'rootMidi': 50,
+                    'tempoBpm': 120,
+                    'durationsBeats': [1, 1, 1, 1, 1, 1, 1, 1],
                     'melody': [0, 2, 4, 7, 4, 2, 0, 0]
                 }]
             }).encode('utf-8')
         })
-        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent === 'My Authorized Melody')")
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent === 'My Authorized Melody — User-provided authorization')")
         self.assertIn('Loaded 1 authorized song', self.page.locator('[data-testid="song-library-status"]').inner_text())
-        self.page.select_option('[data-testid="exercise-select"]', label='My Authorized Melody')
-        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
-        self.assertEqual([event['targets'][0]['midi'] for event in events], [48, 50, 52, 55, 52, 50, 48, 48])
+        self.page.select_option('[data-testid="exercise-select"]', label='My Authorized Melody — User-provided authorization')
+        snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+        self.assertEqual(snapshot['soundPresetId'], 'subtractive::PWM Pad')
+        self.assertEqual(snapshot['fxPresetId'], 'retro-synth')
+        self.assertEqual(snapshot['tonicPc'], 2)
+        self.assertEqual(snapshot['scaleId'], 'ionian')
+        self.assertIn('Timbre: subtractive / Pads / PWM Pad · FX: Retro Synth', self.page.locator('[data-testid="practice-sound-profile"]').inner_text())
+        events = snapshot['exerciseEvents']
+        self.assertEqual([event['targets'][0]['midi'] for event in events], [50, 52, 54, 57, 54, 52, 50, 50])
         self.assertTrue(all(event['valid'] for event in events), events)
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        audition = self.page.locator('[data-testid="audition-song"]')
+        self.assertTrue(audition.is_visible())
+        audition.click()
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"step-readout\"]').textContent.startsWith('2 /')")
+
+    @unittest.skipUnless(
+        (ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json').exists(),
+        'local private song pack is not installed',
+    )
+    def test_local_private_new_wave_pack_renders_its_real_song_content(self):
+        """Acceptance coverage for the ignored personal pack, never a committed fixture."""
+        pack_path = ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json'
+        pack = json.loads(pack_path.read_text(encoding='utf-8'))
+        self.assertEqual(pack['format'], 'ssli-song-pack/v1')
+        self.assertGreaterEqual(len(pack['songs']), 4)
+        expected_profiles = {
+            # rootMidi is the physical Exquis pad address; rootCellId is the
+            # printed musical pad it resolves to. These are deliberately not
+            # conventional chromatic-MIDI equivalents.
+            'Take On Me': (9, 'ionian', 45, 'r5c0'),
+            'Just Can\u2019t Get Enough': (7, 'ionian', 55, 'r2c0'),
+            'Don\u2019t You (Forget About Me)': (4, 'ionian', 52, 'r3c0'),
+            'Everybody Wants to Rule the World': (2, 'ionian', 50, 'r4c2'),
+        }
+
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
+        self.page.wait_for_function(
+            "expected => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options)"
+            ".filter(option => option.textContent.includes('a-ha') || option.textContent.includes('Depeche Mode') || "
+            "option.textContent.includes('Simple Minds') || option.textContent.includes('Tears for Fears')).length >= expected",
+            arg=len(pack['songs']),
+        )
+
+        selector = self.page.locator('[data-testid="exercise-select"]')
+        for song in pack['songs']:
+            self.assertEqual(
+                (song.get('keyTonicPc'), song.get('keyScaleId'), song.get('rootMidi'), expected_profiles[song['title']][3]),
+                expected_profiles[song['title']],
+                song['title'],
+            )
+            option_value = selector.evaluate(
+                "(select, title) => Array.from(select.options).find(option => option.textContent.includes(title)).value",
+                song['title'],
+            )
+            self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+            snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+            self.assertEqual(len(snapshot['exerciseEvents']), len(song['melody']), song['title'])
+            self.assertTrue(all(event['valid'] for event in snapshot['exerciseEvents']), song['title'])
+            self.assertEqual(snapshot['tonicPc'], song['keyTonicPc'])
+            self.assertEqual(snapshot['scaleId'], song['keyScaleId'])
+            self.assertEqual(snapshot['rootCellId'], expected_profiles[song['title']][3])
+            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['midi'], song['rootMidi'] + song['melody'][0])
+            self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['pc'], (song['keyTonicPc'] + song['melody'][0]) % 12)
+            expected_scale_pcs = {(song['keyTonicPc'] + interval) % 12 for interval in (0, 2, 4, 5, 7, 9, 11)}
+            lit_pcs = self.page.locator('[data-testid="exquis-key"].hardware-lit').evaluate_all(
+                "keys => keys.map(key => Number(key.dataset.pc))"
+            )
+            self.assertTrue(lit_pcs, song['title'])
+            self.assertTrue(set(lit_pcs).issubset(expected_scale_pcs), (song['title'], lit_pcs, expected_scale_pcs))
+            self.assertEqual(snapshot['soundPresetId'], song['soundPresetId'])
+            self.assertEqual(snapshot['fxPresetId'], song['fxPresetId'])
+            self.assertTrue(self.page.locator('[data-testid="piano-roll-notation"]').is_visible())
+            self.assertTrue(self.page.locator('[data-testid="practice-piano-reference"]').is_visible())
+            if song.get('scoreMusicXml'):
+                self.page.wait_for_selector('[data-testid="full-score-svg"]')
+                self.assertTrue(self.page.locator('[data-testid="score-notation"]').is_visible())
+                self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
+                self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_visible())
+                self.assertEqual(self.page.locator('.full-score-pitch-color').count(), len(song['melody']))
+                self.assertIn('Measures ', self.page.locator('[data-testid="score-window-readout"]').inner_text())
+                input_surface = self.page.locator('[data-testid="full-score-event-control"]').first
+            else:
+                self.assertTrue(self.page.locator('[data-testid="staff-notation"]').is_visible())
+                self.assertFalse(self.page.locator('[data-testid="score-view-toggle"]').is_visible())
+                input_surface = self.page.locator('[data-testid="staff-event-control"].notation-active').first
+            step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
+            input_surface.dispatch_event('pointerdown')
+            self.page.wait_for_function(
+                "step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step",
+                arg=step_before,
+            )
+            self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
+            visual_name = ''.join(character if character.isalnum() else '-' for character in song['title'].lower()).strip('-')
+            visual_path = ROOT / '.tmp' / 'actual-private-song-visuals' / (visual_name + '-practice.png')
+            visual_path.parent.mkdir(parents=True, exist_ok=True)
+            self.page.screenshot(path=str(visual_path), full_page=True)
+
+    @unittest.skipUnless(
+        (ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json').exists(),
+        'local private song pack is not installed',
+    )
+    def test_local_everybody_wants_audition_uses_recording_tempo_not_import_grid_tempo(self):
+        pack_path = ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json'
+        pack = json.loads(pack_path.read_text(encoding='utf-8'))
+        song = next(song for song in pack['songs'] if song['title'] == 'Everybody Wants to Rule the World')
+        # The source MIDI stores a 170 BPM half-beat grid; the recording is
+        # practiced at 112 BPM, making each authored half beat ~268 ms.
+        self.assertEqual(song['tempoBpm'], 112)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
+        self.page.wait_for_function(
+            "() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options)"
+            ".some(option => option.textContent.includes('Everybody Wants to Rule the World'))"
+        )
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Everybody Wants to Rule the World')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        self.page.evaluate("""() => {
+          const readout = document.querySelector('[data-testid="step-readout"]');
+          window.__auditionTimeline = [];
+          let prior = readout.textContent;
+          new MutationObserver(() => {
+            if (readout.textContent !== prior) {
+              prior = readout.textContent;
+              window.__auditionTimeline.push({ step: prior, at: performance.now() });
+            }
+          }).observe(readout, { childList: true, characterData: true, subtree: true });
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        self.page.wait_for_function("() => window.__auditionTimeline.length >= 3", timeout=3000)
+        timeline = self.page.evaluate("() => window.__auditionTimeline.slice(0, 3)")
+        intervals = [timeline[index + 1]['at'] - timeline[index]['at'] for index in range(2)]
+        self.assertTrue(all(210 <= interval <= 340 for interval in intervals), intervals)
+
+    def test_song_pack_renders_a_complete_musicxml_score_with_the_vendor_engraver(self):
+        musicxml = '''<?xml version="1.0" encoding="UTF-8"?>
+        <score-partwise version="3.1"><part-list><score-part id="P1"><part-name>Melody</part-name></score-part></part-list>
+        <part id="P1"><measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+        <note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note><note><rest/><duration>1</duration><type>quarter</type></note><note><pitch><step>F</step><alter>1</alter><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note></measure>
+        <measure number="2"><note><pitch><step>G</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note></measure></part></score-partwise>'''
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'full-score.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': [{
+                'title': 'Full Score Fixture', 'artist': 'Test fixture',
+                'melody': [0, 2, 5, 7], 'scoreEventMap': [0, 1, None, 2, 3], 'scoreMusicXml': musicxml
+            }]}).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Full Score Fixture'))")
+        score_option_value = self.page.locator('[data-testid="exercise-select"]').evaluate("select => Array.from(select.options).find(option => option.textContent.includes('Full Score Fixture')).value")
+        self.page.select_option('[data-testid="exercise-select"]', value=score_option_value)
+        score = self.page.locator('[data-testid="score-notation"]')
+        self.assertTrue(score.is_visible())
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        self.assertGreater(self.page.locator('[data-testid="full-score-svg"] path').count(), 8)
+        self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
+        self.assertIn('Measures 1', self.page.locator('[data-testid="score-window-readout"]').inner_text())
+        visible_measures = self.page.locator('[data-testid="full-score-svg"] .vf-measure').evaluate_all(
+            "measures => measures.filter(measure => getComputedStyle(measure).display !== 'none').length"
+        )
+        self.assertLessEqual(visible_measures, 2)
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.wait_for_timeout(100)
+        layout = self.page.evaluate("""() => {
+          const box = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {
+            score: box('[data-testid="score-notation"]'),
+            roll: box('[data-testid="piano-roll-notation"]'),
+            device: box('[data-testid="exquis-device"]'),
+            surface: box('[data-testid="practice-surface"]')
+          };
+        }""")
+        self.assertLessEqual(layout['score']['x'] + layout['score']['width'], layout['device']['x'] + 1, layout)
+        self.assertGreaterEqual(layout['roll']['x'], layout['device']['x'] + layout['device']['width'] - 1, layout)
+        self.assertGreaterEqual(layout['device']['y'], layout['surface']['y'] - 1, layout)
+        self.assertLessEqual(layout['device']['y'] + layout['device']['height'], layout['surface']['y'] + layout['surface']['height'] + 1, layout)
+        self.page.locator('[data-testid="score-view-toggle"]').click()
+        self.page.wait_for_function("() => document.querySelector('[data-testid=\"score-window-readout\"]').textContent.includes('All ')")
+        self.assertEqual(
+            self.page.locator('[data-testid="full-score-svg"] .vf-measure').evaluate_all(
+                "measures => measures.filter(measure => getComputedStyle(measure).display !== 'none').length"
+            ),
+            self.page.locator('[data-testid="full-score-svg"] .vf-measure').count(),
+        )
+        step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
+        self.page.locator('[data-testid="full-score-event-control"]').first.dispatch_event('pointerdown')
+        self.page.wait_for_function("step => document.querySelector('[data-testid=\"step-readout\"]').textContent !== step", arg=step_before)
+        self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
 
     def test_regression_progressions_open_with_a_major_starter_lesson(self):
         self.page.select_option('[data-testid="scale-select"]', 'dorian')

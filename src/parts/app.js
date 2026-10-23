@@ -1122,6 +1122,7 @@
   var articulationQueue = [];
   var articulationFlushTimer = null;
   var pendingReleaseStrumCommits = [];
+  var songAuditionToken = 0;
   var articulationSequence = 0;
   var lastAppliedSsliPresetKey = '';
   var lastSsliExpressionPressure = null;
@@ -1217,6 +1218,13 @@
     mismatched: {}
   };
   var els = {};
+  // Full-score rendering deliberately has its own lifecycle. MusicXML is the
+  // notation authority; exercise events remain the Exquis input/scoring map.
+  // Do not infer beams, rests, voices, clefs, or accidentals in application code.
+  var scoreRenderer = null;
+  var scoreRendererXml = '';
+  var scoreRendererLoadToken = 0;
+  var scoreViewMode = 'follow';
   var workspaceHomes = {};
   var physicalPluckedOneShotSequence = 0;
 
@@ -1401,6 +1409,7 @@
       ssliActiveOscillators: getSsliActiveOscillatorCount(),
       lastAppliedSsliPresetKey: lastAppliedSsliPresetKey,
       soundPresetId: state.soundPresetId,
+      fxPresetId: state.fxPresetId,
       pendingReleaseStrumCommits: pendingReleaseStrumCommits.map(function(pending) {
         var event = pending && pending.event;
         return event ? {
@@ -1415,6 +1424,9 @@
       }).filter(Boolean),
       mode: state.mode,
       exerciseId: state.exerciseId,
+      tonicPc: state.tonicPc,
+      scaleId: state.scaleId,
+      rootCellId: state.rootCellId,
       currentPath: currentPath.map(function(cell, index) {
         return {
           index: index,
@@ -1650,9 +1662,9 @@
     if (songLesson) {
       return {
         id: songLesson.id,
-        name: songLesson.name,
+        name: songDisplayName(songLesson),
         family: 'songs',
-        prompt: songLesson.origin + ' public-domain melody · original Exquis study.'
+        prompt: songLesson.artist + ' public-domain melody · original Exquis study.'
       };
     }
     return EXERCISES[0];
@@ -4179,6 +4191,49 @@
     });
   }
 
+  function songEventDurationBeats(song, index) {
+    var durations = song && song.durationsBeats;
+    var beats = Array.isArray(durations) ? durations[index] : 0.5;
+    return typeof beats === 'number' && beats > 0 ? Math.min(8, beats) : 0.5;
+  }
+
+  // Song packs carry explicit beat lengths so audition uses musical timing,
+  // not the generic 420ms scale-preview loop. Keep the visual cursor moving
+  // with the phrase, then restore the learner's original target afterward.
+  function auditionSongMelody() {
+    var song = songLessonForId(state.exerciseId);
+    if (!song || !currentExerciseEvents.length) return;
+    var tempo = Math.max(40, Math.min(240, Number(song.tempoBpm) || 112));
+    var msPerBeat = 60000 / tempo;
+    var originalStep = state.step;
+    var token = ++songAuditionToken;
+    var offsetMs = 0;
+    if (els.auditionSong) {
+      els.auditionSong.disabled = true;
+      els.auditionSong.textContent = 'Auditioning…';
+    }
+    currentExerciseEvents.forEach(function(event, index) {
+      var beats = songEventDurationBeats(song, index);
+      var durationSeconds = Math.max(0.08, (beats * msPerBeat / 1000) * 0.88);
+      window.setTimeout(function() {
+        if (token !== songAuditionToken) return;
+        state.step = index;
+        render();
+        if (event && event.targets.length) playNote(event.targets[0].midi, durationSeconds);
+      }, offsetMs);
+      offsetMs += beats * msPerBeat;
+    });
+    window.setTimeout(function() {
+      if (token !== songAuditionToken) return;
+      state.step = originalStep;
+      if (els.auditionSong) {
+        els.auditionSong.disabled = false;
+        els.auditionSong.textContent = 'Audition melody';
+      }
+      render();
+    }, offsetMs + 40);
+  }
+
   function playTestTone() {
     playNote(60, 0.7, true);
   }
@@ -4331,6 +4386,12 @@
 
   function rootCandidates(cells) {
     var scale = getScale();
+    var song = songLessonForId(state.exerciseId);
+    // Songs can distinguish the musical key from the specific physical
+    // transposition anchor used for this Exquis arrangement.
+    if (song && typeof song.rootMidi === 'number') {
+      return cells.filter(function(cell) { return cell.midi === song.rootMidi; });
+    }
     var candidates = cells.filter(function(cell) {
       return cell.pc === state.tonicPc;
     });
@@ -4391,6 +4452,13 @@
     return roots[0];
   }
 
+  // Exquis uses an isomorphic pad lattice: its transmitted MIDI address is a
+  // physical control address, not a reliable spelling of the printed pad.
+  // User-facing root labels must therefore come from the pad's musical label.
+  function cellPitchLabel(cell) {
+    return (cell && cell.label ? cell.label : noteName(cell.midi)) + octave(cell.midi);
+  }
+
   function renderRootOptions(cells) {
     if (!els.root) return;
     var roots = rootCandidates(cells);
@@ -4398,7 +4466,7 @@
     for (var i = 0; i < roots.length; i++) {
       var option = document.createElement('option');
       option.value = roots[i].id;
-      option.textContent = noteName(roots[i].midi) + octave(roots[i].midi) + ' / r' + (roots[i].row + 1) + ' k' + (roots[i].col + 1);
+      option.textContent = cellPitchLabel(roots[i]) + ' / r' + (roots[i].row + 1) + ' k' + (roots[i].col + 1);
       els.root.appendChild(option);
     }
     if (roots.length) {
@@ -5166,13 +5234,79 @@
   // melodies. We deliberately ship no lyrics, recordings, or third-party
   // arrangements; see docs/songs-rights.md for provenance and scope.
   var SONG_LESSONS = [
-    { id: 'song_frere_jacques', name: 'Frere Jacques', origin: 'Traditional French', melody: [0, 2, 4, 0, 0, 2, 4, 0, 4, 5, 7, 4, 5, 7, 7, 9, 7, 5, 4, 0, 7, 9, 7, 5, 4, 0, 0, 7, 0, 0, 0, 7, 0, 0] },
-    { id: 'song_ode_to_joy', name: 'Ode to Joy', origin: 'Ludwig van Beethoven (1824)', melody: [4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 4, 2, 2, 4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 2, 0, 0] },
-    { id: 'song_auld_lang_syne', name: 'Auld Lang Syne', origin: 'Traditional Scottish', melody: [0, 5, 5, 5, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0, 0, 5, 5, 9, 12, 12, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0] },
-    { id: 'song_oh_susanna', name: 'Oh! Susanna', origin: 'Stephen Foster (1848)', melody: [0, 2, 4, 7, 7, 6, 4, 2, 0, 2, 4, 4, 4, 2, 2, 0, 2, 4, 7, 7, 6, 4, 2, 0] },
-    { id: 'song_simple_gifts', name: 'Simple Gifts', origin: 'Joseph Brackett (1848)', melody: [0, 4, 7, 4, 0, 4, 7, 9, 7, 4, 7, 9, 7, 4, 0, 2, 4, 2, 0] },
-    { id: 'song_greensleeves', name: 'Greensleeves', origin: 'Traditional English', melody: [9, 0, 2, 4, 5, 7, 9, 10, 7, 5, 2, 0, 9, 10, 7, 5, 4, 2, 0] }
+    { id: 'song_frere_jacques', name: 'Frere Jacques', artist: 'Traditional French', melody: [0, 2, 4, 0, 0, 2, 4, 0, 4, 5, 7, 4, 5, 7, 7, 9, 7, 5, 4, 0, 7, 9, 7, 5, 4, 0, 0, 7, 0, 0, 0, 7, 0, 0] },
+    { id: 'song_ode_to_joy', name: 'Ode to Joy', artist: 'Ludwig van Beethoven', melody: [4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 4, 2, 2, 4, 4, 5, 7, 7, 5, 4, 2, 0, 0, 2, 4, 2, 0, 0] },
+    { id: 'song_auld_lang_syne', name: 'Auld Lang Syne', artist: 'Traditional Scottish', melody: [0, 5, 5, 5, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0, 0, 5, 5, 9, 12, 12, 9, 7, 5, 7, 9, 7, 5, 2, 2, 0] },
+    { id: 'song_oh_susanna', name: 'Oh! Susanna', artist: 'Stephen Foster', melody: [0, 2, 4, 7, 7, 6, 4, 2, 0, 2, 4, 4, 4, 2, 2, 0, 2, 4, 7, 7, 6, 4, 2, 0] },
+    { id: 'song_simple_gifts', name: 'Simple Gifts', artist: 'Joseph Brackett', melody: [0, 4, 7, 4, 0, 4, 7, 9, 7, 4, 7, 9, 7, 4, 0, 2, 4, 2, 0] },
+    { id: 'song_greensleeves', name: 'Greensleeves', artist: 'Traditional English', melody: [9, 0, 2, 4, 5, 7, 9, 10, 7, 5, 2, 0, 9, 10, 7, 5, 4, 2, 0] },
+    { id: 'song_twinkle_twinkle', name: 'Twinkle, Twinkle, Little Star', artist: 'Traditional French', melody: [0, 0, 7, 7, 9, 9, 7, 5, 5, 4, 4, 2, 2, 0, 7, 7, 5, 5, 4, 4, 2, 7, 7, 5, 5, 4, 4, 2, 0, 0, 7, 7, 9, 9, 7, 5, 5, 4, 4, 2, 2, 0] },
+    { id: 'song_mary_had_a_little_lamb', name: 'Mary Had a Little Lamb', artist: 'Sarah Josepha Hale / Lowell Mason', melody: [4, 2, 0, 2, 4, 4, 4, 2, 2, 2, 4, 7, 7, 4, 2, 0, 2, 4, 4, 4, 4, 2, 2, 4, 2, 0] },
+    { id: 'song_london_bridge', name: 'London Bridge Is Falling Down', artist: 'Traditional English', melody: [7, 9, 7, 5, 4, 5, 7, 2, 4, 5, 4, 5, 7, 7, 9, 7, 5, 4, 5, 7, 2, 7, 5, 4, 5, 7] },
+    { id: 'song_row_row_row_your_boat', name: 'Row, Row, Row Your Boat', artist: 'Traditional American', melody: [0, 0, 0, 2, 4, 4, 2, 4, 5, 7, 12, 12, 12, 7, 7, 7, 4, 4, 4, 2, 2, 2, 0, 0, 0] },
+    { id: 'song_amazing_grace', name: 'Amazing Grace', artist: 'John Newton / Traditional hymn tune', melody: [0, 5, 9, 5, 9, 7, 5, 2, 0, 5, 9, 5, 9, 7, 12, 9, 12, 9, 5, 0, 5, 9, 5, 9, 7, 5, 2, 0] },
+    { id: 'song_yankee_doodle', name: 'Yankee Doodle', artist: 'Traditional American', melody: [0, 0, 2, 4, 0, 4, 2, 0, 7, 7, 9, 7, 5, 4, 2, 0, 0, 2, 4, 0, 4, 2, 0, 7, 7, 9, 7, 5, 4, 2, 0] },
+    { id: 'song_jingle_bells', name: 'Jingle Bells', artist: 'James Lord Pierpont', melody: [4, 4, 4, 4, 4, 4, 4, 7, 0, 2, 4, 5, 5, 5, 5, 5, 4, 4, 4, 2, 2, 4, 2, 7] },
+    { id: 'song_brahms_lullaby', name: 'Brahms Lullaby', artist: 'Johannes Brahms', melody: [7, 7, 10, 7, 7, 10, 7, 10, 12, 11, 9, 9, 7, 5, 5, 4, 4, 2, 2, 0, 2, 4, 5, 7, 7, 5, 5, 4, 4, 2, 2, 0] },
+    { id: 'song_can_can', name: 'Can-Can', artist: 'Jacques Offenbach', melody: [0, 4, 7, 12, 7, 4, 0, 4, 7, 12, 7, 4, 0, 4, 7, 9, 7, 5, 4, 2, 0, 2, 4, 5, 7] },
+    { id: 'song_william_tell_overture', name: 'William Tell Overture', artist: 'Gioachino Rossini', melody: [4, 4, 4, 5, 7, 4, 7, 4, 0, 2, 4, 5, 7, 7, 7, 5, 4, 2, 0] },
+    { id: 'song_blue_danube', name: 'The Blue Danube', artist: 'Johann Strauss II', melody: [7, 9, 12, 14, 12, 9, 7, 5, 7, 9, 12, 14, 12, 9, 7, 5, 4, 5, 7, 9, 7, 5, 4, 2, 0] }
   ];
+
+  function songDisplayName(song) {
+    return song.name + ' — ' + song.artist;
+  }
+
+  // Song packs may nominate an SSLI timbre and FX chain, but those defaults are
+  // applied only while that song is selected. This keeps a player's manual
+  // sound-design choice intact for every other practice family.
+  function applySelectedSongSoundProfile() {
+    var song = songLessonForId(state.exerciseId);
+    if (!song || !song.soundPresetId) return false;
+    var soundOptions = getSoundPresetOptions();
+    var hasSound = soundOptions.some(function(option) { return option.id === song.soundPresetId; });
+    if (!hasSound) return false;
+    state.soundPresetId = song.soundPresetId;
+    syncSoundSelectorsFromPreset();
+    if (song.fxPresetId) {
+      var hasFx = getFxPresetOptions().some(function(option) { return option.id === song.fxPresetId; });
+      if (hasFx) {
+        state.fxPresetId = song.fxPresetId;
+        state.fxDirty = true;
+        syncFxSelectorsFromPreset();
+      }
+    }
+    invalidateSsliPresetCache();
+    return true;
+  }
+
+  // A song owns its musical context. Do this before its exercise events are
+  // constructed so root-relative melody offsets, UI key labels, hardware sync,
+  // staff colors, and the score all agree on the same tonic and mode.
+  function applySelectedSongMusicalProfile() {
+    var song = songLessonForId(state.exerciseId);
+    if (!song) return false;
+    scoreViewMode = 'follow';
+    var changed = false;
+    if (typeof song.keyTonicPc === 'number' && song.keyTonicPc !== state.tonicPc) {
+      state.tonicPc = song.keyTonicPc;
+      changed = true;
+    }
+    if (song.keyScaleId && SSLI_MODES[song.keyScaleId] && song.keyScaleId !== state.scaleId) {
+      state.scaleId = song.keyScaleId;
+      changed = true;
+    }
+    state.rootCellId = '';
+    if (typeof song.rootMidi === 'number') {
+      var cells = makeGrid();
+      var root = cells.filter(function(cell) { return cell.midi === song.rootMidi; })[0] || null;
+      if (root) {
+        state.rootCellId = root.id;
+        changed = true;
+      }
+    }
+    return changed;
+  }
 
   function repertoireLessonForId(id) {
     for (var i = 0; i < REPERTOIRE_LESSONS.length; i++) {
@@ -5194,13 +5328,29 @@
   }
 
   function validateSongPackSong(song, sourceName) {
+    if (song && typeof song.scoreMusicXml !== 'undefined' && (typeof song.scoreMusicXml !== 'string' || song.scoreMusicXml.indexOf('<score-') < 0)) throw new Error(sourceName + ': ' + song.title + ' scoreMusicXml must be a MusicXML score document');
+    if (song && typeof song.scoreEventMap !== 'undefined' && (!Array.isArray(song.scoreEventMap) || !song.scoreEventMap.every(function(index) { return index === null || (typeof index === 'number' && index >= 0 && Math.floor(index) === index); }))) throw new Error(sourceName + ': ' + song.title + ' scoreEventMap must contain note indexes or null rests');
+    if (song && typeof song.keyTonicPc !== 'undefined' && (!Number.isInteger(song.keyTonicPc) || song.keyTonicPc < 0 || song.keyTonicPc > 11)) throw new Error(sourceName + ': ' + song.title + ' keyTonicPc must be 0 through 11');
+    if (song && typeof song.keyScaleId !== 'undefined' && (typeof song.keyScaleId !== 'string' || !SSLI_MODES[song.keyScaleId])) throw new Error(sourceName + ': ' + song.title + ' keyScaleId is not a supported SSLI scale/mode');
+    if (song && typeof song.rootMidi !== 'undefined' && (!Number.isInteger(song.rootMidi) || song.rootMidi < 0 || song.rootMidi > 127)) throw new Error(sourceName + ': ' + song.title + ' rootMidi must be a MIDI note from 0 through 127');
     if (!song || typeof song.title !== 'string' || !song.title.trim()) throw new Error(sourceName + ': each song needs a title');
     if (!Array.isArray(song.melody) || song.melody.length < 4 || !song.melody.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; })) throw new Error(sourceName + ': ' + song.title + ' needs 4–24-semitone melody offsets');
     return {
       id: 'loaded_song_' + sourceName.replace(/[^a-z0-9]+/gi, '_').toLowerCase() + '_' + song.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase(),
       name: song.title.trim(),
-      origin: typeof song.attribution === 'string' && song.attribution.trim() ? song.attribution.trim() : 'User-authorized local song pack',
-      melody: song.melody.slice()
+      artist: typeof song.artist === 'string' && song.artist.trim() ? song.artist.trim() : (typeof song.attribution === 'string' && song.attribution.trim() ? song.attribution.trim() : 'User-authorized local song pack'),
+      melody: song.melody.slice(),
+      soundPresetId: typeof song.soundPresetId === 'string' ? song.soundPresetId : '',
+      fxPresetId: typeof song.fxPresetId === 'string' ? song.fxPresetId : '',
+      tempoBpm: typeof song.tempoBpm === 'number' ? song.tempoBpm : 112,
+      durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : [],
+      // Full score source; OSMD handles the actual engraving from this standard.
+      scoreMusicXml: typeof song.scoreMusicXml === 'string' ? song.scoreMusicXml : '',
+      // Optional SVG note-order map for score rests and non-played score parts.
+      scoreEventMap: Array.isArray(song.scoreEventMap) ? song.scoreEventMap.slice() : [],
+      keyTonicPc: typeof song.keyTonicPc === 'number' ? song.keyTonicPc : null,
+      keyScaleId: typeof song.keyScaleId === 'string' ? song.keyScaleId : '',
+      rootMidi: typeof song.rootMidi === 'number' ? song.rootMidi : null
     };
   }
 
@@ -5609,7 +5759,7 @@
       if (!target || target.midi !== targetMidi) return [];
       events.push(createNoteExerciseEvent({
         id: song.id + ':phrase-note:' + index,
-        musicalIntent: { type: 'song-melody', songId: song.id, title: song.name, origin: song.origin },
+        musicalIntent: { type: 'song-melody', songId: song.id, title: song.name, artist: song.artist },
         cellId: cellKey(target),
         midi: target.midi,
         sourceCell: clonePathCell(target),
@@ -6041,6 +6191,153 @@
     container.setAttribute('aria-label', label);
   }
 
+  function clearFullScoreNotation() {
+    scoreRendererLoadToken += 1;
+    scoreRenderer = null;
+    scoreRendererXml = '';
+    if (!els.scoreNotation) return;
+    clearChildren(els.scoreNotation);
+    els.scoreNotation.hidden = true;
+    if (els.staffNotation) els.staffNotation.hidden = false;
+    if (els.scoreWindowControls) els.scoreWindowControls.hidden = true;
+  }
+
+  function updateScoreMeasureWindow(svg) {
+    if (!svg) return;
+    var measures = Array.prototype.slice.call(svg.querySelectorAll('.vf-measure'));
+    if (!measures.length) return;
+    var originalViewBox = svg.dataset.fullScoreViewBox || svg.getAttribute('viewBox') || '';
+    if (!svg.dataset.fullScoreViewBox) svg.dataset.fullScoreViewBox = originalViewBox;
+    var activeNote = svg.querySelector('.full-score-active-note');
+    var activeMeasure = activeNote && activeNote.closest ? activeNote.closest('.vf-measure') : null;
+    var currentIndex = Math.max(0, measures.indexOf(activeMeasure));
+    var nextIndex = Math.min(measures.length - 1, currentIndex + 1);
+    // OSMD may place measures on several SVG systems. Cropping the SVG's
+    // viewBox alone is insufficient because off-window systems can remain
+    // visible in browsers with SVG overflow. Keep exactly current + next in
+    // follow mode; the explicit Full score control restores every measure.
+    measures.forEach(function(measure, index) {
+      measure.style.display = scoreViewMode === 'full' || index === currentIndex || index === nextIndex ? '' : 'none';
+    });
+    // Measure numbers are sibling VexFlow groups rather than descendants of
+    // `.vf-measure`, so hide their off-window labels explicitly as well.
+    Array.prototype.forEach.call(svg.querySelectorAll('.vf-measure-number'), function(number, index) {
+      number.style.display = scoreViewMode === 'full' || index === currentIndex || index === nextIndex ? '' : 'none';
+    });
+    if (scoreViewMode === 'full') {
+      svg.setAttribute('viewBox', svg.dataset.fullScoreViewBox);
+    } else {
+      var currentBox = measures[currentIndex].getBBox();
+      var nextBox = measures[nextIndex].getBBox();
+      var left = Math.min(currentBox.x, nextBox.x) - 30;
+      var right = Math.max(currentBox.x + currentBox.width, nextBox.x + nextBox.width) + 30;
+      // Crop tightly to the staff systems. Title/composer are already present
+      // in the practice header and would otherwise intrude into this focused
+      // measure viewport from the full OSMD page above the staves.
+      var top = Math.min(currentBox.y, nextBox.y) - 12;
+      var bottom = Math.max(currentBox.y + currentBox.height, nextBox.y + nextBox.height) + 30;
+      svg.setAttribute('viewBox', [left, top, Math.max(1, right - left), Math.max(1, bottom - top)].join(' '));
+    }
+    if (els.scoreWindowControls) els.scoreWindowControls.hidden = false;
+    if (els.scoreViewToggle) els.scoreViewToggle.textContent = scoreViewMode === 'full' ? 'Follow measures' : 'Full score';
+    if (els.scoreWindowReadout) els.scoreWindowReadout.textContent = scoreViewMode === 'full'
+      ? 'All ' + String(measures.length) + ' measures'
+      : 'Measures ' + String(currentIndex + 1) + (nextIndex > currentIndex ? '–' + String(nextIndex + 1) : '') + ' of ' + String(measures.length);
+  }
+
+  function paintFullScoreWhenVisible(song, projection, token) {
+    window.requestAnimationFrame(function() {
+      if (!scoreRenderer || token !== scoreRendererLoadToken || !els.scoreNotation || els.scoreNotation.hidden) return;
+      // Song selection can occur in Setup, where the practice surface is not
+      // measurable yet. Engrave on the next frame as well, after its rail is
+      // visible, so OSMD receives an actual score width rather than zero.
+      scoreRenderer.render();
+      // OSMD's cursor follows the score's own timestamps/voices. It is a
+      // position marker, not a second handcrafted note renderer.
+      if (scoreRenderer.cursor) {
+        scoreRenderer.cursor.reset();
+        scoreRenderer.cursor.show();
+        for (var cursorStep = 0; cursorStep < state.step; cursorStep++) scoreRenderer.cursor.next();
+      }
+      var svg = els.scoreNotation.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('data-testid', 'full-score-svg');
+        svg.setAttribute('aria-label', songDisplayName(song) + ', complete engraved score');
+        // A score pack's player part is its first MusicXML part and its note
+        // order matches `melody`.  Bind its engraved VexFlow groups to the
+        // identical Exquis UI path used by the keyboard, roll and legacy staff.
+        // This keeps notation as an input surface without replacing OSMD's
+        // layout, glyph choice, or score semantics.
+        var engravedNotes = svg.querySelectorAll('.vf-stavenote');
+        projection.events.forEach(function(event, index) {
+          var renderedIndex = song.scoreEventMap && song.scoreEventMap.length ? song.scoreEventMap.indexOf(index) : index;
+          var engravedNote = engravedNotes[renderedIndex];
+          if (!engravedNote || !event.midis || !event.midis.length) return;
+          engravedNote.setAttribute('data-testid', 'full-score-event-control');
+          engravedNote.classList.add('full-score-pitch-color');
+          engravedNote.style.setProperty('--score-pitch-color', 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 66% 46%)');
+          if (event.active) engravedNote.classList.add('full-score-active-note');
+          bindAlternativeSurfaceInput(engravedNote, event.midis, 'Play score step ' + String(index + 1));
+        });
+        updateScoreMeasureWindow(svg);
+      }
+      els.scoreNotation.querySelectorAll('.osmd-cursor').forEach(function(cursor) {
+        cursor.setAttribute('data-testid', 'full-score-cursor');
+        cursor.style.fill = '#f6c65b';
+        cursor.style.stroke = '#fff1a8';
+      });
+      els.scoreNotation.setAttribute('aria-label', songDisplayName(song) + ', complete engraved score; practice step ' + String(state.step + 1) + ' of ' + String(projection.events.length));
+    });
+  }
+
+  // OpenSheetMusicDisplay is intentionally responsible for the visible score.
+  // It consumes MusicXML (the standard score interchange format) and handles
+  // conventional clefs, rests, voices, measure layout, beams, accidentals and
+  // multi-staff systems. The local MIDI/Exquis adapter never re-engraves them.
+  function renderFullScoreNotation(song, projection) {
+    var container = els.scoreNotation;
+    if (!container || !song || !song.scoreMusicXml) return false;
+    var OSMD = window.opensheetmusicdisplay && window.opensheetmusicdisplay.OpenSheetMusicDisplay;
+    if (!OSMD) {
+      clearChildren(container);
+      container.hidden = false;
+      container.textContent = 'Full score renderer unavailable.';
+      if (els.staffNotation) els.staffNotation.hidden = true;
+      return true;
+    }
+    container.hidden = false;
+    if (els.staffNotation) els.staffNotation.hidden = true;
+    var xml = song.scoreMusicXml;
+    if (scoreRenderer && scoreRendererXml === xml) {
+      paintFullScoreWhenVisible(song, projection, scoreRendererLoadToken);
+      return true;
+    }
+    var token = ++scoreRendererLoadToken;
+    scoreRendererXml = xml;
+    clearChildren(container);
+    scoreRenderer = new OSMD(container, {
+      backend: 'svg',
+      autoResize: true,
+      // Product chrome owns title/credit/part labels. Suppress page furniture
+      // so the follow-measure viewport contains only readable notation.
+      drawTitle: false,
+      drawSubtitle: false,
+      drawComposer: false,
+      drawPartNames: false,
+      drawingParameters: 'compacttight'
+    });
+    scoreRenderer.load(xml).then(function() {
+      if (token !== scoreRendererLoadToken) return;
+      paintFullScoreWhenVisible(song, projection, token);
+    }).catch(function(error) {
+      if (token !== scoreRendererLoadToken) return;
+      clearChildren(container);
+      container.textContent = 'Could not engrave this MusicXML score: ' + (error && error.message ? error.message : 'unknown error');
+      logEvent('song-score', 'MusicXML engraving failed: ' + (error && error.message ? error.message : error));
+    });
+    return true;
+  }
+
   function renderStaffNotation(projection) {
     var container = els.staffNotation;
     if (!container) return;
@@ -6174,19 +6471,28 @@
   function renderPracticeNotation(events, currentEvent, isPracticeMode) {
     if (!els.practiceNotation) return;
     els.practiceNotation.hidden = !isPracticeMode;
-    if (!isPracticeMode) return;
+    if (!isPracticeMode) {
+      if (els.practiceSurface) els.practiceSurface.classList.remove('full-score-active');
+      return;
+    }
     var projection = buildNotationProjection(events, currentEvent);
     els.notationConcealed.hidden = !projection.concealed;
     if (els.notationStaffRail) els.notationStaffRail.classList.toggle('notation-concealed-rail', projection.concealed);
     if (els.notationRollRail) els.notationRollRail.hidden = projection.concealed;
     if (projection.concealed) {
+      clearFullScoreNotation();
       clearStaffNotation(els.staffNotation, 'Staff notation is concealed until the ear-training answer');
       clearNotationSvg(els.pianoRollNotation, 'Piano roll is concealed until the ear-training answer');
       if (els.notationStepLabel) els.notationStepLabel.textContent = 'Listen, then answer';
       if (els.notationHarmony) els.notationHarmony.textContent = 'Ear training keeps answer pitches hidden.';
       return;
     }
-    renderStaffNotation(projection);
+    var activeSong = state.exerciseFamily === 'songs' ? songLessonForId(state.exerciseId) : null;
+    if (els.practiceSurface) els.practiceSurface.classList.toggle('full-score-active', !!(activeSong && activeSong.scoreMusicXml));
+    if (!renderFullScoreNotation(activeSong, projection)) {
+      clearFullScoreNotation();
+      renderStaffNotation(projection);
+    }
     renderPianoRollNotation(projection);
     if (els.notationStepLabel) els.notationStepLabel.textContent = 'Step ' + String(state.step + 1) + ' of ' + String(events.length);
     if (els.notationHarmony) {
@@ -7562,9 +7868,9 @@
       return allSongLessons().map(function(song) {
         return {
           id: song.id,
-          name: song.name,
+          name: songDisplayName(song),
           family: 'songs',
-          prompt: song.origin + ' public-domain melody · original Exquis study.'
+          prompt: song.artist + ' public-domain melody · original Exquis study.'
         };
       });
     }
@@ -7995,6 +8301,16 @@
     els.subtitle.textContent = isPracticeMode
       ? 'Practice: ' + (state.hand === 'right' ? 'Right' : 'Left') + ' hand: ' + strategy.name + ' / ' + exercise.name
       : 'Play: full Exquis surface / MIDI and audio live';
+    if (els.practiceSoundProfile) {
+      var activeSong = songPractice ? songLessonForId(state.exerciseId) : null;
+      var activeSound = getCurrentSoundPreset();
+      var activeFx = getCurrentFxPreset();
+      els.practiceSoundProfile.hidden = !activeSong;
+      if (activeSong && activeSound && activeFx) {
+        var activeRoot = selectedRoot(makeGrid());
+        els.practiceSoundProfile.textContent = 'Timbre: ' + activeSound.label + ' · FX: ' + activeFx.label + ' · Key: ' + getTonicName() + ' ' + getScale().name + (activeRoot ? ' · Root: ' + cellPitchLabel(activeRoot) : '');
+      }
+    }
     if (els.handButtons) {
       var handChoiceButtons = els.handButtons.querySelectorAll('button[data-value]');
       for (var hb = 0; hb < handChoiceButtons.length; hb++) {
@@ -8052,6 +8368,10 @@
     }
     if (els.exerciseFamily) els.exerciseFamily.value = state.exerciseFamily;
     if (els.practiceTitle) els.practiceTitle.textContent = songPractice ? 'Songbook' : (repertoirePractice ? 'Repertoire lab' : (progressionPractice ? 'Progression lab' : 'Scale map'));
+    if (els.auditionSong) {
+      els.auditionSong.hidden = !songPractice;
+      if (!els.auditionSong.disabled) els.auditionSong.textContent = 'Audition melody';
+    }
     if (els.exerciseLegend) els.exerciseLegend.textContent = songPractice ? 'Public-domain song' : (repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise'));
     if (els.practiceWorkflowControls) {
       els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
@@ -8231,6 +8551,12 @@
       render();
       syncExquisKeyModeFromUiChange();
     });
+    if (els.scoreViewToggle) {
+      els.scoreViewToggle.addEventListener('click', function() {
+        scoreViewMode = scoreViewMode === 'full' ? 'follow' : 'full';
+        render();
+      });
+    }
     els.root.addEventListener('change', function() {
       state.rootCellId = els.root.value;
       state.step = 0;
@@ -8302,6 +8628,8 @@
         state.exerciseId = button.dataset.value;
         els.exercise.value = state.exerciseId;
         applyCanonicalProgressionScale();
+        applySelectedSongMusicalProfile();
+        applySelectedSongSoundProfile();
         state.step = 0;
         render();
         if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
@@ -8311,8 +8639,15 @@
       state.exerciseId = els.exercise.value;
       state.exerciseFamily = exerciseFamilyForId(state.exerciseId);
       applyCanonicalProgressionScale();
+      applySelectedSongMusicalProfile();
+      applySelectedSongSoundProfile();
       state.step = 0;
       render();
+      if (songLessonForId(state.exerciseId)) {
+        applySelectedSsliPreset();
+        applySelectedSsliFxChain();
+        if (audioCtx) rebuildFxBus(audioCtx);
+      }
       if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
     });
     if (els.exerciseFamily) {
@@ -8520,6 +8855,7 @@
       syncExquisPracticePadFrame();
     });
     els.playStep.addEventListener('click', playCurrent);
+    if (els.auditionSong) els.auditionSong.addEventListener('click', auditionSongMelody);
     if (els.dashboardHearTarget) els.dashboardHearTarget.addEventListener('click', playCurrent);
     if (els.dashboardOpenSetup) els.dashboardOpenSetup.addEventListener('click', function() {
       setWorkspace('setup');
@@ -8714,14 +9050,19 @@
       exquisDevice: document.getElementById('exquisDevice'),
       keyboard: document.getElementById('keyboard'),
       practicePathStrip: document.getElementById('practicePathStrip'),
+      practiceSurface: document.querySelector('[data-testid="practice-surface"]'),
       practicePianoReference: document.getElementById('practicePianoReference'),
       practiceNotation: document.getElementById('practiceNotation'),
       notationStepLabel: document.getElementById('notationStepLabel'),
       notationHarmony: document.getElementById('notationHarmony'),
+      scoreWindowControls: document.getElementById('scoreWindowControls'),
+      scoreViewToggle: document.getElementById('scoreViewToggle'),
+      scoreWindowReadout: document.getElementById('scoreWindowReadout'),
       notationConcealed: document.getElementById('notationConcealed'),
       notationStaffRail: document.getElementById('notationStaffRail'),
       notationRollRail: document.getElementById('notationRollRail'),
       staffNotation: document.getElementById('staffNotation'),
+      scoreNotation: document.getElementById('scoreNotation'),
       pianoRollNotation: document.getElementById('pianoRollNotation'),
       edgeTopControls: document.getElementById('edgeTopControls'),
       edgeBottomControls: document.getElementById('edgeBottomControls'),
@@ -8734,6 +9075,7 @@
       dashboardOpenSetup: document.getElementById('dashboardOpenSetup'),
       title: document.getElementById('stateTitle'),
       subtitle: document.getElementById('stateSubtitle'),
+      practiceSoundProfile: document.getElementById('practiceSoundProfile'),
       fingerRule: document.getElementById('fingerRule'),
       targetFinger: document.getElementById('targetFinger'),
       targetStep: document.getElementById('targetStep'),
@@ -8752,6 +9094,7 @@
       next: document.getElementById('nextStep'),
       prev: document.getElementById('prevStep'),
       playStep: document.getElementById('playStep'),
+      auditionSong: document.getElementById('auditionSong'),
       testAudio: document.getElementById('testAudio'),
       playScale: document.getElementById('playScale'),
       audioStatus: document.getElementById('audioStatus'),

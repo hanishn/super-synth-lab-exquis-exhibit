@@ -1393,6 +1393,12 @@ input[type="range"]:focus-visible {
   color: var(--muted);
 }
 
+.stage-header .practice-sound-profile {
+  color: var(--accent);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
 .stepper {
   display: grid;
   grid-template-columns: 68px 70px 68px 68px;
@@ -3189,16 +3195,64 @@ input[type="range"]:focus-visible {
 
 .notation-heading p { margin: 0; }
 
+.score-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  position: relative;
+  z-index: 6;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+/* `display:flex` above otherwise wins over the semantic hidden attribute. */
+.score-window-controls[hidden] { display: none !important; }
+
+.score-window-controls button {
+  padding: 4px 7px;
+  font-size: 10px;
+}
+
 #notationStepLabel { color: #fff1a8; font-weight: 800; line-height: 1.15; }
 
 .notation-harmony { color: var(--muted); font-size: 11px; }
 
 .notation-rail svg,
-.staff-notation {
+.staff-notation,
+.score-notation {
   width: 100%;
   height: 100%;
   min-height: 0;
   overflow: visible;
+}
+
+.score-notation {
+  /* The follow view narrows the OSMD SVG viewBox. Keep off-window systems
+     inside that viewport rather than letting them bleed through the rail. */
+  overflow: hidden;
+  border-radius: 4px;
+  background: #f8f5ea;
+}
+
+.score-notation svg {
+  display: block;
+  min-width: 100%;
+  background: #f8f5ea;
+  overflow: hidden;
+}
+
+.score-notation .full-score-pitch-color path,
+.score-notation .full-score-pitch-color text {
+  fill: var(--score-pitch-color) !important;
+  stroke: var(--score-pitch-color) !important;
+}
+
+.score-notation .full-score-active-note path,
+.score-notation .full-score-active-note text {
+  fill: #d26a1d !important;
+  stroke: #8f390c !important;
+  stroke-width: 1.35px !important;
+  filter: drop-shadow(0 0 2px rgba(255, 214, 96, 0.95));
 }
 
 .notation-rail-heading { margin-bottom: 2px; }
@@ -3258,7 +3312,7 @@ input[type="range"]:focus-visible {
 
 @media (min-width: 1260px) {
   .app-shell[data-workspace="practice"] .practice-surface {
-    grid-template-columns: clamp(230px, 18vw, 300px) minmax(700px, 1fr) clamp(230px, 18vw, 300px);
+    grid-template-columns: clamp(260px, 21vw, 330px) minmax(640px, 1fr) clamp(250px, 20vw, 320px);
     grid-template-rows: minmax(0, 1fr);
     gap: 10px;
   }
@@ -3295,6 +3349,13 @@ input[type="range"]:focus-visible {
 
   .app-shell[data-workspace="practice"] .notation-rail svg,
   .app-shell[data-workspace="practice"] .staff-notation {
+    height: min(62vh, 440px);
+  }
+
+  /* In score mode the current-and-next-measure viewport stays in the left
+     rail. The physical Exquis remains centered and the roll stays right; no
+     notation is allowed to consume or cover the play surface. */
+  .app-shell[data-workspace="practice"] .practice-surface.full-score-active .score-notation {
     height: min(62vh, 440px);
   }
 }

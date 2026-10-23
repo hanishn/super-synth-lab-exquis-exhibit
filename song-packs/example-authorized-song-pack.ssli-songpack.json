@@ -3,8 +3,17 @@
   "songs": [
     {
       "title": "My authorized melody",
+      "artist": "Composer, performer, or traditional source",
       "attribution": "Source, license, and/or your own authorship record",
-      "melody": [0, 2, 4, 7, 4, 2, 0, 0]
+      "soundPresetId": "subtractive::Warm Pad",
+      "fxPresetId": "clean-shimmer",
+      "keyTonicPc": 0,
+      "keyScaleId": "ionian",
+      "rootMidi": 48,
+      "tempoBpm": 112,
+      "durationsBeats": [0.5, 0.5, 1, 0.5, 1, 1],
+      "melody": [0, 2, 4, 7, 4, 2, 0, 0],
+      "scoreMusicXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><score-partwise version=\"3.1\"><work><work-title>My authorized melody</work-title></work><identification><creator type=\"composer\">Composer, performer, or traditional source</creator></identification><part-list><score-part id=\"P1\"><part-name>Melody</part-name></score-part></part-list><part id=\"P1\"><measure number=\"1\"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>F</sign><line>4</line></clef></attributes><note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>D</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>E</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>G</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note></measure><measure number=\"2\"><note><pitch><step>E</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>D</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note><note><pitch><step>C</step><octave>3</octave></pitch><duration>1</duration><type>quarter</type></note></measure></part></score-partwise>"
     }
   ]
 }

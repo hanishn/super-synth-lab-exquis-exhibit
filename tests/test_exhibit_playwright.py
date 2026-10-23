@@ -2888,6 +2888,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(roll.is_visible())
         active_before = self.page.locator('[data-testid="piano-roll-note"].notation-active')
         sequence_before = self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.getAttribute('data-event-index'))")
+        colors_before = self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.style.getPropertyValue('--roll-note-color'))")
         self.assertEqual(active_before.count(), 1)
         before_index = active_before.get_attribute('data-event-index')
         before_midi = active_before.get_attribute('data-midi')
@@ -2900,6 +2901,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.getAttribute('data-event-index'))"),
             sequence_before,
             'advancing flashes a different event without rotating the full phrase'
+        )
+        self.assertEqual(
+            self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.style.getPropertyValue('--roll-note-color'))"),
+            colors_before,
+            'completed notes retain their pitch colors'
         )
         self.assertEqual(self.page.locator('[data-testid="staff-note"].notation-active').count(), 1)
         self.page.select_option('[data-testid="exercise-family-select"]', 'ear')

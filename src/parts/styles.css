@@ -3205,13 +3205,13 @@ input[type="range"]:focus-visible {
 .staff-note.notation-completed { fill: #62d2a2; }
 .staff-note-label, .roll-note-label { fill: #dce4ec; font: 10px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
 .roll-note { fill: var(--roll-note-color, rgba(139, 168, 199, 0.82)); stroke: rgba(9, 15, 21, 0.95); stroke-width: 1; }
-.roll-note.notation-active { stroke: #fff5c6; stroke-width: 2.5; }
-.roll-note.notation-completed { fill: #62d2a2; }
+.roll-note.notation-active { stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 7px #fff1a8); }
+.roll-note.notation-completed { opacity: 0.66; }
 .roll-column-active { fill: rgba(255, 209, 102, 0.18); }
 
 @keyframes notation-current-pulse {
-  0%, 100% { opacity: 1; filter: brightness(1); }
-  50% { opacity: 0.46; filter: brightness(1.7); }
+  0%, 100% { opacity: 1; filter: brightness(1) drop-shadow(0 0 2px #fff1a8); }
+  50% { opacity: 1; filter: brightness(1.7) drop-shadow(0 0 9px #fff1a8); }
 }
 
 .notation-active { animation: notation-current-pulse 780ms ease-in-out infinite; }
@@ -3308,6 +3308,16 @@ input[type="range"]:focus-visible {
   fill: var(--staff-note-color) !important;
   stroke: var(--staff-note-color) !important;
 }
+
+.staff-notation svg .vf-stavenote.notation-active path,
+.staff-notation svg .vf-stavenote.notation-active .vf-notehead,
+.staff-notation svg .vf-stavenote.notation-active .vf-notehead path,
+.staff-notation svg .vf-stavenote.notation-active .vf-stem {
+  stroke: #fff5c6 !important;
+  stroke-width: 3px !important;
+}
+
+.staff-notation svg .vf-stavenote.notation-completed { opacity: 0.66; }
 
 .staff-notation svg .vf-notehead path[fill="#ffd166"],
 .staff-notation svg .vf-notehead[fill="#ffd166"] { fill: #ffd166 !important; stroke: #ffd166 !important; }

@@ -5654,10 +5654,11 @@
       note.setStyle({ fillStyle: note._notationColor, strokeStyle: note._notationColor });
       return note;
     });
-    // A wide lesson strip earns one phrase-wide stave; narrow side rails split
-    // at four steps so neither form degenerates into a row of tiny symbols.
-    var notesPerSystem = width >= 480 ? 8 : 4;
-    var systemCount = Math.ceil(notes.length / notesPerSystem);
+    // This is a pitch sequence, not a multi-bar score: keep its phrase in one
+    // visual line. Clef choice carries the register information; duplicating
+    // staves merely hid half the lesson and implied a false system break.
+    var notesPerSystem = Math.max(1, notes.length);
+    var systemCount = 1;
     for (var systemStart = 0; systemStart < notes.length; systemStart += notesPerSystem) {
       var systemNotes = notes.slice(systemStart, systemStart + notesPerSystem);
       var systemIndex = systemStart / notesPerSystem;
@@ -5668,7 +5669,7 @@
       stave.setContext(context).draw();
       var voice = new VF.Voice({ num_beats: systemNotes.length, beat_value: 4 }).setStrict(false);
       voice.addTickables(systemNotes);
-      new VF.Formatter().joinVoices([voice]).format([voice], Math.max(72, width - 120));
+      new VF.Formatter().joinVoices([voice]).format([voice], Math.max(72, width - (systemCount === 1 ? 68 : 120)));
       voice.draw(context, stave);
     }
     var svg = container.querySelector('svg');
@@ -5685,6 +5686,7 @@
         node.style.setProperty('--staff-note-color', note._notationColor);
         node.classList.add('notation-pitch-color');
         if (note._notationActive) node.classList.add('notation-active');
+        if (projection.events[index] && projection.events[index].completed) node.classList.add('notation-completed');
       });
       var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
       projection.events.forEach(function(event) {

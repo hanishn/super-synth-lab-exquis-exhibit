@@ -2992,6 +2992,35 @@ class PlaywrightExhibitTests(unittest.TestCase):
         key.dispatch_event('pointerup')
         self.assertEqual(reference.get_attribute('aria-pressed'), 'false')
 
+    def test_practice_alternate_surfaces_play_and_release_canonical_exquis_notes(self):
+        def assert_surface_holds_and_releases(surface, midi, expected_held=1):
+            surface.dispatch_event('pointerdown')
+            self.page.wait_for_function(
+                "([midi, expected]) => document.querySelectorAll('[data-testid=\"exquis-key\"][data-midi=\"' + midi + '\"].midi-held').length >= expected",
+                arg=[midi, expected_held]
+            )
+            self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
+            self.page.wait_for_function(
+                "midi => document.querySelectorAll('[data-testid=\"exquis-key\"][data-midi=\"' + midi + '\"].midi-held').length === 0",
+                arg=midi
+            )
+
+        piano_key = self.page.locator('[data-testid="practice-piano-key"].is-current')
+        piano_midi = piano_key.get_attribute('data-midi')
+        assert_surface_holds_and_releases(piano_key, piano_midi)
+
+        roll_note = self.page.locator('[data-testid="piano-roll-note"].notation-active')
+        roll_midi = roll_note.get_attribute('data-midi')
+        assert_surface_holds_and_releases(roll_note, roll_midi)
+
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="exercise-select"]', 'c_major_progression')
+        staff_chord = self.page.locator('[data-testid="staff-event-control"]').first
+        staff_chord.dispatch_event('pointerdown')
+        self.page.wait_for_function("() => document.querySelectorAll('[data-testid=\"exquis-key\"].midi-held').length >= 3")
+        self.page.evaluate("document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))")
+        self.page.wait_for_function("() => document.querySelectorAll('[data-testid=\"exquis-key\"].midi-held').length === 0")
+
     def test_practice_notation_uses_side_rails_only_when_the_full_device_fits(self):
         self.page.set_viewport_size({"width": 1920, "height": 1080})
         staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()

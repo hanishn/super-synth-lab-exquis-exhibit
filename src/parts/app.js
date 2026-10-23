@@ -3887,6 +3887,59 @@
     delete midiVoices[key];
   }
 
+  function canonicalInteractiveCellForMidi(midi) {
+    var cells = makeGrid();
+    var canonicalId = canonicalLightCellIdsByMidi(cells)[midi];
+    for (var i = 0; i < cells.length; i++) {
+      if (cellKey(cells[i]) === canonicalId) return cells[i];
+    }
+    return findCellsByMidi(cells, midi)[0] || null;
+  }
+
+  function bindAlternativeSurfaceInput(node, midis, label) {
+    if (!node || node.dataset.alternativeSurfaceBound) return;
+    node.dataset.alternativeSurfaceBound = 'true';
+    node.setAttribute('role', 'button');
+    node.setAttribute('tabindex', '0');
+    node.setAttribute('aria-label', label);
+    var release = function() {};
+    var press = function() {
+      var cells = midis.map(canonicalInteractiveCellForMidi).filter(Boolean);
+      if (!cells.length || node.dataset.alternativeSurfaceHeld === 'true') return;
+      node.dataset.alternativeSurfaceHeld = 'true';
+      cells.forEach(function(cell) { pressUiKey(cell, 96); });
+      release = function() {
+        if (node.dataset.alternativeSurfaceHeld !== 'true') return;
+        node.dataset.alternativeSurfaceHeld = 'false';
+        cells.forEach(function(cell) { releaseUiKey(cell); });
+        document.removeEventListener('pointerup', release, true);
+        document.removeEventListener('pointercancel', release, true);
+      };
+      // Render replaces the clicked SVG/keyboard node immediately. Document
+      // capture keeps release ownership alive across that rerender, exactly as
+      // a physical Exquis pad remains held until its matching note-off.
+      document.addEventListener('pointerup', release, true);
+      document.addEventListener('pointercancel', release, true);
+    };
+    node.addEventListener('pointerdown', function(event) {
+      event.preventDefault();
+      press();
+    });
+    node.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        press();
+      }
+    });
+    node.addEventListener('keyup', function(event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        release();
+      }
+    });
+    node.addEventListener('blur', release);
+  }
+
   function pressUiKey(cell, pressure) {
     var key = voiceKey('ui', cell.midi);
     state.heldNotes[key] = {
@@ -5651,6 +5704,7 @@
         ? 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 82% 70%)'
         : '#a7c7e7';
       note._notationActive = event.active;
+      note._notationMidis = event.midis.slice();
       note.setStyle({ fillStyle: note._notationColor, strokeStyle: note._notationColor });
       return note;
     });
@@ -5687,6 +5741,8 @@
         node.classList.add('notation-pitch-color');
         if (note._notationActive) node.classList.add('notation-active');
         if (projection.events[index] && projection.events[index].completed) node.classList.add('notation-completed');
+        node.setAttribute('data-testid', 'staff-event-control');
+        bindAlternativeSurfaceInput(node, note._notationMidis, 'Play staff step ' + String(index + 1));
       });
       var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
       projection.events.forEach(function(event) {
@@ -5733,6 +5789,7 @@
         note.style.setProperty('--roll-note-color', 'hsl(' + intervalHue(mod(midi, 12) - state.tonicPc, getScale()) + 'deg 82% 70%)');
         note.setAttribute('aria-label', (event.active ? 'Current ' : 'Upcoming ') + spellNotationPitch(midi).label + ', step ' + String(event.index + 1));
         if (event.active) note.setAttribute('aria-current', 'step');
+        bindAlternativeSurfaceInput(note, [midi], 'Play piano-roll ' + spellNotationPitch(midi).label);
         svg.appendChild(note);
         if (event.active) svg.appendChild(notationSvgElement('text', { x: x + 2, y: y - 2, class: 'roll-note-label' }, spellNotationPitch(midi).label));
       });
@@ -5799,6 +5856,7 @@
       key.setAttribute('data-midi', String(midi));
       if (pad) key.setAttribute('data-light-role', pad.role);
       key.setAttribute('aria-pressed', heldMidis.indexOf(midi) >= 0 ? 'true' : 'false');
+      bindAlternativeSurfaceInput(key, [midi], 'Play piano key ' + noteName(midi) + octave(midi));
       container.appendChild(key);
     }
     for (var blackMidi = baseMidi; blackMidi <= endMidi; blackMidi++) if ([1, 3, 6, 8, 10].indexOf(mod(blackMidi, 12)) >= 0) {
@@ -5818,6 +5876,7 @@
       key.setAttribute('data-midi', String(midi));
       if (pad) key.setAttribute('data-light-role', pad.role);
       key.setAttribute('aria-pressed', heldMidis.indexOf(midi) >= 0 ? 'true' : 'false');
+      bindAlternativeSurfaceInput(key, [midi], 'Play piano key ' + noteName(midi) + octave(midi));
       container.appendChild(key);
     }
   }

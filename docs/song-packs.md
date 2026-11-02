@@ -48,8 +48,27 @@ duration is in beats at that song's tempo; omitted or invalid entries default
 to an eighth note at 112 BPM. This makes phrase playback intentionally paced
 rather than a fixed-rate diagnostic preview.
 
+When a pack includes `scoreMusicXml`, audition reads each engraved playable
+note's duration as its audio gate while `durationsBeats` remains the next-note
+deadline. Consequently, an engraved rest stays silent instead of extending the
+previous note. A pack without MusicXML can provide `gateBeats` explicitly when
+its note lengths differ from its transport spacing.
+
 `melody` is a sequence of semitone offsets from the selected root (0–24). The
 loader rejects malformed packs and never fetches or transmits their contents.
+
+### Chord progressions
+
+Use `chords` in place of `melody` when one practice event is a simultaneous
+two-to-five-note grip. Each inner array contains root-relative semitone offsets;
+`durationsBeats` has one entry per chord event. The staff and piano roll render
+every chord tone, the Exquis and piano interfaces require the same complete
+grip, and Audition starts every chord tone on the same transport deadline.
+
+```json
+"chords": [[0, 4, 7], [5, 9, 12], [9, 12, 16], [7, 11, 14]],
+"durationsBeats": [4, 4, 4, 4]
+```
 
 ### Multi-section songs
 

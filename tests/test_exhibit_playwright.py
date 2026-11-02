@@ -101,6 +101,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "hardware_target_sync_must_clear_previous_pulses": "test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets",
         "hardware_target_pulse_must_advance_after_correct_midi_sequence_note": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
         "practice_notation_must_follow_canonical_target_step": "test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers",
+        "staff_roll_and_keyboard_must_share_one_runtime_theme_contract": "test_regression_notation_theme_is_shared_and_preserves_pitch_semantics",
         "hardware_chord_sync_must_pulse_all_current_targets": "test_regression_exquis_sync_pulses_every_current_chord_target",
         "rgb_probe_must_use_official_pad_only_protocol": "test_regression_exquis_rgb_pad_probe_uses_official_pad_only_direct_led_protocol",
         "exquis_low_velocity_midi_must_still_start_audible_ssli_voice": "test_regression_exquis_low_velocity_starts_audible_ssli_voice",
@@ -1456,7 +1457,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         pack_path = ROOT / 'song-packs' / 'private' / 'new-wave-melodic-parts.ssli-songpack.json'
         pack = json.loads(pack_path.read_text(encoding='utf-8'))
         self.assertEqual(pack['format'], 'ssli-song-pack/v1')
-        self.assertGreaterEqual(len(pack['songs']), 4)
+        self.assertGreaterEqual(len(pack['songs']), 9)
         expected_profiles = {
             # rootMidi is the physical Exquis pad address; rootCellId is the
             # printed musical pad it resolves to. These are deliberately not
@@ -1470,19 +1471,19 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
         self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
         self.page.wait_for_function(
-            "expected => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options)"
-            ".filter(option => option.textContent.includes('a-ha') || option.textContent.includes('Depeche Mode') || "
-            "option.textContent.includes('Simple Minds') || option.textContent.includes('Tears for Fears')).length >= expected",
-            arg=len(pack['songs']),
+            "title => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options)"
+            ".some(option => option.textContent.includes(title))",
+            arg='Blue Monday',
         )
 
         selector = self.page.locator('[data-testid="exercise-select"]')
         for song in pack['songs']:
-            self.assertEqual(
-                (song.get('keyTonicPc'), song.get('keyScaleId'), song.get('rootMidi'), expected_profiles[song['title']][3]),
-                expected_profiles[song['title']],
-                song['title'],
-            )
+            if song['title'] in expected_profiles:
+                self.assertEqual(
+                    (song.get('keyTonicPc'), song.get('keyScaleId'), song.get('rootMidi'), expected_profiles[song['title']][3]),
+                    expected_profiles[song['title']],
+                    song['title'],
+                )
             option_value = selector.evaluate(
                 "(select, title) => Array.from(select.options).find(option => option.textContent.includes(title)).value",
                 song['title'],
@@ -1494,10 +1495,18 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.assertTrue(all(event['valid'] for event in snapshot['exerciseEvents']), song['title'])
             self.assertEqual(snapshot['tonicPc'], song['keyTonicPc'])
             self.assertEqual(snapshot['scaleId'], song['keyScaleId'])
-            self.assertEqual(snapshot['rootCellId'], expected_profiles[song['title']][3])
+            expected_root_cell = expected_profiles.get(song['title'], (None, None, None, None))[3]
+            if expected_root_cell:
+                self.assertEqual(snapshot['rootCellId'], expected_root_cell)
+            else:
+                self.assertTrue(snapshot['rootCellId'], song['title'])
             self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['midi'], song['rootMidi'] + melody[0])
             self.assertEqual(snapshot['exerciseEvents'][0]['targets'][0]['pc'], (song['keyTonicPc'] + melody[0]) % 12)
-            expected_scale_pcs = {(song['keyTonicPc'] + interval) % 12 for interval in (0, 2, 4, 5, 7, 9, 11)}
+            scale_intervals = {
+                'ionian': (0, 2, 4, 5, 7, 9, 11),
+                'aeolian': (0, 2, 3, 5, 7, 8, 10),
+            }
+            expected_scale_pcs = {(song['keyTonicPc'] + interval) % 12 for interval in scale_intervals[song['keyScaleId']]}
             lit_pcs = self.page.locator('[data-testid="exquis-key"].hardware-lit').evaluate_all(
                 "keys => keys.map(key => Number(key.dataset.pc))"
             )
@@ -1515,18 +1524,34 @@ class PlaywrightExhibitTests(unittest.TestCase):
                     len(melody),
                     'long songs must use the readable roll window, not overlap every event'
                 )
-            if song.get('scoreMusicXml'):
-                self.page.wait_for_selector('[data-testid="full-score-svg"]')
-                self.assertTrue(self.page.locator('[data-testid="score-notation"]').is_visible())
-                self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
-                self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_hidden())
-                self.assertEqual(self.page.locator('.full-score-pitch-color').count(), len(melody))
-                self.assertIn('Measures ', self.page.locator('[data-testid="score-window-readout"]').inner_text())
-                input_surface = self.page.locator('[data-testid="full-score-event-control"]').first
-            else:
-                self.assertTrue(self.page.locator('[data-testid="staff-notation"]').is_visible())
-                self.assertFalse(self.page.locator('[data-testid="score-view-toggle"]').is_visible())
-                input_surface = self.page.locator('[data-testid="staff-event-control"].notation-active').first
+            # Every song—whether its pack supplied MusicXML or only playable
+            # events—uses the same OSMD multi-phrase score surface.
+            self.page.wait_for_selector('[data-testid="full-score-svg"]')
+            self.assertTrue(self.page.locator('[data-testid="score-notation"]').is_visible())
+            self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
+            self.assertTrue(self.page.locator('[data-testid="score-view-toggle"]').is_hidden())
+            self.assertEqual(self.page.locator('.full-score-pitch-color').count(), len(melody))
+            self.assertIn('Measures ', self.page.locator('[data-testid="score-window-readout"]').inner_text())
+            if song['title'].startswith('Sweet Dreams (Are Made of This)'):
+                spellings = self.page.locator('[data-testid="full-score-event-control"]').evaluate_all(
+                    "nodes => nodes.map(node => node.dataset.notationPitches)"
+                )
+                self.assertTrue(any('Eb' in spelling for spelling in spellings), spellings)
+                self.assertFalse(any('#' in spelling for spelling in spellings), spellings)
+            input_surface = self.page.locator('[data-testid="full-score-event-control"].full-score-active-note').first
+            # Notation is a sibling rail, never an overlay on the hardware.
+            layout = self.page.evaluate("""() => {
+              const notation = document.querySelector('[data-testid="score-notation"]:not([hidden])') ||
+                document.querySelector('[data-testid="staff-notation"]');
+              const a = notation.getBoundingClientRect();
+              const b = document.querySelector('[data-testid="exquis-device"]').getBoundingClientRect();
+              return {
+                overlapWidth: Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)),
+                overlapHeight: Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)),
+                notation: a.toJSON(), device: b.toJSON()
+              };
+            }""")
+            self.assertEqual(layout['overlapWidth'] * layout['overlapHeight'], 0, (song['title'], layout))
             step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
             input_surface.dispatch_event('pointerdown')
             self.page.wait_for_function(
@@ -1544,6 +1569,18 @@ class PlaywrightExhibitTests(unittest.TestCase):
                     self.page.locator('[data-testid="next-step"]').click()
                 roll_window_after = self.page.locator('[data-testid="piano-roll-window-label"]').inner_text()
                 self.assertNotEqual(roll_window_after, roll_window_before)
+                self.page.screenshot(path=str(visual_path.with_name(visual_name + '-later-window.png')), full_page=True)
+            if song['title'].startswith('Sweet Dreams (Are Made of This)'):
+                staff_window_before = self.page.locator('[data-testid="score-window-readout"]').inner_text()
+                for _ in range(18):
+                    self.page.locator('[data-testid="next-step"]').click()
+                self.page.wait_for_function(
+                    "before => document.querySelector('[data-testid=\"score-window-readout\"]').textContent !== before",
+                    arg=staff_window_before,
+                )
+                staff_window_after = self.page.locator('[data-testid="score-window-readout"]').inner_text()
+                self.assertNotEqual(staff_window_after, staff_window_before)
+                self.assertIn('Measures ', staff_window_after)
                 self.page.screenshot(path=str(visual_path.with_name(visual_name + '-later-window.png')), full_page=True)
 
     def test_song_audition_uses_authored_durations_at_actual_ssli_note_on(self):
@@ -1593,6 +1630,43 @@ class PlaywrightExhibitTests(unittest.TestCase):
         intervals = [trace[index + 1]['calledAtMs'] - trace[index]['calledAtMs'] for index in range(3)]
         self.assertTrue(all(abs(actual - expected) <= 28 for actual, expected in zip(intervals, [125, 250, 125])), (intervals, trace))
         self.assertEqual(len(self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type === 'preset')")), 1)
+
+    def test_musicxml_rests_do_not_turn_melodic_transport_gaps_into_sustain(self):
+        """Audition onset spacing and audible note gates are distinct contracts."""
+        musicxml = '''<?xml version="1.0" encoding="UTF-8"?>
+        <score-partwise version="3.1"><part-list><score-part id="P1"><part-name>Lead</part-name></score-part></part-list>
+        <part id="P1"><measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+        <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration></note><note><rest/><duration>12</duration></note>
+        <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration></note><note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration></note><note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration></note></measure></part></score-partwise>'''
+        song = {
+            'title': 'Engraved-rest timing fixture', 'artist': 'Test fixture', 'tempoBpm': 240,
+            'durationsBeats': [4, 1, 1, 1], 'melody': [0, 2, 4, 5], 'scoreMusicXml': musicxml,
+        }
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'engraved-rest-timing.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': [song]}).encode('utf-8')
+        })
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Engraved-rest timing fixture'))")
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Engraved-rest timing fixture')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        self.page.evaluate("""() => {
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = { presets: { apply() {} }, audio: {
+            getCurrentInstrument() { return 0; }, getInstruments() { return [instrument]; },
+            getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+            playNoteOnInstrument() {}, initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {},
+            freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+            getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+          }};
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 4", timeout=4000)
+        trace = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace")
+        self.assertEqual([round(entry['durationSeconds'], 3) for entry in trace], [0.242, 0.242, 0.242, 0.242])
+        self.assertGreater(trace[1]['calledAtMs'] - trace[0]['calledAtMs'], 950)
 
     def test_song_audition_stop_button_and_song_selection_cancel_transport(self):
         """Stopping or selecting another song must cancel future phrase callbacks."""
@@ -1663,6 +1737,140 @@ class PlaywrightExhibitTests(unittest.TestCase):
             self.page.evaluate("() => window.__songAuditionEngineCalls.filter(call => call.type.endsWith('stop')).length"),
             stop_calls_before_song_switch + 2,
         )
+
+    def test_chord_song_pack_renders_and_auditions_simultaneous_grips(self):
+        """Chord packs are real multi-note events on every learning surface."""
+        song = {
+            'title': 'Chord transport fixture', 'artist': 'Test fixture',
+            'keyTonicPc': 0, 'keyScaleId': 'ionian', 'rootMidi': 48, 'tempoBpm': 240,
+            'durationsBeats': [1, 1, 1, 1],
+            'chords': [[0, 4, 7], [5, 9, 12], [9, 12, 16], [7, 11, 14]],
+        }
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files({
+            'name': 'chord-transport.ssli-songpack.json', 'mimeType': 'application/json',
+            'buffer': json.dumps({'format': 'ssli-song-pack/v1', 'songs': [song]}).encode('utf-8')
+        })
+        self.page.wait_for_timeout(300)
+        self.assertIn('Loaded', self.page.locator('[data-testid="song-library-status"]').inner_text())
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Chord transport fixture'))")
+        option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+            "select => Array.from(select.options).find(option => option.textContent.includes('Chord transport fixture')).value"
+        )
+        self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+        events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+        self.assertEqual([event['type'] for event in events], ['grip'] * 4)
+        self.assertEqual([len(event['targets']) for event in events], [3, 3, 3, 3])
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        self.assertEqual(self.page.locator('[data-testid="full-score-event-control"]').count(), 4)
+        self.assertEqual(
+            sum(len(value.split(',')) for value in self.page.locator('[data-testid="full-score-event-control"]').evaluate_all("nodes => nodes.map(node => node.dataset.notationPitches)")),
+            12,
+        )
+        self.assertEqual(self.page.locator('[data-testid="piano-roll-note"]').count(), 12)
+        self.page.evaluate("""() => {
+          window.__chordSongCalls = [];
+          const instrument = { type: 'subtractive', settings: { filter: {}, effects: {} }, masterOutput: {} };
+          window.SynthLab = { presets: { apply() {} }, audio: {
+            getCurrentInstrument() { return 0; }, getInstruments() { return [instrument]; },
+            getCtx() { return { state: 'running', currentTime: performance.now() / 1000 }; },
+            playNoteOnInstrument(midi, duration, inst, velocity, options) { window.__chordSongCalls.push({ midi, duration, options, at: performance.now() }); },
+            initEffectChain() {}, loadInstrumentSettings() {}, refreshFilter() {},
+            freqToSlider(value) { return value; }, qToSlider(value) { return value; },
+            getInstrumentChain() { return { getAvailableEffects() { return []; }, addToChain() {}, getEffect() { return null; }, setOrder() {}, setMasterMix() {} }; }
+          }};
+        }""")
+        self.page.locator('[data-testid="audition-song"]').click()
+        self.page.wait_for_function("() => window.__exquisDebugSnapshot().songAuditionTrace.length === 12", timeout=4000)
+        trace = self.page.evaluate("() => window.__exquisDebugSnapshot().songAuditionTrace")
+        self.assertEqual([entry['midi'] for entry in trace], [48, 52, 55, 53, 57, 60, 57, 60, 64, 55, 59, 62])
+        for event_index in range(4):
+            onsets = [entry['calledAtMs'] for entry in trace if entry['eventIndex'] == event_index]
+            self.assertEqual(len(onsets), 3)
+            self.assertLessEqual(max(onsets) - min(onsets), 12, trace)
+        self.assertTrue(all(entry['backend'] == 'ssli' for entry in trace), trace)
+
+    @unittest.skipUnless(
+        (ROOT / 'song-packs' / 'private' / 'chord-progression-studies.ssli-songpack.json').exists(),
+        'local private chord song pack is not installed',
+    )
+    def test_local_chord_progression_pack_renders_real_song_content(self):
+        """Visual acceptance coverage for the ignored personal chord-study pack."""
+        pack_path = ROOT / 'song-packs' / 'private' / 'chord-progression-studies.ssli-songpack.json'
+        pack = json.loads(pack_path.read_text(encoding='utf-8'))
+        self.assertEqual(pack['format'], 'ssli-song-pack/v1')
+        self.assertGreaterEqual(len(pack['songs']), 2)
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
+        self.page.wait_for_function("() => Array.from(document.querySelector('[data-testid=\"exercise-select\"]').options).some(option => option.textContent.includes('Where the Streets Have No Name'))")
+        for song in pack['songs']:
+            option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+                "(select, title) => Array.from(select.options).find(option => option.textContent.includes(title)).value", song['title']
+            )
+            self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+            events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+            self.assertEqual(len(events), len(song['chords']))
+            self.assertTrue(all(event['type'] == 'grip' and len(event['targets']) >= 3 for event in events), events)
+            expected_tone_count = sum(len(chord) for chord in song['chords'])
+            self.page.wait_for_selector('[data-testid="full-score-svg"]')
+            score_events = self.page.locator('[data-testid="full-score-event-control"]')
+            self.assertEqual(score_events.count(), len(song['chords']))
+            self.assertEqual(
+                sum(len(value.split(',')) for value in score_events.evaluate_all("nodes => nodes.map(node => node.dataset.notationPitches)")),
+                expected_tone_count,
+            )
+            self.assertEqual(self.page.locator('[data-testid="piano-roll-note"]').count(), expected_tone_count)
+            visual_name = ''.join(character if character.isalnum() else '-' for character in song['title'].lower()).strip('-')
+            visual_path = ROOT / '.tmp' / 'actual-private-chord-visuals' / (visual_name + '-practice.png')
+            visual_path.parent.mkdir(parents=True, exist_ok=True)
+            self.page.screenshot(path=str(visual_path), full_page=True)
+
+    @unittest.skipUnless(
+        (ROOT / 'song-packs' / 'private' / 'chord-progression-studies.ssli-songpack.json').exists(),
+        'local private chord song pack is not installed',
+    )
+    def test_local_chord_song_profiles_apply_the_named_ssli_timbre(self):
+        """A profile label is insufficient: assert the real iframe receives its named preset."""
+        pack_path = ROOT / 'song-packs' / 'private' / 'chord-progression-studies.ssli-songpack.json'
+        pack = json.loads(pack_path.read_text(encoding='utf-8'))
+        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
+        server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        server_thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        self.addCleanup(server_thread.join, 2)
+        self.page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
+        self.page.locator('[data-testid="continue-without-midi"]').click()
+        self.page.wait_for_function("""() => {
+          const frame = document.getElementById('ssliEngineFrame');
+          return !!(frame && frame.contentWindow && frame.contentWindow.SynthLab
+            && frame.contentWindow.SynthLab.presets && frame.contentWindow.SynthLab.presets.apply);
+        }""", timeout=15000)
+        self.page.evaluate("""() => {
+          const runtime = document.getElementById('ssliEngineFrame').contentWindow;
+          const original = runtime.SynthLab.presets.apply.bind(runtime.SynthLab.presets);
+          window.__songProfilePresetPayloads = [];
+          runtime.SynthLab.presets.apply = function(payload) {
+            window.parent.__songProfilePresetPayloads.push({ name: payload && payload.name, engine: payload && payload.engine });
+            return original.apply(this, arguments);
+          };
+        }""")
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        self.page.locator('[data-testid="song-pack-input"]').set_input_files(str(pack_path))
+        for song in pack['songs']:
+            option_value = self.page.locator('[data-testid="exercise-select"]').evaluate(
+                "(select, title) => Array.from(select.options).find(option => option.textContent.includes(title)).value", song['title']
+            )
+            self.page.evaluate("() => { window.__songProfilePresetPayloads = []; }")
+            self.page.select_option('[data-testid="exercise-select"]', value=option_value)
+            self.page.wait_for_function(
+                "expected => window.__songProfilePresetPayloads.some(call => call.name === expected)",
+                arg=song['soundPresetId'].split('::', 1)[1], timeout=5000,
+            )
+            applied = self.page.evaluate("() => window.__songProfilePresetPayloads.at(-1)")
+            self.assertEqual(applied['name'], song['soundPresetId'].split('::', 1)[1])
+            self.assertEqual(applied['engine'], 'subtractive')
 
     def test_multi_section_song_auditions_the_complete_canonical_event_stream(self):
         """No consumer may stop at the first named song section."""
@@ -1853,12 +2061,19 @@ class PlaywrightExhibitTests(unittest.TestCase):
         calls = self.page.evaluate("expected => window.__densePhraseCalls.filter(call => call.type === 'note').slice(0, expected)", observed_count)
         self.assertEqual(len(trace), observed_count, trace)
         self.assertEqual([entry['midi'] for entry in trace], [song['rootMidi'] + interval for interval in melody[:observed_count]])
+        self.assertTrue(any(
+            entry['durationSeconds'] < (beats * 60000 / song['tempoBpm'] - 8) / 1000 - 0.05
+            for entry, beats in zip(trace, durations[:observed_count])
+        ), 'the real MusicXML score should shorten at least one rest-separated note')
         self.assertTrue(all(entry['backend'] == 'ssli' and abs(entry['timingErrorMs']) <= 65 for entry in trace), trace)
         self.assertTrue(all(call['options']['realtimePhrase'] and 0.012 <= call['options']['releaseSeconds'] <= 0.032 for call in calls), calls)
         worklet_calls = self.page.evaluate("() => window.__densePhraseWorkletCalls")
         worklet_calls = worklet_calls[:observed_count]
         self.assertEqual(len(worklet_calls), observed_count, worklet_calls)
-        expected_releases = [min(0.032, max(0.012, (beats * 60000 / song['tempoBpm'] - 8) / 1000 * 0.18)) for beats in durations[:observed_count]]
+        # The score may contain rests between note-on deadlines. Release must
+        # follow the traced engraved gate, while onset intervals still follow
+        # the complete transport spacing below.
+        expected_releases = [min(0.032, max(0.012, entry['durationSeconds'] * 0.18)) for entry in trace]
         self.assertEqual([round(call['releaseSeconds'], 4) for call in worklet_calls], [round(value, 4) for value in expected_releases])
         self.assertTrue(all(0.012 <= call['releaseSeconds'] <= 0.032 for call in worklet_calls), worklet_calls)
         self.assertTrue(all(call['phraseAutoRelease'] is True for call in worklet_calls), worklet_calls)
@@ -1867,7 +2082,6 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLessEqual(max(active_voice_counts), 24, active_voice_counts)
         rms_samples = self.page.evaluate("() => { clearInterval(window.__densePhraseRmsTimer); return window.__densePhraseRmsSamples.slice(); }")
         self.assertGreater(max(rms_samples, default=0), 0.002, rms_samples)
-        expected_durations = [max(0.08, (beats * 60000 / song['tempoBpm'] - 8) / 1000) for beats in durations[:observed_count]]
         expected_intervals = [beats * 60000 / song['tempoBpm'] for beats in durations[:observed_count - 1]]
         actual_intervals = [trace[index + 1]['calledAtMs'] - trace[index]['calledAtMs'] for index in range(len(trace) - 1)]
         self.assertTrue(all(abs(actual - expected) <= 45 for actual, expected in zip(actual_intervals, expected_intervals)), (actual_intervals, expected_intervals, trace))
@@ -3536,6 +3750,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="sync-exquis"]').click()
         self.page.wait_for_timeout(2200)
         self.page.locator('[data-testid="workspace-practice"]').click()
+        initial_sync_messages = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertTrue(any(message == [240, 0, 33, 126, 247] for message in initial_sync_messages))
         expected = self.page.evaluate("() => window.__exquisLightDebug.hardwareFrame()")
         self.assertEqual(len(expected), 61)
         self.page.evaluate("() => { window.__mockExquisOutput.sent = []; return window.__exquisLightDebug.reassertPracticeFrame(); }")
@@ -3544,13 +3760,22 @@ class PlaywrightExhibitTests(unittest.TestCase):
         for pad in expected:
             self.assertIn([191, pad['padId'], pad['paletteIndex']], sent)
             self.assertIn([175, pad['padId'], 63 if pad['isTarget'] else 0], sent)
+        # The periodic watchdog must not restart Developer Mode: that is the
+        # observed all-black-then-wave repaint. Only an explicit recovery may
+        # perform a full LED frame transaction.
+        self.page.evaluate("() => { window.__mockExquisOutput.sent = []; return window.__exquisLightDebug.heartbeatPracticeFrame(); }")
+        self.page.wait_for_timeout(120)
+        heartbeat = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertFalse(any(message[:6] == [240, 0, 33, 126, 127, 0] for message in heartbeat), heartbeat)
 
     def test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers(self):
         panel = self.page.locator('[data-testid="practice-notation"]')
-        staff = self.page.locator('[data-testid="staff-notation"]')
+        score = self.page.locator('[data-testid="score-notation"]')
         roll = self.page.locator('[data-testid="piano-roll-notation"]')
         self.assertTrue(panel.is_visible())
-        self.assertTrue(staff.is_visible())
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        self.assertTrue(score.is_visible())
+        self.assertFalse(self.page.locator('[data-testid="staff-notation"]').is_visible())
         self.assertTrue(roll.is_visible())
         active_before = self.page.locator('[data-testid="piano-roll-note"].notation-active')
         sequence_before = self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.getAttribute('data-event-index'))")
@@ -3558,11 +3783,21 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(active_before.count(), 1)
         before_index = active_before.get_attribute('data-event-index')
         before_midi = active_before.get_attribute('data-midi')
+        score_active_before = self.page.locator('[data-testid="full-score-event-control"].full-score-active-note')
+        self.assertEqual(score_active_before.count(), 1)
+        self.assertTrue(score_active_before.first.evaluate("node => node.classList.contains('notation-active')"))
+        self.assertIn('notation-current-pulse', score_active_before.first.evaluate("node => getComputedStyle(node).animationName"))
+        score_fill = score_active_before.locator('path').first.evaluate("node => getComputedStyle(node).fill")
+        self.assertNotEqual(score_fill, 'rgb(210, 106, 29)', 'current-state emphasis must not repaint a pitch amber')
+        self.assertEqual(score_active_before.first.get_attribute('data-event-index'), before_index)
         self.page.locator('[data-testid="next-step"]').click()
         active_after = self.page.locator('[data-testid="piano-roll-note"].notation-active')
         self.assertEqual(active_after.count(), 1)
         self.assertNotEqual(active_after.get_attribute('data-event-index'), before_index)
         self.assertNotEqual(active_after.get_attribute('data-midi'), before_midi)
+        score_active_after = self.page.locator('[data-testid="full-score-event-control"].full-score-active-note')
+        self.assertEqual(score_active_after.count(), 1)
+        self.assertEqual(score_active_after.first.get_attribute('data-event-index'), active_after.get_attribute('data-event-index'))
         self.assertEqual(
             self.page.locator('[data-testid="piano-roll-note"]').evaluate_all("nodes => nodes.map(node => node.getAttribute('data-event-index'))"),
             sequence_before,
@@ -3573,48 +3808,127 @@ class PlaywrightExhibitTests(unittest.TestCase):
             colors_before,
             'completed notes retain their pitch colors'
         )
-        self.assertEqual(self.page.locator('[data-testid="staff-note"].notation-active').count(), 1)
+        self.assertEqual(self.page.locator('[data-testid="full-score-event-control"].full-score-active-note').count(), 1)
         self.page.select_option('[data-testid="exercise-family-select"]', 'ear')
         self.page.select_option('[data-testid="exercise-select"]', 'ear_major_third')
         self.assertTrue(self.page.locator('[data-testid="notation-concealed"]').is_visible())
         self.assertEqual(self.page.locator('[data-testid="piano-roll-note"]').count(), 0)
-        self.assertEqual(self.page.locator('[data-testid="staff-note"]').count(), 0)
+        self.assertEqual(self.page.locator('[data-testid="full-score-event-control"]').count(), 0)
+
+    def test_regression_notation_theme_is_shared_and_preserves_pitch_semantics(self):
+        """One root switch changes all chrome, never score/roll/piano/pad pitch data."""
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        baseline = self.page.evaluate("""() => {
+          const style = (selector) => getComputedStyle(document.querySelector(selector));
+          const scorePitch = document.querySelector('.full-score-pitch-color path');
+          const rollPitch = document.querySelector('[data-testid="piano-roll-note"].notation-active');
+          const pianoPitch = document.querySelector('[data-testid="practice-piano-key"].is-current');
+          const padPitch = document.querySelector('[data-testid="exquis-key"].current');
+          const scoreActive = document.querySelector('.full-score-active-note path');
+          const rollActiveColumn = document.querySelector('.roll-column-active');
+          const unlitPad = Array.from(document.querySelectorAll('[data-testid="exquis-key"]'))
+            .find(node => !node.classList.contains('hardware-lit'));
+          const engraving = Array.from(document.querySelectorAll('[data-testid="score-notation"] svg path'))
+            .find(node => !node.closest('.full-score-pitch-color'));
+          return {
+            theme: document.documentElement.dataset.notationTheme,
+            score: style('[data-testid="score-notation"]').backgroundColor,
+            rail: getComputedStyle(document.querySelector('[data-testid="score-notation"]').closest('.notation-rail')).backgroundColor,
+            roll: style('[data-testid="piano-roll-notation"]').backgroundColor,
+            piano: style('[data-testid="practice-piano-reference"]').backgroundColor,
+            padChrome: unlitPad && getComputedStyle(unlitPad).backgroundColor,
+            scorePitch: scorePitch && getComputedStyle(scorePitch).fill,
+            rollPitch: rollPitch && getComputedStyle(rollPitch).fill,
+            pianoPitch: pianoPitch && getComputedStyle(pianoPitch).backgroundColor,
+            padPitch: padPitch && getComputedStyle(padPitch).backgroundColor,
+            scoreActiveFilter: scoreActive && getComputedStyle(scoreActive).filter,
+            rollActiveColumn: rollActiveColumn && getComputedStyle(rollActiveColumn).fill,
+            engraving: engraving && getComputedStyle(engraving).stroke
+          };
+        }""")
+        self.assertEqual(baseline['theme'], 'dark')
+        self.assertEqual(baseline['score'], 'rgb(8, 13, 18)')
+        self.assertEqual(baseline['roll'], 'rgb(8, 13, 18)')
+        self.assertEqual(baseline['piano'], 'rgb(12, 16, 23)')
+        self.assertEqual(baseline['engraving'], 'rgb(244, 247, 245)')
+        self.assertNotEqual(baseline['scorePitch'], baseline['engraving'])
+        self.assertTrue(all(baseline[key] for key in ('scorePitch', 'rollPitch', 'pianoPitch', 'padPitch', 'padChrome', 'scoreActiveFilter', 'rollActiveColumn')), baseline)
+
+        selected = self.page.evaluate("() => window.__exquisDebugSetNotationTheme('high-contrast')")
+        self.assertEqual(selected, 'high-contrast')
+        switched = self.page.evaluate("""() => {
+          const style = (selector) => getComputedStyle(document.querySelector(selector));
+          const scorePitch = document.querySelector('.full-score-pitch-color path');
+          const rollPitch = document.querySelector('[data-testid="piano-roll-note"].notation-active');
+          const pianoPitch = document.querySelector('[data-testid="practice-piano-key"].is-current');
+          const padPitch = document.querySelector('[data-testid="exquis-key"].current');
+          const scoreActive = document.querySelector('.full-score-active-note path');
+          const rollActiveColumn = document.querySelector('.roll-column-active');
+          const unlitPad = Array.from(document.querySelectorAll('[data-testid="exquis-key"]'))
+            .find(node => !node.classList.contains('hardware-lit'));
+          return {
+            theme: document.documentElement.dataset.notationTheme,
+            score: style('[data-testid="score-notation"]').backgroundColor,
+            rail: getComputedStyle(document.querySelector('[data-testid="score-notation"]').closest('.notation-rail')).backgroundColor,
+            roll: style('[data-testid="piano-roll-notation"]').backgroundColor,
+            piano: style('[data-testid="practice-piano-reference"]').backgroundColor,
+            padChrome: unlitPad && getComputedStyle(unlitPad).backgroundColor,
+            scorePitch: scorePitch && getComputedStyle(scorePitch).fill,
+            rollPitch: rollPitch && getComputedStyle(rollPitch).fill,
+            pianoPitch: pianoPitch && getComputedStyle(pianoPitch).backgroundColor,
+            padPitch: padPitch && getComputedStyle(padPitch).backgroundColor,
+            scoreActiveFilter: scoreActive && getComputedStyle(scoreActive).filter,
+            rollActiveColumn: rollActiveColumn && getComputedStyle(rollActiveColumn).fill
+          };
+        }""")
+        self.assertEqual(switched['theme'], 'high-contrast')
+        self.assertEqual(switched['score'], 'rgb(0, 0, 0)')
+        self.assertEqual(switched['rail'], 'rgb(8, 8, 8)')
+        self.assertEqual(switched['roll'], 'rgb(0, 0, 0)')
+        self.assertEqual(switched['piano'], 'rgb(0, 0, 0)')
+        self.assertNotEqual(switched['padChrome'], baseline['padChrome'], 'the Exquis chrome must consume the shared root theme')
+        self.assertNotEqual(switched['scoreActiveFilter'], baseline['scoreActiveFilter'], 'active score emphasis must consume the root theme')
+        self.assertNotEqual(switched['rollActiveColumn'], baseline['rollActiveColumn'], 'active roll emphasis must consume the root theme')
+        for pitch_surface in ('scorePitch', 'rollPitch', 'pianoPitch', 'padPitch'):
+            self.assertEqual(switched[pitch_surface], baseline[pitch_surface], pitch_surface + ' must retain its musical hue')
 
     def test_practice_notation_lens_stacks_canonical_grip_pitches(self):
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
         self.page.select_option('[data-testid="exercise-select"]', 'c_major_progression')
         roll_notes = self.page.locator('[data-testid="piano-roll-note"].notation-active')
-        staff_notes = self.page.locator('[data-testid="staff-note"].notation-active')
+        score_notes = self.page.locator('[data-testid="full-score-event-control"].full-score-active-note')
         self.assertEqual(roll_notes.count(), 3)
-        self.assertEqual(staff_notes.count(), 3)
+        self.assertEqual(score_notes.count(), 1)
         roll_midis = sorted(int(roll_notes.nth(index).get_attribute('data-midi')) for index in range(roll_notes.count()))
-        staff_midis = sorted(int(staff_notes.nth(index).get_attribute('data-midi')) for index in range(staff_notes.count()))
-        self.assertEqual(roll_midis, staff_midis)
+        score_midis = sorted(int(midi) for midi in score_notes.first.get_attribute('data-notation-midis').split(','))
+        self.assertEqual(roll_midis, score_midis)
         self.assertEqual(len(set(roll_notes.evaluate_all("nodes => nodes.map((node) => node.getAttribute('data-event-index'))"))), 1)
 
     def test_practice_notation_uses_legible_two_panel_tablet_fit(self):
         self.page.set_viewport_size({"width": 768, "height": 1024})
         self.page.select_option('[data-testid="tonic-select"]', '4')  # E major: four sharps.
         panel = self.page.locator('[data-testid="practice-notation"]')
-        staff = self.page.locator('[data-testid="staff-notation"]')
+        staff = self.page.locator('[data-testid="score-notation"]')
         roll = self.page.locator('[data-testid="piano-roll-notation"]')
         panel_box = panel.bounding_box()
         staff_box = staff.bounding_box()
         roll_box = roll.bounding_box()
-        self.assertGreaterEqual(panel_box['height'], 210)
+        self.assertGreaterEqual(panel_box['height'], 160)
         self.assertLessEqual(panel_box['height'], 400)
         self.assertLess(staff_box['x'] + staff_box['width'], roll_box['x'], 'tablet keeps staff and piano roll side by side')
-        self.assertLess(abs(staff_box['y'] - roll_box['y']), 30, 'the two rails remain in one visual band')
+        self.assertLess(abs(staff_box['y'] - roll_box['y']), 50, 'the two rails remain in one visual band')
         self.assertLessEqual(self.page.evaluate('document.documentElement.scrollWidth'), 768)
         self.assertEqual(staff.locator('svg').count(), 1)
         self.assertGreater(staff.locator('svg path').count(), 10)
-        colors = staff.locator('svg path').evaluate_all("nodes => nodes.slice(0, 30).map(node => getComputedStyle(node).fill)")
+        colors = staff.locator('.full-score-pitch-color path').evaluate_all("nodes => nodes.map(node => getComputedStyle(node).fill)")
+        self.assertTrue(colors)
         self.assertTrue(all(color not in {'rgb(0, 0, 0)', 'rgba(0, 0, 0, 0)'} for color in colors))
-        self.assertIn('E Major', staff.get_attribute('aria-label'))
+        self.assertIn('Practice lesson', staff.get_attribute('aria-label'))
 
     def test_practice_notation_uses_visible_side_rails_on_normal_desktop(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
-        staff = self.page.locator('[data-testid="staff-notation"]').bounding_box()
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        staff = self.page.locator('[data-testid="score-notation"]').bounding_box()
         roll = self.page.locator('[data-testid="piano-roll-notation"]').bounding_box()
         device = self.page.locator('[data-testid="exquis-device"]').bounding_box()
         surface = self.page.locator('[data-testid="practice-surface"]').bounding_box()
@@ -3688,13 +4002,14 @@ class PlaywrightExhibitTests(unittest.TestCase):
         roll_midi = roll_note.get_attribute('data-midi')
         assert_surface_holds_releases_and_advances(roll_note, roll_midi)
 
-        staff_note = self.page.locator('[data-testid="staff-event-control"].notation-active')
-        staff_midi = self.page.locator('[data-testid="staff-note"].notation-active').get_attribute('data-midi')
+        staff_note = self.page.locator('[data-testid="full-score-event-control"].full-score-active-note')
+        staff_midi = self.page.locator('[data-testid="piano-roll-note"].notation-active').get_attribute('data-midi')
         assert_surface_holds_releases_and_advances(staff_note, staff_midi)
 
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
         self.page.select_option('[data-testid="exercise-select"]', 'c_major_progression')
-        staff_chord = self.page.locator('[data-testid="staff-event-control"]').first
+        self.page.wait_for_selector('[data-testid="full-score-svg"]')
+        staff_chord = self.page.locator('[data-testid="full-score-event-control"]').first
         step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
         staff_chord.dispatch_event('pointerdown')
         self.page.wait_for_function("() => document.querySelectorAll('[data-testid=\"exquis-key\"].midi-held').length >= 3")

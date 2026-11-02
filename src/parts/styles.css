@@ -18,6 +18,40 @@
   --tonic-key: #f2f0e7;
   --active-key: #c7ebff;
   --shadow: rgba(0, 0, 0, 0.28);
+  /* Shared practice-notation language.  The staff, roll, reference piano,
+     and Exquis pads consume these semantic roles rather than owning a visual
+     scheme each.  Musical pitch hue stays in per-note data variables. */
+  --notation-surface: #080d12;
+  --notation-surface-raised: #111922;
+  --notation-foreground: #f4f7f5;
+  --notation-muted: #aeb9b6;
+  --notation-grid: rgba(218, 230, 240, 0.34);
+  --notation-grid-strong: rgba(255, 209, 102, 0.62);
+  --notation-border: rgba(117, 167, 255, 0.4);
+  --notation-current-glow: #fff1a8;
+  --notation-current-outline: #fff5c6;
+  --notation-current-fill: #ffd166;
+  --notation-upcoming: #7fa8d8;
+  --instrument-surface: #0c1017;
+  --instrument-key-off: #1d252c;
+}
+
+/* Configuration seam: a future global preference only changes this root
+   attribute.  Components must not add their own alternate palettes. */
+:root[data-notation-theme="high-contrast"] {
+  --notation-surface: #000;
+  --notation-surface-raised: #080808;
+  --notation-foreground: #fff;
+  --notation-muted: #d9d9d9;
+  --notation-grid: rgba(255, 255, 255, 0.56);
+  --notation-grid-strong: #ffe26d;
+  --notation-border: rgba(255, 255, 255, 0.74);
+  --notation-current-glow: #fff4a3;
+  --notation-current-outline: #fff;
+  --notation-current-fill: #ffe26d;
+  --notation-upcoming: #9bc4ff;
+  --instrument-surface: #000;
+  --instrument-key-off: #202020;
 }
 
 * {
@@ -1311,6 +1345,17 @@ input[type="range"]:focus-visible {
   align-items: stretch;
 }
 
+/* Notation and the hardware surface are separate grid regions. Containing
+   SVG paint here is a hard boundary: a long staff system may be clipped or
+   reflowed, but it may never paint over playable Exquis controls. */
+.practice-surface > .exquis-device,
+.practice-surface > .practice-notation {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  isolation: isolate;
+}
+
 /* At ordinary desktop widths the instrument owns the primary canvas; the
    lesson strip follows it instead of competing for the top of the stage. */
 .practice-surface .exquis-device { order: 1; }
@@ -1923,7 +1968,7 @@ input[type="range"]:focus-visible {
   display: grid;
   place-items: center;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  background: var(--key);
+  background: var(--instrument-key-off);
   border: 0;
   color: #dce4ec;
   transform: translate(-50%, -50%);
@@ -1948,7 +1993,7 @@ input[type="range"]:focus-visible {
 }
 
 .key.in-scale {
-  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 88%, #1d252c);
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 88%, var(--instrument-key-off));
   color: #0b1016;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
 }
@@ -1960,9 +2005,9 @@ input[type="range"]:focus-visible {
   width: 100%;
   margin: 0 0 10px;
   overflow: hidden;
-  border: 1px solid rgba(117, 167, 255, 0.4);
+  border: 1px solid var(--notation-border);
   border-radius: 5px;
-  background: #0c1017;
+  background: var(--instrument-surface);
 }
 
 .practice-piano-reference[hidden] { display: none; }
@@ -1971,15 +2016,16 @@ input[type="range"]:focus-visible {
 .reference-piano-black { position: absolute; top: 0; z-index: 2; width: 20px; height: 29px; padding-bottom: 2px; border: 1px solid #06080c; border-radius: 0 0 3px 3px; background: linear-gradient(180deg, #303d4e, #080b10); color: #d7e6f5; }
 .reference-piano-key.reference-piano-colored.reference-piano-white { background: linear-gradient(180deg, hsl(var(--reference-hue) 88% 76%), hsl(var(--reference-hue) 68% 58%)); color: #091018; }
 .reference-piano-key.reference-piano-colored.reference-piano-black { background: linear-gradient(180deg, hsl(var(--reference-hue) 74% 47%), hsl(var(--reference-hue) 62% 25%)); }
-.reference-piano-key.is-upcoming { box-shadow: inset 0 -6px 0 #7fa8d8; }
-.reference-piano-key.is-current { background: #ffd166; color: #10141a; box-shadow: inset 0 0 0 2px #fff5c6, 0 0 12px rgba(255, 209, 102, 0.72); }
-.reference-piano-key.is-held { box-shadow: inset 0 0 0 3px #f7fbff, 0 0 16px rgba(255,255,255,0.92); filter: brightness(1.18) saturate(1.12); z-index: 4; }
+.reference-piano-key.is-upcoming { box-shadow: inset 0 -6px 0 var(--notation-upcoming); }
+/* Current is an emphasis state, never a replacement pitch hue. */
+.reference-piano-key.is-current { box-shadow: inset 0 0 0 2px var(--notation-current-outline), 0 0 12px color-mix(in srgb, var(--notation-current-glow) 72%, transparent); }
+.reference-piano-key.is-held { box-shadow: inset 0 0 0 3px var(--notation-foreground), 0 0 16px color-mix(in srgb, var(--notation-foreground) 92%, transparent); filter: brightness(1.18) saturate(1.12); z-index: 4; }
 .reference-piano-key[role="button"],
 .piano-roll-notation [role="button"],
 .staff-notation [role="button"] { cursor: pointer; }
 .reference-piano-key[role="button"]:focus-visible,
 .piano-roll-notation [role="button"]:focus-visible,
-.staff-notation [role="button"]:focus-visible { outline: 2px solid #fff5c6; outline-offset: 3px; }
+.staff-notation [role="button"]:focus-visible { outline: 2px solid var(--notation-current-outline); outline-offset: 3px; }
 
 @media (max-width: 1000px) {
   .practice-piano-reference { height: 44px; }
@@ -1987,13 +2033,13 @@ input[type="range"]:focus-visible {
 }
 
 .key.hardware-lit {
-  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 82%, #1d252c);
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 76%) 82%, var(--instrument-key-off));
   color: #0b1016;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .key.in-path {
-  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 78%) 94%, #17202a);
+  background: color-mix(in srgb, hsl(var(--pad-hue, 258deg) 100% 78%) 94%, var(--instrument-surface));
   color: #0b1016;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
 }
@@ -2024,11 +2070,12 @@ input[type="range"]:focus-visible {
 }
 
 .key.current {
-  background: color-mix(in srgb, hsl(var(--pad-hue, 120deg) 100% 68%) 90%, #fff) !important;
+  /* Keep the pitch's authored hue; the outline/glow conveys currentness. */
+  background: hsl(var(--pad-hue, 120deg) 100% 68%) !important;
   color: #121417;
-  outline: 5px solid rgba(242, 109, 109, 0.95);
+  outline: 5px solid var(--notation-current-outline);
   outline-offset: 4px;
-  box-shadow: 0 0 0 10px rgba(242, 109, 109, 0.16), 0 0 30px rgba(255, 241, 168, 0.55);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--notation-current-glow) 16%, transparent), 0 0 30px color-mix(in srgb, var(--notation-current-glow) 55%, transparent);
   z-index: 8;
 }
 
@@ -3181,9 +3228,9 @@ input[type="range"]:focus-visible {
   gap: 3px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--notation-border);
   border-radius: 5px;
-  background: rgba(5, 10, 14, 0.5);
+  background: var(--notation-surface-raised);
 }
 
 .notation-heading {
@@ -3213,7 +3260,7 @@ input[type="range"]:focus-visible {
   font-size: 10px;
 }
 
-#notationStepLabel { color: #fff1a8; font-weight: 800; line-height: 1.15; }
+#notationStepLabel { color: var(--notation-current-glow); font-weight: 800; line-height: 1.15; }
 
 .notation-harmony { color: var(--muted); font-size: 11px; }
 
@@ -3223,23 +3270,35 @@ input[type="range"]:focus-visible {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
+
+.piano-roll-notation { background: var(--notation-surface); }
 
 .score-notation {
   /* The follow view narrows the OSMD SVG viewBox. Keep off-window systems
      inside that viewport rather than letting them bleed through the rail. */
   overflow: hidden;
   border-radius: 4px;
-  background: #f8f5ea;
+  background: var(--notation-surface);
 }
 
 .score-notation svg {
   display: block;
   min-width: 100%;
-  background: #f8f5ea;
+  background: var(--notation-surface);
   overflow: hidden;
 }
+
+/* OSMD emits black engraving by default.  The baseline is deliberately
+   themed here; the semantic pitch-color rule below wins for note glyphs. */
+.score-notation svg path,
+.score-notation svg text,
+.score-notation svg line {
+  fill: var(--notation-foreground);
+  stroke: var(--notation-foreground);
+}
+.score-notation svg path[fill="none"] { fill: none; }
 
 .score-notation .full-score-pitch-color path,
 .score-notation .full-score-pitch-color text {
@@ -3249,41 +3308,40 @@ input[type="range"]:focus-visible {
 
 .score-notation .full-score-active-note path,
 .score-notation .full-score-active-note text {
-  fill: #d26a1d !important;
-  stroke: #8f390c !important;
-  stroke-width: 1.35px !important;
-  filter: drop-shadow(0 0 2px rgba(255, 214, 96, 0.95));
+  /* Current is a motion/glow state, never a new pitch color. A root stays
+     green, and every other scale degree keeps its own color semantics. */
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--notation-current-glow) 95%, transparent));
 }
 
 .notation-rail-heading { margin-bottom: 2px; }
 .notation-rail-heading p { margin: 0; }
 .notation-rail-heading p:last-child { color: var(--muted); font-size: 10px; }
 
-.staff-line, .roll-grid-line { stroke: rgba(218, 230, 240, 0.34); stroke-width: 1; }
-.roll-c-line { stroke: rgba(255, 209, 102, 0.62); stroke-width: 1.3; }
-.roll-axis-label { fill: #dce8f3; font: 11px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
-.staff-ledger { stroke: rgba(255, 241, 168, 0.82); stroke-width: 1.4; }
+.staff-line, .roll-grid-line { stroke: var(--notation-grid); stroke-width: 1; }
+.roll-c-line { stroke: var(--notation-grid-strong); stroke-width: 1.3; }
+.roll-axis-label { fill: var(--notation-foreground); font: 11px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
+.staff-ledger { stroke: color-mix(in srgb, var(--notation-current-glow) 82%, transparent); stroke-width: 1.4; }
 .staff-clef {
-  fill: #f5f1dd;
+  fill: var(--notation-foreground);
   font: 52px "Bravura", "Noto Music", "Segoe UI Symbol", serif;
 }
 .key-signature-accidental,
 .staff-note-accidental {
-  fill: #f5f1dd;
+  fill: var(--notation-foreground);
   font: 18px "Bravura", "Noto Music", "Segoe UI Symbol", serif;
 }
-.staff-note { fill: #8ba8c7; stroke: #0c1116; stroke-width: 1.2; }
-.staff-note.notation-active { fill: #fff1a8; stroke: #f26d6d; stroke-width: 2.3; }
-.staff-note.notation-completed { fill: #62d2a2; }
-.staff-note-label, .roll-note-label { fill: #dce4ec; font: 10px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
-.roll-note { fill: var(--roll-note-color, rgba(139, 168, 199, 0.82)); stroke: rgba(9, 15, 21, 0.95); stroke-width: 1; }
-.roll-note.notation-active { stroke: #fff; stroke-width: 4; filter: drop-shadow(0 0 7px #fff1a8); }
+.staff-note { fill: var(--notation-foreground); stroke: var(--notation-surface); stroke-width: 1.2; }
+.staff-note.notation-active { fill: var(--notation-current-fill); stroke: var(--notation-current-outline); stroke-width: 2.3; }
+.staff-note.notation-completed { opacity: 0.66; }
+.staff-note-label, .roll-note-label { fill: var(--notation-foreground); font: 10px ui-sans-serif, system-ui, sans-serif; font-weight: 800; }
+.roll-note { fill: var(--roll-note-color, var(--notation-foreground)); stroke: var(--notation-surface); stroke-width: 1; }
+.roll-note.notation-active { stroke: var(--notation-foreground); stroke-width: 4; filter: drop-shadow(0 0 7px var(--notation-current-glow)); }
 .roll-note.notation-completed { opacity: 0.66; }
-.roll-column-active { fill: rgba(255, 209, 102, 0.18); }
+.roll-column-active { fill: color-mix(in srgb, var(--notation-current-glow) 18%, transparent); }
 
 @keyframes notation-current-pulse {
-  0%, 100% { opacity: 1; filter: brightness(1) drop-shadow(0 0 2px #fff1a8); }
-  50% { opacity: 1; filter: brightness(1.7) drop-shadow(0 0 9px #fff1a8); }
+  0%, 100% { opacity: 1; filter: brightness(1) drop-shadow(0 0 2px var(--notation-current-glow)); }
+  50% { opacity: 1; filter: brightness(1.7) drop-shadow(0 0 9px var(--notation-current-glow)); }
 }
 
 .notation-active { animation: notation-current-pulse 780ms ease-in-out infinite; }
@@ -3327,8 +3385,8 @@ input[type="range"]:focus-visible {
     min-height: 360px;
     max-height: none;
     padding: 8px;
-    border: 0;
-    background: transparent;
+    border: 1px solid var(--notation-border);
+    background: var(--notation-surface-raised);
   }
 
   .app-shell[data-workspace="practice"] .notation-staff-rail {
@@ -3363,22 +3421,22 @@ input[type="range"]:focus-visible {
 .staff-notation svg path,
 .staff-notation svg text,
 .staff-notation svg line {
-  fill: #dbe8f4 !important;
-  stroke: #dbe8f4 !important;
+  fill: var(--notation-foreground) !important;
+  stroke: var(--notation-foreground) !important;
   stroke-width: 1.4px;
 }
 
 .staff-notation svg .vf-notehead path,
 .staff-notation svg .vf-notehead {
-  fill: #dbe8f4 !important;
-  stroke: #dbe8f4 !important;
+  fill: var(--notation-foreground) !important;
+  stroke: var(--notation-foreground) !important;
 }
 
 .staff-notation svg .vf-clef path,
-.staff-notation svg .vf-clef { fill: #62d2a2 !important; stroke: #62d2a2 !important; }
+.staff-notation svg .vf-clef { fill: var(--notation-foreground) !important; stroke: var(--notation-foreground) !important; }
 
 .staff-notation svg .vf-keysignature path,
-.staff-notation svg .vf-keysignature { fill: #7fa8d8 !important; stroke: #7fa8d8 !important; }
+.staff-notation svg .vf-keysignature { fill: var(--notation-foreground) !important; stroke: var(--notation-foreground) !important; }
 
 .staff-notation svg .vf-stavenote.notation-pitch-color path,
 .staff-notation svg .vf-stavenote.notation-pitch-color .vf-notehead,
@@ -3392,14 +3450,16 @@ input[type="range"]:focus-visible {
 .staff-notation svg .vf-stavenote.notation-active .vf-notehead,
 .staff-notation svg .vf-stavenote.notation-active .vf-notehead path,
 .staff-notation svg .vf-stavenote.notation-active .vf-stem {
-  stroke: #fff5c6 !important;
+  stroke: var(--notation-current-outline) !important;
   stroke-width: 3px !important;
 }
 
 .staff-notation svg .vf-stavenote.notation-completed { opacity: 0.66; }
 
-.staff-notation svg .vf-notehead path[fill="#ffd166"],
-.staff-notation svg .vf-notehead[fill="#ffd166"] { fill: #ffd166 !important; stroke: #ffd166 !important; }
+.score-notation .osmd-cursor {
+  fill: var(--notation-current-fill) !important;
+  stroke: var(--notation-current-glow) !important;
+}
 
 @media (max-width: 1000px) {
   .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) {

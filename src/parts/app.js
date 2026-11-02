@@ -1119,6 +1119,11 @@
   var logs = [];
   var pendingLogs = [];
   var logFlushTimer = null;
+  // Raw wire evidence for physical Exquis failures. This is intentionally
+  // separate from the human console so routine log trimming cannot erase the
+  // packets immediately preceding a reported blackout.
+  var exquisWireTrace = [];
+  var EXQUIS_WIRE_TRACE_LIMIT = 900;
   var midiVoices = {};
   var recentMidiNoteOffs = {};
   var pendingShortNoteReleases = {};
@@ -1168,6 +1173,10 @@
     scaleId: 'ionian',
     strategyId: 'natural_clusters',
     view: 'practice',
+    // Root-level theme selector: all notation surfaces inherit their palette
+    // from documentElement[data-notation-theme].  This is intentionally
+    // configuration state rather than a set of component-local switches.
+    notationTheme: 'dark',
     soundPresetId: 'subtractive::Wurlitzer EP',
     soundEngine: 'subtractive',
     soundCategory: 'Keys',
@@ -1442,6 +1451,7 @@
       }).filter(Boolean),
       mode: state.mode,
       exerciseId: state.exerciseId,
+      notationTheme: state.notationTheme,
       tonicPc: state.tonicPc,
       scaleId: state.scaleId,
       rootCellId: state.rootCellId,
@@ -1483,12 +1493,18 @@
   window.__exquisDebugBuildVoiceLeadingTransition = buildVoiceLeadingTransition;
   window.__exquisDebugBuildExerciseLifecycleEvents = buildDebugExerciseLifecycleEvents;
   window.__exquisDebugEvaluateGrip = evaluateGripAttempt;
+  window.__exquisDebugSetNotationTheme = function(theme) {
+    state.notationTheme = theme === 'high-contrast' ? 'high-contrast' : 'dark';
+    render();
+    return state.notationTheme;
+  };
   window.__exquisLightDebug = {
     currentFrame: function() { return { pads: currentLightFrame.map(function(pad) { return Object.assign({}, pad); }) }; },
     hardwareFrame: function() { return currentLightFrame.map(function(pad) { return { padId: pad.padId, midi: pad.midi, role: pad.role, isTarget: pad.isTarget, paletteIndex: lightFramePaletteIndex(pad) }; }); },
     paletteRgbFor: function(pad) { return lightFramePaletteRgb(pad, getScale()); },
     intervalHue: intervalHue,
-    reassertPracticeFrame: function() { return reassertExquisPracticeLightFrame(true); }
+    reassertPracticeFrame: function() { return reassertExquisPracticeLightFrame(true); },
+    heartbeatPracticeFrame: function() { return reassertExquisPracticeLightFrame(false); }
   };
 
   function mod(n, m) {
@@ -1498,6 +1514,18 @@
   function noteName(midi) {
     var names = FLAT_KEY_ROOTS.indexOf(state.tonicPc) >= 0 ? NOTES_FLAT : NOTES_SHARP;
     return names[mod(midi, 12)];
+  }
+
+  function traceExquisWire(direction, bytes, reason) {
+    if (!state.exquisSyncEnabled && direction === 'out') return;
+    exquisWireTrace.push({
+      at: new Date().toISOString(),
+      ms: Math.round(diagnosticNowMs()),
+      direction: direction,
+      bytes: Array.prototype.slice.call(bytes || []),
+      reason: reason || ''
+    });
+    if (exquisWireTrace.length > EXQUIS_WIRE_TRACE_LIMIT) exquisWireTrace.shift();
   }
 
   function tonicNameForPc(pc) {
@@ -1970,7 +1998,13 @@
       var categories = SL.presets.getCategoriesForEngine ? SL.presets.getCategoriesForEngine(engineName) : [];
       if (categories.indexOf(category) < 0) category = categories[0] || category;
       var runtimePresets = SL.presets.getPresetsForEngineCategory(engineName, category) || [];
-      var runtimePreset = runtimePresets[0] || null;
+      // Never turn a missing runtime match into that category's first preset.
+      // The embedded SSLI catalog can briefly expose a stale category while a
+      // song profile changes; choosing its first entry silently turns the
+      // requested timbre into (commonly) Celesta while the UI still names the
+      // song's requested sound. The vendor record below remains the canonical
+      // fallback and findSsliRuntimePreset resolves it across runtime categories.
+      var runtimePreset = null;
       for (var runtimeIndex = 0; runtimeIndex < runtimePresets.length; runtimeIndex++) {
         if (runtimePresets[runtimeIndex] && runtimePresets[runtimeIndex].name === presetName) {
           runtimePreset = runtimePresets[runtimeIndex];
@@ -4257,6 +4291,12 @@
     return typeof beats === 'number' && beats > 0 ? Math.min(8, beats) : 0.5;
   }
 
+  function songEventGateBeats(song, index) {
+    var gates = song && song.gateBeats;
+    var beats = Array.isArray(gates) ? gates[index] : 0;
+    return typeof beats === 'number' && beats > 0 ? beats : songEventDurationBeats(song, index);
+  }
+
   function prepareSongAuditionOutput() {
     var host = getSsliHost();
     if (!host || !host.SynthLab) return;
@@ -4306,7 +4346,8 @@
           key.classList.toggle('is-current', activeMidis.indexOf(Number(key.getAttribute('data-midi'))) >= 0);
         });
       }
-      if (song.scoreMusicXml) updateRenderedFullScorePlaybackState(song, projection, { suppressCursor: true });
+      var scoreSource = scoreSourceForPractice(song, projection);
+      if (scoreSource) updateRenderedFullScorePlaybackState(scoreSource, projection, { suppressCursor: true });
       else if (els.staffNotation) {
         els.staffNotation.querySelectorAll('[data-event-index]').forEach(function(node) {
           var isActive = Number(node.getAttribute('data-event-index')) === activeIndex;
@@ -4356,19 +4397,20 @@
     currentExerciseEvents.forEach(function(event, index) {
       var beats = songEventDurationBeats(song, index);
       var eventDurationMs = beats * msPerBeat;
+      var gateDurationMs = Math.min(eventDurationMs - 8, songEventGateBeats(song, index) * msPerBeat - 8);
       // Preserve authored melodic length; the tiny release guard prevents
       // overlap clicks without turning short values into staccato notes.
-      var durationSeconds = Math.max(0.08, (eventDurationMs - 8) / 1000);
+      var durationSeconds = Math.max(0.08, gateDurationMs / 1000);
       var expectedAtMs = startedAtMs + offsetMs;
       window.setTimeout(function() {
         if (token !== songAuditionToken) return;
         // Sound starts before repainting the staff, roll and hardware frame.
-        if (event && event.targets.length) {
-          playNote(event.targets[0].midi, durationSeconds, false, {
-            kind: 'song-audition', eventIndex: index, midi: event.targets[0].midi,
+        getPromptMidis(event).forEach(function(midi) {
+          playNote(midi, durationSeconds, false, {
+            kind: 'song-audition', eventIndex: index, midi: midi,
             expectedAtMs: expectedAtMs, durationSeconds: durationSeconds
           });
-        }
+        });
         state.step = index;
         renderSongAuditionVisual(token, false);
       }, Math.max(0, expectedAtMs - performance.now()));
@@ -4452,6 +4494,39 @@
       });
     } else {
       logEvent('console', 'copy unavailable in this browser context');
+      render();
+    }
+  }
+
+  function markExquisBlackout() {
+    expandConsole();
+    traceExquisWire('marker', [], 'USER REPORTED LIGHTS BLACK');
+    logEvent('midi', '*** USER MARKER: EXQUIS LIGHTS BLACK *** traceEvents=' + exquisWireTrace.length + ' pendingSyncTimers=' + exquisKeyModeSyncTimers.length + ' developerMask=' + state.exquisDeveloperMask);
+    render();
+  }
+
+  function copyExquisLightCapture() {
+    var capture = {
+      capturedAt: new Date().toISOString(),
+      syncEnabled: state.exquisSyncEnabled,
+      syncStatus: state.exquisSyncStatus,
+      developerMask: state.exquisDeveloperMask,
+      pendingSyncTimers: exquisKeyModeSyncTimers.length,
+      lightFrame: window.__exquisLightDebug.hardwareFrame(),
+      wireTrace: exquisWireTrace.slice(),
+      console: logs.slice()
+    };
+    var text = JSON.stringify(capture, null, 2);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        logEvent('midi', 'copied Exquis LED capture events=' + capture.wireTrace.length);
+        render();
+      }).catch(function(err) {
+        logEvent('midi', 'LED capture copy failed: ' + (err && err.message ? err.message : err));
+        render();
+      });
+    } else {
+      logEvent('midi', 'LED capture copy unavailable in this browser context');
       render();
     }
   }
@@ -5520,7 +5595,10 @@
   function normalizeSongSections(song, sourceName) {
     var rawSections = song && song.sections;
     if (typeof rawSections === 'undefined') {
-      return { melody: song.melody.slice(), durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : [], sections: [] };
+      var topLevelEvents = Array.isArray(song.chords)
+        ? song.chords.map(function(chord) { return chord.slice(); })
+        : song.melody.map(function(note) { return [note]; });
+      return { melody: topLevelEvents.map(function(event) { return event[0]; }), eventOffsets: topLevelEvents, durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : [], sections: [] };
     }
     if (!Array.isArray(rawSections) || !rawSections.length) throw new Error(sourceName + ': ' + song.title + ' sections must be a non-empty array');
     var seenIds = {};
@@ -5542,7 +5620,7 @@
     // Supplying both representations invites them to drift. Accept the
     // top-level form only when it exactly matches the canonical sequence.
     if (Array.isArray(song.melody) && (song.melody.length !== melody.length || song.melody.some(function(note, index) { return note !== melody[index]; }))) throw new Error(sourceName + ': ' + song.title + ' melody must match the concatenated sections, or be omitted');
-    return { melody: melody, durationsBeats: durationsBeats, sections: sections };
+    return { melody: melody, eventOffsets: melody.map(function(note) { return [note]; }), durationsBeats: durationsBeats, sections: sections };
   }
 
   function songSectionForEvent(song, eventIndex) {
@@ -5554,6 +5632,37 @@
     return null;
   }
 
+  // Transport spacing can include engraved rests. Read the actual printed
+  // note length from the first MusicXML part so an isolated melody note does
+  // not ring through the silence before its successor.
+  function musicXmlPlayableGateBeats(xml, expectedEventCount) {
+    if (!xml || !expectedEventCount || !window.DOMParser) return [];
+    try {
+      var documentNode = new window.DOMParser().parseFromString(xml, 'application/xml');
+      if (documentNode.getElementsByTagName('parsererror').length) return [];
+      var part = documentNode.getElementsByTagName('part')[0];
+      if (!part) return [];
+      var divisions = 1;
+      var gates = [];
+      var nodes = part.getElementsByTagName('*');
+      for (var nodeIndex = 0; nodeIndex < nodes.length; nodeIndex++) {
+        var node = nodes[nodeIndex];
+        if (node.tagName === 'divisions') {
+          divisions = Math.max(1, Number(node.textContent) || 1);
+        } else if (node.tagName === 'note' && !node.getElementsByTagName('rest').length) {
+          var durationNode = node.getElementsByTagName('duration')[0];
+          var beats = durationNode ? (Number(durationNode.textContent) || 0) / divisions : 0;
+          if (!(beats > 0)) return [];
+          if (node.getElementsByTagName('chord').length && gates.length) gates[gates.length - 1] = Math.max(gates[gates.length - 1], beats);
+          else gates.push(beats);
+        }
+      }
+      return gates.length === expectedEventCount ? gates : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
   function validateSongPackSong(song, sourceName) {
     if (song && typeof song.scoreMusicXml !== 'undefined' && (typeof song.scoreMusicXml !== 'string' || song.scoreMusicXml.indexOf('<score-') < 0)) throw new Error(sourceName + ': ' + song.title + ' scoreMusicXml must be a MusicXML score document');
     if (song && typeof song.scoreEventMap !== 'undefined' && (!Array.isArray(song.scoreEventMap) || !song.scoreEventMap.every(function(index) { return index === null || (typeof index === 'number' && index >= 0 && Math.floor(index) === index); }))) throw new Error(sourceName + ': ' + song.title + ' scoreEventMap must contain note indexes or null rests');
@@ -5561,20 +5670,27 @@
     if (song && typeof song.keyScaleId !== 'undefined' && (typeof song.keyScaleId !== 'string' || !SSLI_MODES[song.keyScaleId])) throw new Error(sourceName + ': ' + song.title + ' keyScaleId is not a supported SSLI scale/mode');
     if (song && typeof song.rootMidi !== 'undefined' && (!Number.isInteger(song.rootMidi) || song.rootMidi < 0 || song.rootMidi > 127)) throw new Error(sourceName + ': ' + song.title + ' rootMidi must be a MIDI note from 0 through 127');
     if (!song || typeof song.title !== 'string' || !song.title.trim()) throw new Error(sourceName + ': each song needs a title');
-    if (typeof song.sections === 'undefined' && (!Array.isArray(song.melody) || song.melody.length < 4 || !song.melody.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; }))) throw new Error(sourceName + ': ' + song.title + ' needs 4–24-semitone melody offsets');
+    var hasMelody = Array.isArray(song.melody) && song.melody.length >= 4 && song.melody.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; });
+    var hasChords = Array.isArray(song.chords) && song.chords.length >= 4 && song.chords.every(function(chord) { return Array.isArray(chord) && chord.length >= 2 && chord.length <= 5 && chord.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; }); });
+    if (typeof song.sections === 'undefined' && !hasMelody && !hasChords) throw new Error(sourceName + ': ' + song.title + ' needs four melody events or four 2–5-note chord events');
     var normalizedSections = normalizeSongSections(song, sourceName);
     if (normalizedSections.melody.length < 4) throw new Error(sourceName + ': ' + song.title + ' needs at least four playable notes');
     if (typeof song.durationsBeats !== 'undefined' && (!Array.isArray(song.durationsBeats) || song.durationsBeats.length !== normalizedSections.melody.length)) throw new Error(sourceName + ': ' + song.title + ' durationsBeats must match the complete melody length');
+    if (typeof song.gateBeats !== 'undefined' && (!Array.isArray(song.gateBeats) || song.gateBeats.length !== normalizedSections.melody.length || !song.gateBeats.every(function(beats) { return typeof beats === 'number' && beats > 0; }))) throw new Error(sourceName + ': ' + song.title + ' gateBeats must contain one positive duration per event');
     if (Array.isArray(song.scoreEventMap) && song.scoreEventMap.some(function(index) { return typeof index === 'number' && index >= normalizedSections.melody.length; })) throw new Error(sourceName + ': ' + song.title + ' scoreEventMap references a note outside the complete melody');
     return {
       id: 'loaded_song_' + sourceName.replace(/[^a-z0-9]+/gi, '_').toLowerCase() + '_' + song.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase(),
       name: song.title.trim(),
       artist: typeof song.artist === 'string' && song.artist.trim() ? song.artist.trim() : (typeof song.attribution === 'string' && song.attribution.trim() ? song.attribution.trim() : 'User-authorized local song pack'),
       melody: normalizedSections.melody,
+      // A monophonic song stores one offset per event; chord songs retain all
+      // simultaneous offsets here while keeping `melody` for legacy consumers.
+      eventOffsets: normalizedSections.eventOffsets,
       soundPresetId: typeof song.soundPresetId === 'string' ? song.soundPresetId : '',
       fxPresetId: typeof song.fxPresetId === 'string' ? song.fxPresetId : '',
       tempoBpm: typeof song.tempoBpm === 'number' ? song.tempoBpm : 112,
       durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : normalizedSections.durationsBeats,
+      gateBeats: Array.isArray(song.gateBeats) ? song.gateBeats.slice() : musicXmlPlayableGateBeats(song.scoreMusicXml, normalizedSections.melody.length),
       sections: normalizedSections.sections,
       // Full score source; OSMD handles the actual engraving from this standard.
       scoreMusicXml: typeof song.scoreMusicXml === 'string' ? song.scoreMusicXml : '',
@@ -5983,23 +6099,34 @@
     if (!root) return [];
     var events = [];
     for (var index = 0; index < song.melody.length; index++) {
-      var offset = song.melody[index];
-      var targetMidi = root.midi + offset;
-      var target = bestCellForTarget(cells, mod(root.pc + offset, 12), targetMidi, root, null);
+      var offsets = Array.isArray(song.eventOffsets) && Array.isArray(song.eventOffsets[index]) ? song.eventOffsets[index] : [song.melody[index]];
+      var targets = offsets.map(function(offset) {
+        var targetMidi = root.midi + offset;
+        var target = bestCellForTarget(cells, mod(root.pc + offset, 12), targetMidi, root, null);
+        return target && target.midi === targetMidi ? target : null;
+      });
       // A song must be completely playable on the displayed Exquis range. Do
       // not silently substitute another octave or a virtual pad.
-      if (!target || target.midi !== targetMidi) return [];
-      events.push(createNoteExerciseEvent({
-        id: song.id + ':phrase-note:' + index,
-        musicalIntent: { type: 'song-melody', songId: song.id, title: song.name, artist: song.artist },
-        cellId: cellKey(target),
-        midi: target.midi,
-        sourceCell: clonePathCell(target),
-        targets: [{ cellId: cellKey(target), midi: target.midi, pc: target.pc }],
-        fingering: { primary: fingers[index % fingers.length], alternatives: [] },
-        timing: { mode: 'sequential' },
-        remediation: { type: 'repeat-event' }
-      }));
+      if (targets.some(function(target) { return !target; })) return [];
+      var targetSpecs = targets.map(function(target) { return { cellId: cellKey(target), midi: target.midi, pc: target.pc }; });
+      if (targetSpecs.length === 1) {
+        events.push(createNoteExerciseEvent({
+          id: song.id + ':phrase-note:' + index,
+          musicalIntent: { type: 'song-melody', songId: song.id, title: song.name, artist: song.artist },
+          cellId: targetSpecs[0].cellId, midi: targetSpecs[0].midi,
+          sourceCell: clonePathCell(targets[0]), targets: targetSpecs,
+          fingering: { primary: fingers[index % fingers.length], alternatives: [] },
+          timing: { mode: 'sequential' }, remediation: { type: 'repeat-event' }
+        }));
+      } else {
+        var chordFingers = exquisChordFingerPattern(targetSpecs.length);
+        events.push(createGripExerciseEvent({
+          id: song.id + ':phrase-chord:' + index,
+          musicalIntent: { type: 'song-chord', songId: song.id, title: song.name, artist: song.artist },
+          sourceCell: clonePathCell(targets[0]), sourceCells: targets.map(clonePathCell), targets: targetSpecs,
+          fingerAssignments: targetSpecs.map(function(target, targetIndex) { return { cellId: target.cellId, finger: chordFingers[targetIndex] }; })
+        }));
+      }
     }
     return events;
   }
@@ -6306,7 +6433,13 @@
   }
 
   function spellNotationPitch(midi) {
-    var names = FLAT_KEY_ROOTS.indexOf(state.tonicPc) >= 0 ? NOTES_FLAT : NOTES_SHARP;
+    // The staff must follow the written key, not merely the tonic button's
+    // preferred label. C minor, for example, is an E-flat-key-signature
+    // context even though C itself is normally displayed without a flat.
+    // Keeping this decision here makes VexFlow noteheads, accidentals and
+    // piano-roll labels agree for every song and every phrase window.
+    var signature = notationKeySignature();
+    var names = signature.conventional && signature.count < 0 ? NOTES_FLAT : NOTES_SHARP;
     var name = names[mod(midi, 12)];
     var letter = name.charAt(0);
     var accidental = name.slice(1);
@@ -6487,22 +6620,32 @@
         // This keeps notation as an input surface without replacing OSMD's
         // layout, glyph choice, or score semantics.
         var engravedNotes = svg.querySelectorAll('.vf-stavenote');
+        // Cached score renders reuse the SVG. Clear the old active marker
+        // before applying the new projection, otherwise the phrase viewport
+        // follows the first note that was ever active instead of the learner.
+        Array.prototype.forEach.call(engravedNotes, function(note) {
+          note.classList.remove('full-score-active-note');
+          note.classList.remove('notation-active');
+        });
         projection.events.forEach(function(event, index) {
           var renderedIndex = song.scoreEventMap && song.scoreEventMap.length ? song.scoreEventMap.indexOf(index) : index;
           var engravedNote = engravedNotes[renderedIndex];
           if (!engravedNote || !event.midis || !event.midis.length) return;
           engravedNote.setAttribute('data-testid', 'full-score-event-control');
+          engravedNote.setAttribute('data-event-index', String(event.index));
+          engravedNote.setAttribute('data-notation-pitches', event.midis.map(function(midi) {
+            return spellNotationPitch(midi).label;
+          }).join(','));
+          engravedNote.setAttribute('data-notation-midis', event.midis.join(','));
           engravedNote.classList.add('full-score-pitch-color');
           engravedNote.style.setProperty('--score-pitch-color', 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 66% 46%)');
-          if (event.active) engravedNote.classList.add('full-score-active-note');
+          if (event.active) engravedNote.classList.add('full-score-active-note', 'notation-active');
           bindAlternativeSurfaceInput(engravedNote, event.midis, 'Play score step ' + String(index + 1));
         });
         updateScoreMeasureWindow(svg);
       }
       els.scoreNotation.querySelectorAll('.osmd-cursor').forEach(function(cursor) {
         cursor.setAttribute('data-testid', 'full-score-cursor');
-        cursor.style.fill = '#f6c65b';
-        cursor.style.stroke = '#fff1a8';
       });
       els.scoreNotation.setAttribute('aria-label', songDisplayName(song) + ', complete engraved score; practice step ' + String(state.step + 1) + ' of ' + String(projection.events.length));
     });
@@ -6515,11 +6658,12 @@
     var engravedNotes = svg.querySelectorAll('.vf-stavenote');
     Array.prototype.forEach.call(engravedNotes, function(note) {
       note.classList.remove('full-score-active-note');
+      note.classList.remove('notation-active');
     });
     projection.events.forEach(function(event, index) {
       var renderedIndex = song.scoreEventMap && song.scoreEventMap.length ? song.scoreEventMap.indexOf(index) : index;
       var engravedNote = engravedNotes[renderedIndex];
-      if (engravedNote && event.active) engravedNote.classList.add('full-score-active-note');
+      if (engravedNote && event.active) engravedNote.classList.add('full-score-active-note', 'notation-active');
     });
     // The cursor is lightweight DOM state once OSMD has engraved. Do not call
     // scoreRenderer.render() here: re-engraving every 115 ms note blocks the
@@ -6537,6 +6681,71 @@
   // It consumes MusicXML (the standard score interchange format) and handles
   // conventional clefs, rests, voices, measure layout, beams, accidentals and
   // multi-staff systems. The local MIDI/Exquis adapter never re-engraves them.
+  function generatedSongScoreXml(song, projection) {
+    // Melody-only packs use the same standards-based engraver as authored
+    // MusicXML. That removes the old second staff display without asking the
+    // event engine to become an engraving engine.
+    var signature = notationKeySignature();
+    var beatsPerMeasure = Math.max(1, Number(song && song.beatsPerMeasure) || 4);
+    var divisions = 4;
+    var remaining = beatsPerMeasure;
+    var measureNumber = 1;
+    var measures = [];
+    var current = [];
+    function noteType(beats) {
+      if (beats >= 4) return { type: 'whole', dot: false };
+      if (beats >= 3) return { type: 'half', dot: true };
+      if (beats >= 2) return { type: 'half', dot: false };
+      if (beats >= 1.5) return { type: 'quarter', dot: true };
+      if (beats >= 1) return { type: 'quarter', dot: false };
+      if (beats >= 0.75) return { type: 'eighth', dot: true };
+      return { type: 'eighth', dot: false };
+    }
+    function closeMeasure() {
+      if (!current.length) return;
+      measures.push('<measure number="' + String(measureNumber++) + '">' + current.join('') + '</measure>');
+      current = [];
+      remaining = beatsPerMeasure;
+    }
+    projection.events.forEach(function(event, index) {
+      var beats = Math.min(beatsPerMeasure, songEventDurationBeats(song, index));
+      if (current.length && beats > remaining + 0.001) closeMeasure();
+      var rhythm = noteType(beats);
+      event.midis.forEach(function(midi, chordIndex) {
+        var pitch = spellNotationPitch(midi);
+        var alter = pitch.accidental === '#' ? '<alter>1</alter>' : (pitch.accidental === 'b' ? '<alter>-1</alter>' : '');
+        current.push('<note>' + (chordIndex ? '<chord/>' : '') + '<pitch><step>' + pitch.letter + '</step>' + alter + '<octave>' + String(pitch.octave) + '</octave></pitch><duration>' + String(Math.max(1, Math.round(beats * divisions))) + '</duration><type>' + rhythm.type + '</type>' + (rhythm.dot ? '<dot/>' : '') + '</note>');
+      });
+      remaining -= beats;
+      if (remaining < 0.001) closeMeasure();
+    });
+    closeMeasure();
+    if (measures.length) {
+      measures[0] = measures[0].replace('>', '><attributes><divisions>' + String(divisions) + '</divisions><key><fifths>' + String(signature.conventional ? signature.count : 0) + '</fifths></key><time><beats>' + String(beatsPerMeasure) + '</beats><beat-type>4</beat-type></time><clef><sign>' + (projection.useBass ? 'F' : 'G') + '</sign><line>' + (projection.useBass ? '4' : '2') + '</line></clef></attributes>');
+    }
+    return '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><part-list><score-part id="P1"><part-name>Practice</part-name></score-part></part-list><part id="P1">' + measures.join('') + '</part></score-partwise>';
+  }
+
+  function scoreSourceForPractice(song, projection) {
+    // Practice has one staff surface: OSMD. Authored songs keep their source
+    // score; every other lesson becomes MusicXML at this adapter boundary.
+    // This prevents initial scale/arpeggio lessons from falling back to the
+    // retired black-background VexFlow display.
+    if (song && song.scoreMusicXml) return song;
+    var generatedSource = song || {
+      name: 'Practice lesson',
+      artist: '',
+      beatsPerMeasure: 4,
+      durationsBeats: projection.events.map(function() { return 0.5; })
+    };
+    return {
+      name: generatedSource.name,
+      artist: generatedSource.artist,
+      scoreMusicXml: generatedSongScoreXml(generatedSource, projection),
+      scoreEventMap: projection.events.map(function(event) { return event.index; })
+    };
+  }
+
   function renderFullScoreNotation(song, projection) {
     var container = els.scoreNotation;
     if (!container || !song || !song.scoreMusicXml) return false;
@@ -6581,7 +6790,7 @@
     return true;
   }
 
-  function renderStaffNotation(projection) {
+  function renderStaffNotation(projection, song) {
     var container = els.staffNotation;
     if (!container) return;
     clearStaffNotation(container, 'Staff notation of the full practice sequence; current step flashes');
@@ -6602,7 +6811,13 @@
     var context = renderer.getContext();
     var alteredPcs = signature.count > 0 ? [6, 1, 8, 3, 10, 5, 11].slice(0, signature.count) :
       (signature.count < 0 ? [10, 3, 8, 1, 6, 11, 5].slice(0, -signature.count) : []);
-    var notes = projection.events.map(function(event) {
+    var eventWindow = song ? pianoRollEventWindow(projection, song) : {
+      events: projection.events,
+      key: 'all',
+      label: 'Full sequence'
+    };
+    var visibleEvents = eventWindow.events;
+    var notes = visibleEvents.map(function(event) {
       var note = new VF.StaveNote({
         clef: useBass ? 'bass' : 'treble',
         keys: event.midis.map(function(midi) {
@@ -6623,9 +6838,9 @@
       note.setStyle({ fillStyle: note._notationColor, strokeStyle: note._notationColor });
       return note;
     });
-    // This is a pitch sequence, not a multi-bar score: keep its phrase in one
-    // visual line. Clef choice carries the register information; duplicating
-    // staves merely hid half the lesson and implied a false system break.
+    // The staff follows the same measure-sized phrase as the piano roll. A
+    // full song is never compressed into one unreadable line; the cursor
+    // advances the window together across every notation surface.
     var notesPerSystem = Math.max(1, notes.length);
     var systemCount = 1;
     for (var systemStart = 0; systemStart < notes.length; systemStart += notesPerSystem) {
@@ -6643,11 +6858,7 @@
     }
     var svg = container.querySelector('svg');
     if (svg) {
-      svg.querySelectorAll('path, line, text').forEach(function(node) {
-        node.style.stroke = '#dbe8f4';
-        node.style.fill = '#dbe8f4';
-      });
-      svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', full practice sequence; current step flashes');
+      svg.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', ' + eventWindow.label + '; current step flashes');
       var renderedNotes = svg.querySelectorAll('.vf-stavenote');
       notes.forEach(function(note, index) {
         var node = renderedNotes[index];
@@ -6655,12 +6866,19 @@
         node.style.setProperty('--staff-note-color', note._notationColor);
         node.classList.add('notation-pitch-color');
         if (note._notationActive) node.classList.add('notation-active');
-        if (projection.events[index] && projection.events[index].completed) node.classList.add('notation-completed');
+        if (visibleEvents[index] && visibleEvents[index].completed) node.classList.add('notation-completed');
         node.setAttribute('data-testid', 'staff-event-control');
-        bindAlternativeSurfaceInput(node, note._notationMidis, 'Play staff step ' + String(index + 1));
+        // Expose the written pitch spelling for accessibility and regression
+        // coverage. This is deliberately derived from the same function that
+        // creates the VexFlow keys, so a visible sharp/flat cannot drift from
+        // the key-aware spelling contract.
+        node.setAttribute('data-notation-pitches', note._notationMidis.map(function(midi) {
+          return spellNotationPitch(midi).label;
+        }).join(','));
+        bindAlternativeSurfaceInput(node, note._notationMidis, 'Play staff step ' + String(visibleEvents[index].index + 1));
       });
       var metadata = notationSvgElement('g', { opacity: 0, 'aria-hidden': 'true' });
-      projection.events.forEach(function(event) {
+      visibleEvents.forEach(function(event) {
         event.midis.forEach(function(midi) {
           var marker = notationSvgElement('rect', { width: 0, height: 0, class: 'staff-note' + (event.active ? ' notation-active' : ''), 'data-testid': 'staff-note', 'data-midi': midi, 'data-event-index': event.index });
           if (event.active) marker.setAttribute('aria-current', 'step');
@@ -6669,7 +6887,7 @@
       });
       svg.appendChild(metadata);
     }
-    container.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', full practice sequence; current step flashes');
+    container.setAttribute('aria-label', signature.label + ', ' + (useBass ? 'bass clef' : 'treble clef') + ', ' + eventWindow.label + '; current step flashes');
   }
 
   function pianoRollEventWindow(projection, song) {
@@ -6762,11 +6980,9 @@
       return;
     }
     var activeSong = state.exerciseFamily === 'songs' ? songLessonForId(state.exerciseId) : null;
-    if (els.practiceSurface) els.practiceSurface.classList.toggle('full-score-active', !!(activeSong && activeSong.scoreMusicXml));
-    if (!renderFullScoreNotation(activeSong, projection)) {
-      clearFullScoreNotation();
-      renderStaffNotation(projection);
-    }
+    var scoreSource = scoreSourceForPractice(activeSong, projection);
+    if (els.practiceSurface) els.practiceSurface.classList.toggle('full-score-active', !!scoreSource);
+    renderFullScoreNotation(scoreSource, projection);
     renderPianoRollNotation(projection, activeSong);
     var notationSongSection = songSectionForEvent(songLessonForId(state.exerciseId), state.step);
     if (els.notationStepLabel) els.notationStepLabel.textContent = (notationSongSection ? notationSongSection.name + ' · ' : '') + 'Step ' + String(state.step + 1) + ' of ' + String(events.length);
@@ -7284,6 +7500,7 @@
   function onMidiMessage(event) {
     var data = event.data;
     if (!data || data.length < 2) return;
+    traceExquisWire('in', data, data[0] === 0xF0 ? 'SysEx receive' : 'MIDI receive');
     if (data[0] === 0xF0) {
       handleExquisSysex(data);
       return;
@@ -7551,6 +7768,7 @@
     if (!midiOutput || !midiOutput.send) return false;
     try {
       midiOutput.send(bytes);
+      traceExquisWire('out', bytes, reason);
       if (bytes && bytes.length >= 7 && bytes[0] === 0xF0 && bytes[1] === 0x00 && bytes[2] === 0x21 && bytes[3] === 0x7E && bytes[4] === 0x7F && bytes[5] === 0x00) {
         state.exquisDeveloperMask = clamp7Bit(bytes[6]);
       }
@@ -7631,6 +7849,15 @@
       state.mode === 'practice' && !exquisKeyModeSyncTimers.length &&
       !objectKeyCount(state.heldNotes) && (force || idleForMs >= EXQUIS_PRACTICE_LIGHT_IDLE_MS);
     if (!canRefresh) return false;
+    // The transport keepalive holds the device's LED ownership continuously.
+    // A passive watchdog rebuild is therefore counterproductive: Developer
+    // Mode deliberately blanks every pad before the palette is streamed back,
+    // producing the visible black-to-wave animation. Reserve that disruptive
+    // transaction for an explicit diagnostic/manual recovery only.
+    if (!force) {
+      logEvent('midi', 'Exquis practice LED watchdog skipped disruptive rebuild; transport keepalive is active');
+      return false;
+    }
     // Do a complete official transaction, rather than sending only changed
     // values. The cache describes what the browser last sent, not necessarily
     // what the hardware retained after its own idle LED timeout.
@@ -8309,6 +8536,7 @@
   }
 
   function render() {
+    document.documentElement.setAttribute('data-notation-theme', state.notationTheme === 'high-contrast' ? 'high-contrast' : 'dark');
     var logicCells = makeGrid();
     var cells = logicCells;
     var scale = getScale();
@@ -9190,6 +9418,8 @@
     els.rgbPadTestExquis.addEventListener('click', probeExquisRgbPad);
     els.dialListen.addEventListener('click', toggleExquisDialListen);
     els.hardwareDiagnostics.addEventListener('click', expandConsole);
+    els.markExquisBlackout.addEventListener('click', markExquisBlackout);
+    els.copyExquisLightCapture.addEventListener('click', copyExquisLightCapture);
     els.audioDiag.addEventListener('click', function() {
       expandConsole();
       logSsliAudioHealth('manual');
@@ -9427,6 +9657,8 @@
       rgbPadTestExquis: document.getElementById('rgbPadTestExquis'),
       dialListen: document.getElementById('dialListen'),
       hardwareDiagnostics: document.getElementById('hardwareDiagnostics'),
+      markExquisBlackout: document.getElementById('markExquisBlackout'),
+      copyExquisLightCapture: document.getElementById('copyExquisLightCapture'),
       exquisSyncStatus: document.getElementById('exquisSyncStatus'),
       lastMidi: document.getElementById('lastMidi'),
       coachFeedback: document.getElementById('coachFeedback'),

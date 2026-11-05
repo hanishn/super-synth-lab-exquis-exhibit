@@ -342,6 +342,12 @@ input {
 .library-controls-slot .session-setup {
   position: static;
   margin: 0;
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-3);
 }
 
 .library-controls-slot .setup-controls-body {
@@ -352,10 +358,10 @@ input {
 .library-controls-slot .controls-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   width: 100%;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .library-controls-slot .controls-grid > * {
@@ -376,6 +382,17 @@ input {
 
 .library-controls-slot [data-testid="practice-tools"] > summary {
   display: none;
+}
+
+.library-controls-slot .workbench-card-title,
+.library-controls-slot .audio-section > h2 {
+  margin: 0 0 2px;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.library-controls-slot .practice-workflow-controls > .workbench-card-title {
+  grid-column: 1 / -1 !important;
 }
 
 .library-controls-slot .console-panel {
@@ -443,80 +460,59 @@ input {
 }
 
 .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] [data-testid="hardware-tools"] {
-  display: grid;
-  gap: 14px;
+  display: block;
+  gap: 0;
   margin: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel-3);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 @media (min-width: 1001px) {
   .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(330px, 0.92fr);
+    grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.9fr);
     grid-template-areas:
-      "heading heading"
-      "connection diagnostics"
-      "sync advanced"
-      "activity advanced";
-    gap: 10px 16px;
+      "connection status"
+      "diagnostics diagnostics"
+      "advanced advanced";
+    gap: 12px;
     align-items: start;
   }
 
-  .studio-workspace .midi-coach-section > h2 {
-    grid-area: heading;
-    margin: 0;
-  }
-
-  .studio-workspace [aria-labelledby="hardware-connection-heading"] {
+  .studio-workspace [data-testid="hardware-connection-card"] {
     grid-area: connection;
   }
 
-  .studio-workspace [aria-labelledby="hardware-diagnostics-heading"] {
+  .studio-workspace [data-testid="hardware-status-card"] {
+    grid-area: status;
+  }
+
+  .studio-workspace [data-testid="hardware-diagnostics-card"] {
     grid-area: diagnostics;
   }
 
   .studio-workspace .advanced-hardware-research {
     grid-area: advanced;
   }
-
-  .studio-workspace #exquisSyncStatus {
-    grid-area: sync;
-  }
-
-  .studio-workspace #midiActivity {
-    grid-area: activity;
-  }
 }
 
 .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) {
-  display: block;
-  position: relative;
-  padding-right: 499px;
-}
-
-.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) > h2,
-.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) .hardware-control-help {
-  display: none;
-}
-
-.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) .hardware-control-group {
-  gap: 4px;
-}
-
-.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .midi-coach-section:has(.console-panel.expanded) > :not(.console-panel) {
-  max-width: 100%;
+  grid-template-columns: minmax(360px, 0.88fr) minmax(480px, 1.12fr);
+  grid-template-areas:
+    "connection console"
+    "status console"
+    "diagnostics console"
+    "advanced console";
+  align-items: start;
 }
 
 .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: auto;
-  width: 485px;
-  max-height: calc(100vh - 132px);
+  position: static;
+  grid-area: console;
+  width: auto;
+  max-height: calc(100vh - 190px);
 }
 
 .studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded .console-actions {
@@ -544,6 +540,14 @@ input {
   gap: 8px;
 }
 
+.studio-workspace .hardware-workbench-card,
+.studio-workspace .advanced-hardware-research {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-3);
+}
+
 .studio-workspace .hardware-control-group h3,
 .studio-workspace .hardware-control-group p {
   margin: 0;
@@ -553,15 +557,63 @@ input {
   color: var(--muted);
 }
 
-.advanced-hardware-research {
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
+.advanced-hardware-research { margin: 0; }
 
 .advanced-hardware-research > summary {
   cursor: pointer;
   color: #fff1a8;
   font-weight: 850;
+}
+
+.hardware-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hardware-state-chip {
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(117, 167, 255, 0.42);
+  border-radius: 999px;
+  background: var(--panel-3);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hardware-state-chip.ready { border-color: rgba(98, 210, 162, 0.72); color: var(--accent); }
+.hardware-state-chip.live { border-color: rgba(246, 198, 91, 0.72); color: #fff1a8; }
+
+.hardware-status-card h3 { margin: 0 0 12px; }
+
+.hardware-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hardware-status-grid p {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+}
+
+.hardware-status-grid span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hardware-status-grid b {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hardware-control-warning {
@@ -806,6 +858,67 @@ input {
     min-height: 44px;
     margin: 0;
   }
+}
+
+/*
+ * Layout templates:
+ * - workbench: configure a session or a device with the same editorial header
+ *   (eyebrow, title, deck) and an aligned control canvas.
+ * - playfield: prioritize the instrument and live notation; it shares the
+ *   shell and component language but is intentionally not a settings form.
+ *
+ * Keep workspace-specific information inside the workbench canvas.  Do not
+ * create a competing header geometry for one destination: it breaks the
+ * user's learned scan order when moving between Session and Hardware.
+ */
+.workspace-screen[data-layout-template="workbench"] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px 22px;
+  overflow: auto;
+}
+
+.workspace-screen[data-layout-template="workbench"] .workspace-screen-header {
+  max-width: none;
+  margin: 0;
+}
+
+.workspace-screen[data-layout-template="workbench"] .workspace-screen-header .eyebrow {
+  margin: 0 0 2px;
+}
+
+.workspace-screen[data-layout-template="workbench"] .workspace-screen-header h2 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.05;
+}
+
+.workspace-screen[data-layout-template="workbench"] .workspace-screen-header p:last-child {
+  max-width: 620px;
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+
+/* Hardware used to bypass the shared header with a split two-column title. */
+.studio-workspace .workspace-screen-header {
+  display: block;
+  grid-template-columns: none;
+  gap: 0;
+}
+
+.studio-workspace .workspace-screen-header h2,
+.studio-workspace #studioDescription,
+.studio-workspace .workspace-screen-header .eyebrow {
+  grid-column: auto;
+  grid-row: auto;
+  align-self: auto;
+}
+
+.studio-workspace #studioDescription {
+  max-width: 620px;
+  margin: 8px 0 0;
+  font-size: 15px;
 }
 
 @media (min-width: 901px) {
@@ -2460,10 +2573,12 @@ input[type="range"]:focus-visible {
 }
 
 .midi-coach-section {
-  padding: 4px 6px;
-  border: 1px solid rgba(98, 210, 162, 0.38);
-  border-radius: 8px;
-  background: linear-gradient(180deg, rgba(98, 210, 162, 0.11), rgba(117, 167, 255, 0.06));
+  /* The enclosing workbench card owns its surface.  Reserve green for the
+   * connection action/status, not a second screen-wide visual language. */
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .midi-coach-section h2 {
@@ -3175,23 +3290,6 @@ input[type="range"]:focus-visible {
 }
 
 @media (max-height: 780px) and (min-width: 1001px) {
-  .studio-workspace {
-    gap: 4px;
-    padding: 10px 20px;
-  }
-
-  .studio-workspace .workspace-screen-header .eyebrow {
-    display: none;
-  }
-
-  .studio-workspace .workspace-screen-header h2 {
-    font-size: 24px;
-  }
-
-  .studio-workspace #studioDescription {
-    font-size: 12px;
-  }
-
   .studio-workspace .studio-tabs {
     margin-top: 0;
   }

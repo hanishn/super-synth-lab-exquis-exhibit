@@ -4949,6 +4949,64 @@
     return offset === 1 ? '0' : '1';
   }
 
+  function selectUniqueScaleLightsByRow(cells, scale, root) {
+    // The Exquis has duplicate lattice representations for a few MIDI pitches.
+    // A "two nearest in each row" pass can therefore select the same actual
+    // pitch twice (A minor used to emit C3 and F3 twice) while omitting another
+    // in-key printed note. Choose two pads per physical row as one constrained
+    // map: every selected MIDI is unique, and the requested root is retained.
+    var rootColumn = logicalColumn(root);
+    var byRow = {};
+    for (var i = 0; i < cells.length; i++) {
+      if (!isScalePc(cells[i].pc, scale)) continue;
+      if (!byRow[cells[i].row]) byRow[cells[i].row] = [];
+      byRow[cells[i].row].push(cells[i]);
+    }
+    var rows = Object.keys(byRow).map(Number);
+    var choices = rows.map(function(row) {
+      var candidates = byRow[row].slice().sort(function(a, b) {
+        return Math.abs(logicalColumn(a) - rootColumn) - Math.abs(logicalColumn(b) - rootColumn) || a.col - b.col;
+      });
+      var pairs = [];
+      for (var left = 0; left < candidates.length; left++) {
+        for (var right = left + 1; right < candidates.length; right++) {
+          var pair = [candidates[left], candidates[right]];
+          if (pair[0].midi === pair[1].midi) continue;
+          if (pair[0].id !== root.id && pair[1].id !== root.id && byRow[row].some(function(cell) { return cell.id === root.id; })) continue;
+          pairs.push({
+            cells: pair,
+            score: Math.abs(logicalColumn(pair[0]) - rootColumn) + Math.abs(logicalColumn(pair[1]) - rootColumn)
+          });
+        }
+      }
+      return { row: row, pairs: pairs };
+    });
+    // Constrain the tightest rows first. This avoids a locally pretty choice
+    // consuming the only MIDI available to a later physical row.
+    choices.sort(function(a, b) { return a.pairs.length - b.pairs.length || a.row - b.row; });
+    var best = null;
+    function choose(index, usedMidis, selected, score) {
+      if (best && score >= best.score) return;
+      if (index === choices.length) {
+        best = { cells: selected.slice(), score: score };
+        return;
+      }
+      choices[index].pairs.forEach(function(pair) {
+        if (usedMidis[pair.cells[0].midi] || usedMidis[pair.cells[1].midi]) return;
+        usedMidis[pair.cells[0].midi] = true;
+        usedMidis[pair.cells[1].midi] = true;
+        selected.push(pair.cells[0], pair.cells[1]);
+        choose(index + 1, usedMidis, selected, score + pair.score);
+        selected.pop();
+        selected.pop();
+        delete usedMidis[pair.cells[0].midi];
+        delete usedMidis[pair.cells[1].midi];
+      });
+    }
+    choose(0, {}, [], 0);
+    return best ? best.cells : [];
+  }
+
   function getLitPracticeCells(cells, scale, root) {
     var lit = {};
     if (!root) return lit;
@@ -4974,21 +5032,8 @@
       });
       return lit;
     }
-    var rootColumn = logicalColumn(root);
-    var byRow = {};
-    for (var i = 0; i < cells.length; i++) {
-      if (!isScalePc(cells[i].pc, scale)) continue;
-      if (!byRow[cells[i].row]) byRow[cells[i].row] = [];
-      byRow[cells[i].row].push(cells[i]);
-    }
-    Object.keys(byRow).forEach(function(rowKey) {
-      byRow[rowKey].sort(function(a, b) {
-        return Math.abs(logicalColumn(a) - rootColumn) - Math.abs(logicalColumn(b) - rootColumn) || a.col - b.col;
-      });
-      for (var j = 0; j < Math.min(2, byRow[rowKey].length); j++) {
-        lit[byRow[rowKey][j].id] = true;
-      }
-    });
+    var selected = selectUniqueScaleLightsByRow(cells, scale, root);
+    for (var j = 0; j < selected.length; j++) lit[selected[j].id] = true;
     if (!lit[root.id]) lit[root.id] = true;
     var laneRows = {};
     Object.keys(lit).forEach(function(id) {
@@ -6489,10 +6534,14 @@
         ? pathIndexById[cellId] === 0 && !!litPracticeById[cellId]
         : (isCanonical && cell.pc === state.tonicPc);
       var isPath = !!pathById[cellId];
-      var isScale = options.isPractice && options.view === 'practice'
-        ? isPath
-        : (isCanonical && isScalePc(cell.pc, scale));
       var isHardwareLit = options.isPractice && options.view === 'practice' && !!litPracticeById[cellId];
+      // The frame is also serialized to physical LEDs.  A path may reference
+      // a duplicate lattice pad, but only the canonical selected key-map pad
+      // is a scale light; otherwise C-minor produces three lit physical pads
+      // in a column (for example F3/G3/F#3).
+      var isScale = options.isPractice && options.view === 'practice'
+        ? isHardwareLit
+        : (isCanonical && isScalePc(cell.pc, scale));
       var isMismatch = !!state.mismatched[cellId];
       var role = isMismatch ? 'mismatch'
         : (heldInfo.level > 0 ? 'held'
@@ -8806,8 +8855,18 @@
         soundTabButton.setAttribute('aria-pressed', soundTabActive ? 'true' : 'false');
       }
     }
-    if (els.studioTitle) els.studioTitle.textContent = 'Connect and diagnose Exquis.';
-    if (els.studioDescription) els.studioDescription.textContent = 'MIDI routing, Exquis synchronization, and diagnostic tools live here.';
+    var hardwareConnected = !!midiInput;
+    var hardwareLive = hardwareConnected && !!state.lastMidi;
+    if (els.studioTitle) els.studioTitle.textContent = 'Exquis hardware';
+    if (els.studioDescription) {
+      els.studioDescription.textContent = hardwareConnected
+        ? 'Monitor the controller, synchronize the current key, or open diagnostics.'
+        : 'Choose a MIDI input, then connect.';
+    }
+    if (els.hardwareStateChip) {
+      els.hardwareStateChip.textContent = hardwareLive ? 'Activity detected' : (hardwareConnected ? 'Connected' : 'Not connected');
+      els.hardwareStateChip.className = 'hardware-state-chip' + (hardwareLive ? ' live' : (hardwareConnected ? ' ready' : ''));
+    }
     if (els.workspaceNav) {
       var workspaceButtons = els.workspaceNav.querySelectorAll('button[data-workspace]');
       for (var workspaceIndex = 0; workspaceIndex < workspaceButtons.length; workspaceIndex++) {
@@ -8906,7 +8965,11 @@
       var key = document.createElement('button');
       var classes = ['key'];
       if (hardwareLit) classes.push('hardware-lit');
-      if (inScale) classes.push('in-scale');
+      // `lightPad.isScale` can describe a duplicate lattice pitch.  Only the
+      // canonical pad selected for the physical/hardware frame may receive
+      // the colored scale treatment; otherwise a third apparent pad appears
+      // in columns such as C-minor F3/G3/F#3.
+      if (inScale && hardwareLit) classes.push('in-scale');
       // The complete tonic/key map owns pad color. A path target outside that
       // standard map may still receive its current-step outline, but it must
       // not introduce another colored pad into a two-per-column scale map.
@@ -9165,6 +9228,13 @@
       els.assumptionText.textContent = 'This first build uses a documented Exquis-style model: horizontal semitones and vertical thirds. It is meant for fingering exploration, then calibration against the physical keyboard.';
     }
     if (els.exquisSyncStatus) els.exquisSyncStatus.textContent = state.exquisSyncStatus;
+    if (els.hardwareStatusInput) els.hardwareStatusInput.textContent = midiInput ? midiInputLabel(midiInput) : (midiAccess ? 'No input found' : 'Not scanned');
+    if (els.hardwareStatusSync) els.hardwareStatusSync.textContent = state.exquisSyncEnabled ? 'Active' : 'Off';
+    if (els.hardwareStatusActivity) els.hardwareStatusActivity.textContent = state.lastMidi ? noteLabelFromMidi(state.lastMidi.midi) : 'Idle';
+    if (els.hardwareStatusHeld) {
+      var heldCount = objectKeyCount(state.heldNotes);
+      els.hardwareStatusHeld.textContent = heldCount ? String(heldCount) + (heldCount === 1 ? ' note' : ' notes') : 'None';
+    }
     if (els.syncExquis) {
       els.syncExquis.disabled = !midiAccess || !state.exquisSysexAvailable || !midiOutput;
       els.syncExquis.textContent = state.exquisSyncEnabled ? 'Stop Sync' : 'Sync Key/Mode';
@@ -9819,6 +9889,11 @@
       hardwareDiagnostics: document.getElementById('hardwareDiagnostics'),
       markExquisBlackout: document.getElementById('markExquisBlackout'),
       copyExquisLightCapture: document.getElementById('copyExquisLightCapture'),
+      hardwareStateChip: document.getElementById('hardwareStateChip'),
+      hardwareStatusInput: document.getElementById('hardwareStatusInput'),
+      hardwareStatusSync: document.getElementById('hardwareStatusSync'),
+      hardwareStatusActivity: document.getElementById('hardwareStatusActivity'),
+      hardwareStatusHeld: document.getElementById('hardwareStatusHeld'),
       exquisSyncStatus: document.getElementById('exquisSyncStatus'),
       lastMidi: document.getElementById('lastMidi'),
       coachFeedback: document.getElementById('coachFeedback'),

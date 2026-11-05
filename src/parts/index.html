@@ -27,6 +27,7 @@
       <button type="button" data-workspace="studio" data-testid="workspace-studio">Hardware &amp; Diagnostics</button>
     </nav>
     <section class="session-setup" data-testid="session-setup">
+      <h2 class="workbench-card-title">Session setup</h2>
       <div class="setup-controls-body">
     <div class="controls-grid primary-controls" id="primaryControls">
       <fieldset class="mode-switch" data-testid="mode-switch" aria-label="Session">
@@ -76,6 +77,7 @@
       </fieldset>
       </div>
       <div class="practice-workflow-controls" id="practiceWorkflowControls">
+      <h2 class="workbench-card-title">Lesson design</h2>
       <label class="practice-control exercise-family-control control-break" data-testid="exercise-family-control">
         <span>Practice family</span>
         <select id="exerciseFamilySelect" data-testid="exercise-family-select"></select>
@@ -136,7 +138,7 @@
     </section>
   </section>
 
-  <section class="workspace-screen library-workspace" data-testid="library-workspace" aria-label="Session" hidden>
+  <section class="workspace-screen library-workspace" data-layout-template="workbench" data-testid="library-workspace" aria-label="Session" hidden>
     <header class="workspace-screen-header">
       <p class="eyebrow">Session</p>
       <h2>Build your next practice session.</h2>
@@ -146,16 +148,16 @@
     <button id="startLibrarySession" class="workspace-primary-action" type="button" data-testid="start-library-session">Start practice</button>
   </section>
 
-  <section class="workspace-screen studio-workspace" data-testid="studio-workspace" aria-label="Hardware and diagnostics" hidden>
+  <section class="workspace-screen studio-workspace" data-layout-template="workbench" data-testid="studio-workspace" aria-label="Hardware and diagnostics" hidden>
     <header class="workspace-screen-header">
       <p class="eyebrow">Hardware &amp; Diagnostics</p>
-      <h2 id="studioTitle">Connect and diagnose Exquis.</h2>
+      <div class="hardware-title-row"><h2 id="studioTitle">Exquis hardware</h2><p id="hardwareStateChip" class="hardware-state-chip" data-testid="hardware-state-chip">Not connected</p></div>
       <p id="studioDescription">Sound design, MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.</p>
     </header>
     <div class="studio-controls-slot" id="studioControlsSlot"></div>
   </section>
 
-  <section class="stage-panel" aria-label="Exquis keyboard visualization">
+  <section class="stage-panel" data-layout-template="playfield" aria-label="Exquis keyboard visualization">
     <div class="stage-header">
       <div>
         <h2 id="stateTitle">C Major</h2>
@@ -260,8 +262,7 @@
     <details class="practice-tools" data-testid="hardware-tools">
       <summary>Hardware &amp; diagnostics</summary>
       <section class="midi-coach-section" data-testid="midi-coach-section">
-      <h2>Exquis hardware</h2>
-      <section class="hardware-control-group" aria-labelledby="hardware-connection-heading">
+      <section class="hardware-control-group hardware-workbench-card" data-testid="hardware-connection-card" aria-labelledby="hardware-connection-heading">
         <h3 id="hardware-connection-heading">Connection</h3>
         <p class="hardware-control-help">Connect your Exquis, then sync the current key and scale.</p>
         <div class="midi-action-row hardware-primary-actions">
@@ -276,13 +277,22 @@
         </label>
         <p id="midiDevices" data-testid="midi-devices">Devices: not scanned</p>
       </section>
-      <section class="hardware-control-group" aria-labelledby="hardware-diagnostics-heading">
+      <section class="hardware-control-group hardware-workbench-card" data-testid="hardware-diagnostics-card" aria-labelledby="hardware-diagnostics-heading">
         <h3 id="hardware-diagnostics-heading">Diagnostics</h3>
         <p class="hardware-control-help">View connection activity, run an audio snapshot, and export a support report.</p>
         <div class="midi-action-row">
           <button id="hardwareDiagnostics" type="button" data-testid="hardware-diagnostics">Open diagnostics</button>
           <button id="markExquisBlackout" type="button" data-testid="mark-exquis-blackout">Mark lights black</button>
           <button id="copyExquisLightCapture" type="button" data-testid="copy-exquis-light-capture">Copy LED capture</button>
+        </div>
+      </section>
+      <section class="hardware-status-card hardware-workbench-card" data-testid="hardware-status-card" aria-label="Live status">
+        <h3>Live status</h3>
+        <div class="hardware-status-grid">
+          <p><span>MIDI input</span><b id="hardwareStatusInput" data-testid="hardware-status-input">Not scanned</b></p>
+          <p><span>Exquis sync</span><b id="hardwareStatusSync" data-testid="hardware-status-sync">Off</b></p>
+          <p><span>Last activity</span><b id="hardwareStatusActivity" data-testid="hardware-status-activity">Idle</b></p>
+          <p><span>Held notes</span><b id="hardwareStatusHeld" data-testid="hardware-status-held">None</b></p>
         </div>
       </section>
       <details class="advanced-hardware-research" data-testid="advanced-hardware-research">

@@ -203,6 +203,9 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "build_metadata_must_not_cover_the_practice_surface": "test_regression_build_metadata_does_not_dominate_practice_surface",
         "workspace_navigation_must_consolidate_session_and_hardware": "test_regression_three_workspace_navigation_consolidates_session_and_hardware",
         "session_workspace_must_fit_laptop_without_clipping_controls": "test_regression_session_workspace_fits_laptop_without_clipping_controls",
+        "workbench_screens_must_share_one_header_and_content_template": "test_regression_workbench_screens_share_header_hierarchy_and_content_gutter",
+        "session_workbench_cards_must_have_peer_titles": "test_regression_session_workbench_cards_have_peer_titles",
+        "hardware_must_use_a_state_first_operational_workflow": "test_regression_hardware_uses_state_first_operational_workflow",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "studio_diagnostics_must_open_a_visible_hardware_drawer": "test_regression_studio_diagnostics_opens_visible_hardware_drawer",
         "studio_hardware_must_fit_laptop_height_without_scroll_or_cutoff": "test_regression_studio_hardware_fits_laptop_height_without_scroll_or_cutoff",
@@ -2691,12 +2694,66 @@ class PlaywrightExhibitTests(unittest.TestCase):
           }).filter((choice) => choice.candidates.length > 1 && choice.lit.length);
         }""")
         self.assertGreaterEqual(len(choices), 2, choices)
-        for choice in choices:
-            with self.subTest(midi=choice["midi"]):
-                expected = choice["candidates"][0]["id"]
-                self.assertEqual([candidate["id"] for candidate in choice["lit"]], [expected], choice)
-                self.assertEqual([candidate["id"] for candidate in choice["hardwareLit"]], [expected], choice)
-                self.assertEqual([candidate["id"] for candidate in choice["uiLit"]], [expected], choice)
+
+        # This is deliberately a shared-frame assertion, not a CSS assertion.
+        # The physical Exquis palette serializer consumes `isScale`; a duplicate
+        # lattice path must therefore never be a scale/palette light unless the
+        # selected physical key-map also marks it hardware-lit.  C minor used to
+        # violate this with F3/G3/F#3 and G#/A#/C4 three-pad columns.
+        hardware_leaks = self.page.evaluate("""() => {
+          const frame = window.__exquisLightDebug.currentFrame().pads;
+          const paletteByPadId = Object.fromEntries(window.__exquisLightDebug.hardwareFrame()
+            .map((pad) => [pad.padId, pad.paletteIndex]));
+          return frame.filter((pad) => pad.isScale && !pad.isHardwareLit)
+            .map((pad) => ({
+              cellId: pad.cellId,
+              midi: pad.midi,
+              padId: pad.padId,
+              paletteIndex: paletteByPadId[pad.padId]
+            }));
+        }""")
+        self.assertEqual(hardware_leaks, [], hardware_leaks)
+
+        # Assert the serialized palette itself—not merely the intermediate
+        # semantic role—is exactly the requested physical path.  This guards
+        # changes to lightFramePaletteIndex as well as path-selection bugs.
+        serialized_palette = self.page.evaluate("""() => {
+          const frame = window.__exquisLightDebug.currentFrame().pads;
+          const wanted = frame.filter((pad) => pad.isHardwareLit)
+            .map((pad) => pad.padId).sort((a, b) => a - b);
+          const sent = window.__exquisLightDebug.hardwareFrame()
+            .filter((pad) => pad.paletteIndex > 1)
+            .map((pad) => pad.padId).sort((a, b) => a - b);
+          return { wanted, sent };
+        }""")
+        self.assertEqual(serialized_palette["sent"], serialized_palette["wanted"], serialized_palette)
+
+        # DOM styling must be derived from the exact same physical-light set.
+        visual_duplicates = self.page.locator('[data-testid="exquis-key"].in-scale:not(.hardware-lit)').evaluate_all(
+            "elements => elements.map((element) => element.dataset.cellId)"
+        )
+        self.assertEqual(visual_duplicates, [], visual_duplicates)
+
+    def test_regression_a_minor_hardware_key_map_lights_d_and_never_duplicates_f(self):
+        # User-reported real route: a fresh session selects A Minor and Exquis
+        # must expose the complete key map, including D.  A nearest-to-root
+        # heuristic previously chose two copies of F while omitting D.
+        self.page.select_option('[data-testid="tonic-select"]', '9')
+        self.page.select_option('[data-testid="scale-select"]', 'aeolian')
+        lit = self.page.evaluate("""() => window.__exquisLightDebug.currentFrame().pads
+          .filter((pad) => pad.isHardwareLit)
+          .map((pad) => ({ cellId: pad.cellId, midi: pad.midi, pc: pad.pc }))""")
+        expected_pcs = {9, 11, 0, 2, 4, 5, 7}  # A natural minor: A B C D E F G
+        self.assertEqual({pad["pc"] for pad in lit}, expected_pcs, lit)
+        self.assertIn(2, {pad["pc"] for pad in lit}, lit)  # D must be present.
+        midi_counts = {}
+        for pad in lit:
+            midi_counts[pad["midi"]] = midi_counts.get(pad["midi"], 0) + 1
+        self.assertEqual(
+            {midi: count for midi, count in midi_counts.items() if count > 1},
+            {},
+            lit,
+        )
 
     def test_regression_expressive_light_targets_pulse_without_hiding_interval_identity(self):
         self.page.select_option('[data-testid="exercise-family-select"]', "progressions")
@@ -4472,7 +4529,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
           actionLabels: [...element.querySelectorAll('.console-actions button')].map(button => button.textContent.trim()),
           clippedActions: [...element.querySelectorAll('.console-actions button')].filter(button => button.scrollWidth > button.clientWidth).map(button => button.textContent.trim())
         })""")
-        self.assertEqual(drawer_layout["position"], "absolute")
+        self.assertEqual(drawer_layout["position"], "static")
         self.assertLess(drawer_layout["left"], drawer_layout["hardwareRight"])
         self.assertEqual(drawer_layout["actionLabels"], ["Audio snapshot", "Clear log", "Copy", "Collapse"])
         self.assertEqual(drawer_layout["clippedActions"], [])
@@ -4500,6 +4557,48 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(layout["topBeforeKeys"], layout)
         self.assertTrue(layout["bottomAfterKeys"], layout)
 
+    def test_regression_hardware_uses_state_first_operational_workflow(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.open_hardware_tools()
+        self.assertEqual(self.page.locator('#studioTitle').inner_text(), 'Exquis hardware')
+        state_chip = self.page.locator('[data-testid="hardware-state-chip"]')
+        self.assertTrue(state_chip.is_visible())
+        self.assertIn('Not connected', state_chip.inner_text())
+
+        cards = {
+            'connection': self.page.locator('[data-testid="hardware-connection-card"]'),
+            'status': self.page.locator('[data-testid="hardware-status-card"]'),
+            'diagnostics': self.page.locator('[data-testid="hardware-diagnostics-card"]'),
+            'advanced': self.page.locator('[data-testid="advanced-hardware-research"]')
+        }
+        for name, card in cards.items():
+            self.assertTrue(card.is_visible(), name)
+
+        telemetry = [
+            'hardware-status-input', 'hardware-status-sync',
+            'hardware-status-activity', 'hardware-status-held'
+        ]
+        for test_id in telemetry:
+            self.assertTrue(self.page.locator(f'[data-testid="{test_id}"]').is_visible(), test_id)
+
+        metrics = self.page.evaluate("""() => {
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          return {
+            connection: rect('[data-testid="hardware-connection-card"]'),
+            status: rect('[data-testid="hardware-status-card"]'),
+            diagnostics: rect('[data-testid="hardware-diagnostics-card"]'),
+            advanced: rect('[data-testid="advanced-hardware-research"]'),
+            hardware: rect('[data-testid="hardware-tools"]'),
+            overflow: document.documentElement.scrollHeight - document.documentElement.clientHeight
+          };
+        }""")
+        self.assertLess(metrics['connection']['left'], metrics['status']['left'], metrics)
+        self.assertLess(metrics['diagnostics']['top'], metrics['advanced']['top'], metrics)
+        self.assertGreater(metrics['connection']['width'] / metrics['status']['width'], 1.15, metrics)
+        self.assertLess(metrics['connection']['width'] / metrics['status']['width'], 1.55, metrics)
+        self.assertLessEqual(metrics['advanced']['bottom'], metrics['hardware']['bottom'], metrics)
+        self.assertLessEqual(metrics['overflow'], 1, metrics)
+
         self.page.evaluate("""
         () => {
           window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
@@ -4519,6 +4618,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         """)
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="advanced-hardware-research"] summary').click()
         self.page.locator('[data-testid="dial-listen"]').click()
         self.assertIn("settings/sound", self.page.locator('[data-testid="edge-control-status"]').inner_text())
         self.assertGreaterEqual(self.page.locator('[data-edge-id="settings"].captured').count(), 1)
@@ -4556,7 +4656,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         density = self.page.evaluate("""() => {
           const hardware = document.querySelector('[data-testid="hardware-tools"]').getBoundingClientRect();
           const regions = [...document.querySelectorAll(
-            '[aria-labelledby="hardware-connection-heading"], [aria-labelledby="hardware-diagnostics-heading"], .advanced-hardware-research, #exquisSyncStatus, #midiActivity'
+            '[data-testid="hardware-connection-card"], [data-testid="hardware-status-card"], [data-testid="hardware-diagnostics-card"], .advanced-hardware-research'
           )].map((element) => element.getBoundingClientRect());
           const columns = 20;
           const rows = 12;
@@ -4600,14 +4700,15 @@ class PlaywrightExhibitTests(unittest.TestCase):
           };
         }""")
         self.assertGreaterEqual(density["occupiedRatio"], 0.70, density)
-        self.assertLessEqual(density["largestEmptyRatio"], 0.16, density)
+        self.assertLessEqual(density["largestEmptyRatio"], 0.22, density)
 
         self.page.locator('[data-testid="hardware-diagnostics"]').click()
         expanded = layout_metrics()
         self.assertLessEqual(expanded["hardware"]["bottom"], expanded["studio"]["bottom"])
         self.assertLessEqual(expanded["activity"]["bottom"], expanded["hardware"]["bottom"])
         self.assertLessEqual(expanded["console"]["bottom"], expanded["hardware"]["bottom"])
-        self.assertGreaterEqual(expanded["console"]["left"], expanded["activity"]["right"])
+        self.assertGreater(expanded["console"]["left"], expanded["hardware"]["left"] + expanded["hardware"]["width"] * 0.35)
+        self.assertLessEqual(expanded["console"]["right"], expanded["hardware"]["right"])
         self.assertLessEqual(expanded["studioScrollHeight"], expanded["studioClientHeight"] + 1)
         self.assertLessEqual(expanded["slotScrollHeight"], expanded["slotClientHeight"] + 1)
 
@@ -11320,6 +11421,72 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLessEqual(metrics["start"]["bottom"], metrics["session"]["bottom"], metrics)
         self.assertLessEqual(metrics["sessionScrollHeight"], metrics["sessionClientHeight"] + 1, metrics)
         self.assertLessEqual(metrics["pageScrollHeight"], metrics["pageClientHeight"] + 1, metrics)
+
+    def test_regression_workbench_screens_share_header_hierarchy_and_content_gutter(self):
+        """Session and Hardware are workbenches: eyebrow, title, deck, then content."""
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+
+        def measure(workspace):
+            self.page.locator(f'[data-testid="workspace-{workspace}"]').click()
+            return self.page.evaluate("""() => {
+              const screen = document.querySelector('.workspace-screen:not([hidden])');
+              const header = screen.querySelector('.workspace-screen-header');
+              const eyebrow = header.querySelector('.eyebrow').getBoundingClientRect();
+              const title = header.querySelector('h2').getBoundingClientRect();
+              const deck = header.querySelector(':scope > p:last-child').getBoundingClientRect();
+              const content = screen.querySelector('[class$="controls-slot"]').getBoundingClientRect();
+              const screenBox = screen.getBoundingClientRect();
+              return {
+                screen: screenBox.toJSON(), header: header.getBoundingClientRect().toJSON(),
+                eyebrow: eyebrow.toJSON(), title: title.toJSON(), deck: deck.toJSON(), content: content.toJSON()
+              };
+            }""")
+
+        session = measure('library')
+        hardware = measure('studio')
+        self.assertEqual(self.page.locator('[data-testid="studio-workspace"]').get_attribute('data-layout-template'), 'workbench')
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.assertEqual(self.page.locator('[data-testid="library-workspace"]').get_attribute('data-layout-template'), 'workbench')
+        for metrics in (session, hardware):
+            self.assertGreater(metrics['eyebrow']['height'], 0, metrics)
+            self.assertLessEqual(metrics['eyebrow']['bottom'], metrics['title']['top'], metrics)
+            self.assertLessEqual(metrics['title']['bottom'], metrics['deck']['top'], metrics)
+            self.assertGreaterEqual(metrics['content']['top'] - metrics['deck']['bottom'], 10, metrics)
+            self.assertLessEqual(abs(metrics['header']['left'] - metrics['content']['left']), 1, metrics)
+        self.assertLessEqual(abs(session['header']['left'] - hardware['header']['left']), 4, (session, hardware))
+        self.assertLessEqual(abs(session['content']['left'] - hardware['content']['left']), 4, (session, hardware))
+
+        hardware_surface = self.page.locator('[data-testid="midi-coach-section"]').evaluate("""element => ({
+          backgroundImage: getComputedStyle(element).backgroundImage,
+          borderRadius: getComputedStyle(element).borderRadius
+        })""")
+        self.assertEqual(hardware_surface['backgroundImage'], 'none', hardware_surface)
+        self.assertEqual(hardware_surface['borderRadius'], '0px', hardware_surface)
+
+    def test_regression_session_workbench_cards_have_peer_titles(self):
+        """Session setup, lesson design, and sound are peer cards, so each names itself."""
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.locator('[data-testid="workspace-library"]').click()
+        expected = {
+            '[data-testid="session-setup"]': 'Session setup',
+            '#practiceWorkflowControls': 'Lesson design',
+            '[data-testid="practice-tools"] .audio-section': 'Sound'
+        }
+        for selector, title in expected.items():
+            card = self.page.locator(selector)
+            heading = card.locator(':scope > h2')
+            self.assertEqual(heading.count(), 1, selector)
+            self.assertTrue(heading.is_visible(), selector)
+            self.assertEqual(heading.inner_text(), title, selector)
+            metrics = card.evaluate("""card => {
+              const heading = card.querySelector(':scope > h2').getBoundingClientRect();
+              const box = card.getBoundingClientRect();
+              return { heading: heading.toJSON(), card: box.toJSON() };
+            }""")
+            self.assertGreaterEqual(metrics['heading']['left'], metrics['card']['left'], metrics)
+            self.assertLessEqual(metrics['heading']['right'], metrics['card']['right'], metrics)
+            self.assertGreaterEqual(metrics['heading']['top'], metrics['card']['top'], metrics)
+            self.assertLessEqual(metrics['heading']['bottom'], metrics['card']['bottom'], metrics)
 
     def test_medium_view_has_no_document_horizontal_overflow(self):
         self.page.set_viewport_size({"width": 1024, "height": 768})

@@ -1099,6 +1099,7 @@
   var midiHitTimer = null;
   var midiActivityTimer = null;
   var exquisLegacyKeepaliveTimer = null;
+  var exquisLegacyKeepaliveQueuedThrough = 0;
   var exquisPracticeLightWatchdogTimer = null;
   var exquisLegacySyncTimer = null;
   var lastExquisLegacySyncAt = 0;
@@ -1114,6 +1115,12 @@
   // that timeout, but only when the player is not touching the instrument.
   var EXQUIS_PRACTICE_LIGHT_WATCHDOG_MS = 60000;
   var EXQUIS_PRACTICE_LIGHT_IDLE_MS = 1500;
+  // Browser background timers are intentionally coalesced. Queue the legacy
+  // transport heartbeat ahead on the Web MIDI timeline so a 30–60s timer
+  // pause cannot silently leave the controller without traffic.
+  var EXQUIS_LEGACY_KEEPALIVE_INTERVAL_MS = 5000;
+  var EXQUIS_LEGACY_KEEPALIVE_HORIZON_MS = 90000;
+  var EXQUIS_LEGACY_KEEPALIVE_REFILL_MS = 15000;
   var resizeTimer = null;
   var ssliPresetRetryTimer = null;
   var logs = [];
@@ -7764,10 +7771,11 @@
     return sendOfficialPadsDeveloperMode(false, (reason || 'native-keymode') + ' developer-mode off');
   }
 
-  function sendRawMidi(bytes, reason) {
+  function sendRawMidi(bytes, reason, timestamp) {
     if (!midiOutput || !midiOutput.send) return false;
     try {
-      midiOutput.send(bytes);
+      if (Number.isFinite(timestamp)) midiOutput.send(bytes, timestamp);
+      else midiOutput.send(bytes);
       traceExquisWire('out', bytes, reason);
       if (bytes && bytes.length >= 7 && bytes[0] === 0xF0 && bytes[1] === 0x00 && bytes[2] === 0x21 && bytes[3] === 0x7E && bytes[4] === 0x7F && bytes[5] === 0x00) {
         state.exquisDeveloperMask = clamp7Bit(bytes[6]);
@@ -7818,22 +7826,43 @@
     return [0x00, 0x00, 0x00];
   }
 
-  function sendExquisLegacyKeepalive(reason) {
-    return sendRawMidi(buildExquisLegacySysex(null, []), reason || '');
+  function sendExquisLegacyKeepalive(reason, timestamp) {
+    return sendRawMidi(buildExquisLegacySysex(null, []), reason || '', timestamp);
+  }
+
+  function queueExquisLegacyKeepalives() {
+    if (!state.exquisSyncEnabled || !midiOutput || !midiOutput.send) return 0;
+    var now = performance.now();
+    var horizon = now + EXQUIS_LEGACY_KEEPALIVE_HORIZON_MS;
+    var at = Math.max(now + 20, exquisLegacyKeepaliveQueuedThrough || 0);
+    var count = 0;
+    while (at <= horizon) {
+      // `MIDIOutput.send` owns this timestamp after this call. Unlike a
+      // window timer, Chromium's background-timer throttling cannot create a
+      // silent transport gap inside the queued horizon.
+      sendExquisLegacyKeepalive('', at);
+      at += EXQUIS_LEGACY_KEEPALIVE_INTERVAL_MS;
+      count++;
+    }
+    exquisLegacyKeepaliveQueuedThrough = at;
+    if (Date.now() - lastExquisLegacyKeepaliveLogAt > 5000) {
+      lastExquisLegacyKeepaliveLogAt = Date.now();
+      logEvent('midi', 'Exquis legacy keepalive queued count=' + count + ' through +' + Math.round(exquisLegacyKeepaliveQueuedThrough - now) + 'ms');
+    }
+    return count;
   }
 
   function startExquisLegacyKeepalive() {
     if (exquisLegacyKeepaliveTimer) return;
+    exquisLegacyKeepaliveQueuedThrough = 0;
+    queueExquisLegacyKeepalives();
     exquisLegacyKeepaliveTimer = window.setInterval(function() {
       if (!state.exquisSyncEnabled || !midiOutput) {
         stopExquisLegacyKeepalive();
         return;
       }
-      var now = Date.now();
-      var shouldLog = now - lastExquisLegacyKeepaliveLogAt > 5000;
-      if (shouldLog) lastExquisLegacyKeepaliveLogAt = now;
-      sendExquisLegacyKeepalive(shouldLog ? 'Exquis legacy keepalive tick' : '');
-    }, 250);
+      queueExquisLegacyKeepalives();
+    }, EXQUIS_LEGACY_KEEPALIVE_REFILL_MS);
   }
 
   function stopExquisLegacyKeepalive() {
@@ -7841,6 +7870,12 @@
       window.clearInterval(exquisLegacyKeepaliveTimer);
       exquisLegacyKeepaliveTimer = null;
     }
+    // MIDIOutput.clear cancels future-timestamp packets when the user turns
+    // sync off, preventing a stale heartbeat from touching a later session.
+    if (midiOutput && midiOutput.clear) {
+      try { midiOutput.clear(); } catch (err) { /* output may already be gone */ }
+    }
+    exquisLegacyKeepaliveQueuedThrough = 0;
   }
 
   function reassertExquisPracticeLightFrame(force) {
@@ -7849,14 +7884,14 @@
       state.mode === 'practice' && !exquisKeyModeSyncTimers.length &&
       !objectKeyCount(state.heldNotes) && (force || idleForMs >= EXQUIS_PRACTICE_LIGHT_IDLE_MS);
     if (!canRefresh) return false;
-    // The transport keepalive holds the device's LED ownership continuously.
-    // A passive watchdog rebuild is therefore counterproductive: Developer
-    // Mode deliberately blanks every pad before the palette is streamed back,
-    // producing the visible black-to-wave animation. Reserve that disruptive
-    // transaction for an explicit diagnostic/manual recovery only.
+    // Never restart Developer Mode from the passive watchdog: it deliberately
+    // blanks every pad before rebuilding and creates the visible black wave.
+    // Re-send the retained palette/effect frame instead; these commands do
+    // not clear the display and recover a renderer-only LED timeout.
     if (!force) {
-      logEvent('midi', 'Exquis practice LED watchdog skipped disruptive rebuild; transport keepalive is active');
-      return false;
+      logEvent('midi', 'Exquis practice LED watchdog reasserting retained pad frame without developer-mode reset');
+      scheduleExquisPadColors(0);
+      return true;
     }
     // Do a complete official transaction, rather than sending only changed
     // values. The cache describes what the browser last sent, not necessarily
@@ -8064,7 +8099,12 @@
     var changedPalettePads = currentLightFrame.filter(function(pad) {
       return lastExquisPadPalette[pad.padId] !== lightFramePaletteIndex(pad);
     });
-    var effectPads = currentLightFrame.slice().sort(function(a, b) { return a.padId - b.padId; });
+    // A practice step changes only two effects: old target off, new target
+    // on. Re-sending all 61 effects serializes the next flash behind up to
+    // half a second of unrelated packets, which feels like input lag.
+    var effectPads = currentLightFrame.filter(function(pad) {
+      return lastExquisPadEffect[pad.padId] !== lightFrameEffect(pad);
+    }).sort(function(a, b) { return a.padId - b.padId; });
     if (!changedPalettePads.length && !effectPads.length) return;
     logEvent('midi', 'Exquis practice light frame palette-changed=' + changedPalettePads.length + ' effects-refreshed=' + effectPads.length);
     changedPalettePads.sort(function(a, b) { return a.padId - b.padId; }).forEach(function(pad, index) {

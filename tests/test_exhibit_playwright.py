@@ -47,6 +47,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "supported_rotations_must_preserve_hex_layout": "test_regression_supported_rotations_preserve_hex_layout",
         "unsupported_rotation_buttons_must_not_be_exposed": "test_regression_unsupported_rotation_buttons_are_not_exposed",
         "practice_must_light_only_two_exquis_chains": "test_regression_practice_lights_only_two_exquis_chains",
+        "exquis_led_keepalive_must_survive_background_timer_coalescing": "test_regression_exquis_keepalive_is_queued_beyond_background_timer_gaps",
         "hardware_lit_keys_must_all_be_in_selected_key": "test_regression_hardware_lit_keys_are_all_in_selected_key",
         "default_c_major_leds_must_match_exquis_product_photo": "test_regression_default_c_major_leds_match_product_photo",
         "fingering_must_only_label_two_lit_chains": "test_regression_fingering_labels_only_two_lit_chains",
@@ -100,6 +101,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "exquis_midi_must_use_ssli_sustained_notes_and_expression": "test_regression_exquis_midi_uses_ssli_sustained_note_and_expression_api",
         "hardware_target_sync_must_clear_previous_pulses": "test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets",
         "hardware_target_pulse_must_advance_after_correct_midi_sequence_note": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
+        "hardware_target_pulse_must_not_wait_behind_unrelated_pad_effects": "test_regression_exquis_sync_target_pulse_has_no_frame_length_latency",
         "practice_notation_must_follow_canonical_target_step": "test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers",
         "staff_roll_and_keyboard_must_share_one_runtime_theme_contract": "test_regression_notation_theme_is_shared_and_preserves_pitch_semantics",
         "hardware_chord_sync_must_pulse_all_current_targets": "test_regression_exquis_sync_pulses_every_current_chord_target",
@@ -3652,8 +3654,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         () => {
           window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
           window.__mockExquisOutput = {
-            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
-            send(bytes) { this.sent.push([...bytes]); }
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [], timed: [],
+            send(bytes) { this.sent.push([...bytes]); this.timed.push({ bytes: [...bytes], at: performance.now() }); }
           };
           navigator.requestMIDIAccess = () => Promise.resolve({
             inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
@@ -3693,8 +3695,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         () => {
           window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
           window.__mockExquisOutput = {
-            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
-            send(bytes) { this.sent.push([...bytes]); }
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [], timed: [],
+            send(bytes) { this.sent.push([...bytes]); this.timed.push({ bytes: [...bytes], at: performance.now() }); }
           };
           navigator.requestMIDIAccess = () => Promise.resolve({
             inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
@@ -3712,19 +3714,29 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_timeout(2200)
         before = self.page.evaluate("""() => ({
           target: window.__exquisLightDebug.hardwareFrame().find((pad) => pad.isTarget),
-          sent: window.__mockExquisOutput.sent.length
+          sent: window.__mockExquisOutput.sent.length,
+          timed: window.__mockExquisOutput.timed.length
         })""")
         self.assertIsNotNone(before["target"])
-        self.page.evaluate("(midi) => window.__mockExquisInput.onmidimessage({ data: [0x90, midi, 100] })", before["target"]["midi"])
+        input_at = self.page.evaluate("(midi) => { const at = performance.now(); window.__mockExquisInput.onmidimessage({ data: [0x90, midi, 100] }); return at; }", before["target"]["midi"])
         self.page.wait_for_timeout(1000)
-        after = self.page.evaluate("""(count) => ({
+        after = self.page.evaluate("""(before) => ({
           target: window.__exquisLightDebug.hardwareFrame().find((pad) => pad.isTarget),
-          updates: window.__mockExquisOutput.sent.slice(count)
-        })""", before["sent"])
+          updates: window.__mockExquisOutput.sent.slice(before.sent),
+          timed: window.__mockExquisOutput.timed.slice(before.timed)
+        })""", {"sent": before["sent"], "timed": before["timed"]})
         self.assertIsNotNone(after["target"])
         self.assertNotEqual(after["target"]["padId"], before["target"]["padId"])
         self.assertIn([175, before["target"]["padId"], 0], after["updates"])
         self.assertIn([175, after["target"]["padId"], 63], after["updates"])
+        effect_updates = [entry for entry in after["timed"] if entry["bytes"] and entry["bytes"][0] == 175]
+        self.assertEqual(len(effect_updates), 2, effect_updates)
+        self.assertLess(
+            max(entry["at"] for entry in effect_updates) - min(entry["at"] for entry in effect_updates),
+            60,
+            effect_updates,
+        )
+        self.assertLess(min(entry["at"] for entry in effect_updates) - input_at, 120, effect_updates)
 
     def test_regression_exquis_practice_idle_reasserts_the_entire_led_frame(self):
         """A controller LED timeout must not be mistaken for a still-valid JS cache."""
@@ -3767,6 +3779,38 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.wait_for_timeout(120)
         heartbeat = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertFalse(any(message[:6] == [240, 0, 33, 126, 127, 0] for message in heartbeat), heartbeat)
+        self.page.wait_for_timeout(1100)
+        retained_frame = self.page.evaluate("() => window.__mockExquisOutput.sent")
+        self.assertTrue(any(message and message[0] == 191 for message in retained_frame), retained_frame)
+        self.assertTrue(any(message and message[0] == 175 for message in retained_frame), retained_frame)
+
+    def test_regression_exquis_keepalive_is_queued_beyond_background_timer_gaps(self):
+        """Timer throttling must not create the LED transport gaps seen on hardware."""
+        self.page.evaluate("""
+        () => {
+          window.__mockExquisInput = { id: 'exquis-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          window.__mockExquisOutput = {
+            id: 'exquis-out', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', sent: [],
+            send(bytes, timestamp) { this.sent.push({ bytes: [...bytes], timestamp: Number.isFinite(timestamp) ? timestamp : null }); },
+            clear() { this.cleared = true; }
+          };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: (callback) => callback(window.__mockExquisInput) },
+            outputs: { forEach: (callback) => callback(window.__mockExquisOutput) },
+            onstatechange: null
+          });
+        }
+        """)
+        self.open_hardware_tools()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        self.page.locator('[data-testid="sync-exquis"]').click()
+        queued = self.page.evaluate("""() => window.__mockExquisOutput.sent.filter(entry =>
+          entry.bytes.length === 5 && entry.bytes.every((value, index) => [240, 0, 33, 126, 247][index] === value) &&
+          typeof entry.timestamp === 'number'
+        ).map(entry => entry.timestamp)""")
+        self.assertGreaterEqual(len(queued), 18, queued)
+        self.assertGreaterEqual(max(queued) - min(queued), 85000, queued)
 
     def test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers(self):
         panel = self.page.locator('[data-testid="practice-notation"]')

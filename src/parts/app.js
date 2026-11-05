@@ -1145,6 +1145,9 @@
   // cancellation primitive: no stale timeout can restart a stopped phrase.
   var songAuditionRunning = false;
   var songAuditionRestoreStep = null;
+  var sequencePlaybackToken = 0;
+  var sequencePlaybackRunning = false;
+  var sequencePlaybackRestoreStep = null;
   // A visual cursor can be on time while expensive rendering has delayed the
   // actual note-on. Keep a bounded trace so playback timing is testable.
   var songAuditionTrace = [];
@@ -4292,6 +4295,63 @@
     });
   }
 
+  function updateSequenceTransportControls() {
+    var running = songAuditionRunning || sequencePlaybackRunning;
+    if (els.playSequence) els.playSequence.disabled = running;
+    if (els.coachPlayAll) els.coachPlayAll.disabled = running;
+    if (els.stopSequence) {
+      els.stopSequence.hidden = !running;
+      els.stopSequence.disabled = !running;
+    }
+  }
+
+  function stopPracticeSequence(reason) {
+    if (songAuditionRunning) return stopSongAudition(reason || 'learner stopped sequence');
+    if (!sequencePlaybackRunning) return false;
+    ++sequencePlaybackToken;
+    sequencePlaybackRunning = false;
+    if (sequencePlaybackRestoreStep !== null) state.step = sequencePlaybackRestoreStep;
+    sequencePlaybackRestoreStep = null;
+    Object.keys(midiVoices).forEach(function(key) { releaseMidiVoice(key, true); });
+    setFeedback('Sequence playback stopped.', 'neutral');
+    updateSequenceTransportControls();
+    render();
+    return true;
+  }
+
+  function playPracticeSequence() {
+    if (!currentExerciseEvents.length) return;
+    if (songLessonForId(state.exerciseId)) {
+      auditionSongMelody();
+      updateSequenceTransportControls();
+      return;
+    }
+    stopPracticeSequence('restart');
+    var token = ++sequencePlaybackToken;
+    var originalStep = state.step;
+    sequencePlaybackRunning = true;
+    sequencePlaybackRestoreStep = originalStep;
+    updateSequenceTransportControls();
+    currentExerciseEvents.forEach(function(event, index) {
+      window.setTimeout(function() {
+        if (token !== sequencePlaybackToken) return;
+        state.step = index;
+        render();
+        getPromptMidis(event).forEach(function(midi, noteIndex) {
+          window.setTimeout(function() { playNote(midi, 0.38); }, noteIndex * 14);
+        });
+      }, index * 420);
+    });
+    window.setTimeout(function() {
+      if (token !== sequencePlaybackToken) return;
+      sequencePlaybackRunning = false;
+      state.step = originalStep;
+      sequencePlaybackRestoreStep = null;
+      updateSequenceTransportControls();
+      render();
+    }, currentExerciseEvents.length * 420 + 30);
+  }
+
   function songEventDurationBeats(song, index) {
     var durations = song && song.durationsBeats;
     var beats = Array.isArray(durations) ? durations[index] : 0.5;
@@ -4669,7 +4729,9 @@
       return candidates.sort(function(a, b) {
         var aSupported = supportsAscendingOctaves(cells, scale, a, 2);
         var bSupported = supportsAscendingOctaves(cells, scale, b, 2);
-        return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || Math.abs(a.midi - preferredTwoOctaveRootMidi) - Math.abs(b.midi - preferredTwoOctaveRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
+        var aLaneSafe = aSupported && hasColumnSafeScaleLayout(cells, scale, a, 2);
+        var bLaneSafe = bSupported && hasColumnSafeScaleLayout(cells, scale, b, 2);
+        return (bLaneSafe ? 1 : 0) - (aLaneSafe ? 1 : 0) || (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || Math.abs(a.midi - preferredTwoOctaveRootMidi) - Math.abs(b.midi - preferredTwoOctaveRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
       });
     }
     var supported = candidates.filter(function(cell) {
@@ -4683,7 +4745,11 @@
     return supported.sort(function(a, b) {
       var aSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, a, 2);
       var bSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, b, 2);
-      return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
+      var aColumnSafe = state.exerciseId !== 'two_octaves' && hasColumnSafeScaleLayout(cells, scale, a, 1);
+      var bColumnSafe = state.exerciseId !== 'two_octaves' && hasColumnSafeScaleLayout(cells, scale, b, 1);
+      // A fully playable one-octave map without a three-note column outranks
+      // octave-side and equator preferences.
+      return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || (bColumnSafe ? 1 : 0) - (aColumnSafe ? 1 : 0) || Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
     });
   }
 
@@ -4706,8 +4772,8 @@
 
   function rootSupportsCurrentExercise(cells, scale, root) {
     if (!root) return false;
-    if (state.exerciseId === 'two_octaves') return supportsAscendingOctaves(cells, scale, root, 2);
-    return supportsAscendingOctaves(cells, scale, root, 1);
+    if (state.exerciseId === 'two_octaves') return supportsAscendingOctaves(cells, scale, root, 2) && hasColumnSafeScaleLayout(cells, scale, root, 2);
+    return supportsAscendingOctaves(cells, scale, root, 1) && hasColumnSafeScaleLayout(cells, scale, root, 1);
   }
 
   function selectedRoot(cells) {
@@ -4946,11 +5012,24 @@
     return lit;
   }
 
-  function bestCellForTarget(cells, pc, targetMidi, anchor, preferredCellsById) {
+  function wouldOverstackPathColumn(existingCells, candidate) {
+    // The horizontal Exquis surface renders each logical row as one displayed
+    // vertical pad column. Keep each *visible* column at one or two sequence
+    // pads; the two-octave drill needs 15 pads and can safely occupy its many
+    // separate screen columns without imposing a false diagonal restriction.
+    var sameRow = 0;
+    for (var i = 0; i < (existingCells || []).length; i++) {
+      if (existingCells[i].row === candidate.row) sameRow += 1;
+    }
+    return sameRow >= 2;
+  }
+
+  function bestCellForTarget(cells, pc, targetMidi, anchor, preferredCellsById, existingPathCells) {
     var best = null;
     var bestScore = Infinity;
     for (var i = 0; i < cells.length; i++) {
       if (cells[i].pc !== pc) continue;
+      if (existingPathCells && wouldOverstackPathColumn(existingPathCells, cells[i])) continue;
       var exactMidiPenalty = cells[i].midi === targetMidi ? 0 : 10000;
       var distance = Math.abs(cells[i].midi - targetMidi) * 24;
       var preferredPenalty = preferredCellsById && !preferredCellsById[cells[i].id] ? 1000 : 0;
@@ -4966,32 +5045,61 @@
     return best;
   }
 
+  function scalePathPlacementScore(cell, root, preferredCellsById) {
+    var preferredPenalty = preferredCellsById && !preferredCellsById[cell.id] ? 1000 : 0;
+    var spatial = Math.abs(cell.row - root.row) + Math.abs(cell.col - root.col);
+    var chainPenalty = !isInnerChainCell(cell, root) ? 100 : 0;
+    return preferredPenalty + chainPenalty + spatial + centerScore(cell) * 12;
+  }
+
+  function selectColumnSafeScalePath(cells, targetMidis, root, preferredCellsById) {
+    var candidateGroups = targetMidis.map(function(midi, index) {
+      if (index === 0) return [root];
+      return exactMidiCandidates(cells, midi);
+    });
+    if (candidateGroups.some(function(group) { return !group.length; })) return null;
+    var best = null;
+    var bestScore = Infinity;
+    function visit(index, selected, score) {
+      if (score >= bestScore) return;
+      if (index === candidateGroups.length) {
+        best = selected.slice();
+        bestScore = score;
+        return;
+      }
+      candidateGroups[index].forEach(function(candidate) {
+        if (wouldOverstackPathColumn(selected, candidate)) return;
+        selected.push(candidate);
+        visit(index + 1, selected, score + (index === 0 ? 0 : scalePathPlacementScore(candidate, root, preferredCellsById)));
+        selected.pop();
+      });
+    }
+    visit(0, [], 0);
+    return best;
+  }
+
+  function hasColumnSafeScaleLayout(cells, scale, root, octaveCount) {
+    var totalOctaves = Math.max(1, octaveCount || 1);
+    var targetMidis = [];
+    for (var octaveIndex = 0; octaveIndex < totalOctaves; octaveIndex++) {
+      for (var d = 0; d < scale.intervals.length; d++) targetMidis.push(root.midi + scale.intervals[d] + octaveIndex * 12);
+    }
+    targetMidis.push(root.midi + totalOctaves * 12);
+    return !!selectColumnSafeScalePath(cells, targetMidis, root, getLitPracticeCells(cells, scale, root));
+  }
+
   function buildAscendingScalePath(cells, scale, octaveCount) {
     var root = selectedRoot(cells);
     if (!root) return [];
-    var path = [];
     var preferredCellsById = getLitPracticeCells(cells, scale, root);
     var totalOctaves = Math.max(1, octaveCount || 1);
+    var targetMidis = [];
     for (var octaveIndex = 0; octaveIndex < totalOctaves; octaveIndex++) {
-      for (var d = 0; d < scale.intervals.length; d++) {
-        var interval = scale.intervals[d] + octaveIndex * 12;
-        var targetMidi = root.midi + interval;
-        var pc = mod(state.tonicPc + interval, 12);
-        var cell = interval === 0 ? root : bestCellForTarget(cells, pc, targetMidi, root, preferredCellsById);
-        if (cell && cell.midi === targetMidi) {
-          var pathCell = {};
-          Object.keys(cell).forEach(function(key) { pathCell[key] = cell[key]; });
-          path.push(pathCell);
-        }
-      }
+      for (var d = 0; d < scale.intervals.length; d++) targetMidis.push(root.midi + scale.intervals[d] + octaveIndex * 12);
     }
-    var octaveCell = bestCellForTarget(cells, root.pc, root.midi + totalOctaves * 12, root, preferredCellsById);
-    if (octaveCell && octaveCell.midi === root.midi + totalOctaves * 12) {
-      var octavePathCell = {};
-      Object.keys(octaveCell).forEach(function(key) { octavePathCell[key] = octaveCell[key]; });
-      path.push(octavePathCell);
-    }
-    return path;
+    targetMidis.push(root.midi + totalOctaves * 12);
+    var selected = selectColumnSafeScalePath(cells, targetMidis, root, preferredCellsById);
+    return selected ? selected.map(clonePathCell) : [];
   }
 
   function buildRootToOctavePath(cells, scale) {
@@ -5795,6 +5903,23 @@
     return (maxX - minX) + (maxY - minY) * 2 + centerCost * 80;
   }
 
+  function hasOverstackedGripColumn(gripCells) {
+    // A vertical three-note stack is technically playable but forces an
+    // awkward, error-prone reach on Exquis. This is a hard layout constraint:
+    // prefer a less central voicing over ever placing three chord targets in
+    // one physical column. Two targets remain a compact, usable grip.
+    var countByColumn = {};
+    var countByRow = {};
+    for (var i = 0; i < gripCells.length; i++) {
+      var column = String(gripCells[i].col);
+      countByColumn[column] = (countByColumn[column] || 0) + 1;
+      var row = String(gripCells[i].row);
+      countByRow[row] = (countByRow[row] || 0) + 1;
+      if (countByColumn[column] > 2 || countByRow[row] > 2) return true;
+    }
+    return false;
+  }
+
   function selectErgonomicGripCells(cells, targetMidis) {
     var candidateGroups = targetMidis.map(function(midi) { return exactMidiCandidates(cells, midi); });
     if (candidateGroups.some(function(group) { return !group.length; })) return null;
@@ -5802,6 +5927,7 @@
     var bestScore = Infinity;
     function visit(index, selected) {
       if (index === candidateGroups.length) {
+        if (hasOverstackedGripColumn(selected)) return;
         var score = ergonomicGripScore(selected);
         if (score < bestScore) {
           bestScore = score;
@@ -5872,23 +5998,13 @@
     var offsets = chordVoicingOffsets(spec.quality, noteCount, inversion);
     if (!offsets || typeof spec.rootMidi !== 'number') return null;
     var cells = makeGrid();
-    var root;
-    var gripCells;
-    if (spec.compactVoicing) {
-      gripCells = selectErgonomicGripCells(cells, offsets.map(function(offset) { return spec.rootMidi + offset; }));
-      if (!gripCells) return null;
-      root = gripCells[0];
-    } else {
-      root = bestCellForTarget(cells, mod(spec.rootMidi, 12), spec.rootMidi, null, null);
-      if (!root || root.midi !== spec.rootMidi) return null;
-      gripCells = offsets.map(function(offset) {
-        var targetMidi = spec.rootMidi + offset;
-        var cell = bestCellForTarget(cells, mod(targetMidi, 12), targetMidi, root, null);
-        return cell && cell.midi === targetMidi ? cell : null;
-      });
-      if (gripCells.some(function(cell) { return !cell; })) return null;
-    }
-    var inversionName = inversion === 0 ? 'root' : String(inversion) + (inversion === 1 ? 'st' : inversion === 2 ? 'nd' : inversion === 3 ? 'rd' : 'th');
+    // All chord entry points—including the live Harmony Triad lesson—share
+    // the same physical-layout solver. Do not let the legacy anchored path
+    // reintroduce an otherwise forbidden three-note column.
+    var gripCells = selectErgonomicGripCells(cells, offsets.map(function(offset) { return spec.rootMidi + offset; }));
+    if (!gripCells) return null;
+    var root = gripCells[0];
+    var inversionName = inversion === 0 ? 'root' : inversion === 1 ? 'first' : inversion === 2 ? 'second' : inversion === 3 ? 'third' : String(inversion) + 'th';
     // Chord positions follow neighboring Exquis buttons, not piano interval spacing.
     var fingers = exquisChordFingerPattern(noteCount);
     return createGripExerciseEvent({
@@ -6356,35 +6472,27 @@
     var pathMidiById = options.pathMidiById || {};
     var fingerById = options.fingerById || {};
     var canonicalCellIdByMidi = canonicalLightCellIdsByMidi(cells);
-    var targetByMidi = {};
-    var targetOrderByMidi = {};
-    var pathByMidi = {};
-    var practiceByMidi = {};
-    var pathIndexByMidi = {};
-    var pathMidiByMidi = {};
-    var fingerByMidi = {};
-    cells.forEach(function(cell) {
-      var cellId = cellKey(cell);
-      var key = cellId + ':' + cell.midi;
-      if (targetByKey[key]) targetByMidi[cell.midi] = true;
-      if (targetOrderByKey[key]) targetOrderByMidi[cell.midi] = targetOrderByKey[key];
-      if (pathById[cellId]) pathByMidi[cell.midi] = true;
-      if (litPracticeById[cellId]) practiceByMidi[cell.midi] = true;
-      if (typeof pathIndexById[cellId] === 'number') pathIndexByMidi[cell.midi] = pathIndexById[cellId];
-      if (typeof pathMidiById[cellId] === 'number') pathMidiByMidi[cell.midi] = pathMidiById[cellId];
-      if (fingerById[cellId]) fingerByMidi[cell.midi] = fingerById[cellId];
-    });
     return cells.map(function(cell) {
       var cellId = cell.id.replace('-octave', '');
+      var exactKey = cellId + ':' + cell.midi;
       var isCanonical = canonicalCellIdByMidi[cell.midi] === cellId;
       var heldInfo = getHeldInfoForCell(cell);
-      var isTarget = isCanonical && !!targetByMidi[cell.midi];
-      var isRoot = isCanonical && cell.pc === state.tonicPc;
-      var isPath = isCanonical && !!pathByMidi[cell.midi];
+      // A scale path is a physical fingering plan, not merely a MIDI set.
+      // Several Exquis pads can carry the same MIDI pitch; collapsing by MIDI
+      // here silently substituted a canonical pad, which could reintroduce a
+      // visible three-pad stack despite the planner selecting a safe layout.
+      var isTarget = !!targetByKey[exactKey];
+      // During practice the tonic marker belongs to the selected physical
+      // root pad. A canonical duplicate of the same pitch is not an extra
+      // practice target and must not light a third visible pad in a column.
+      var isRoot = options.isPractice && options.view === 'practice'
+        ? pathIndexById[cellId] === 0 && !!litPracticeById[cellId]
+        : (isCanonical && cell.pc === state.tonicPc);
+      var isPath = !!pathById[cellId];
       var isScale = options.isPractice && options.view === 'practice'
         ? isPath
         : (isCanonical && isScalePc(cell.pc, scale));
-      var isHardwareLit = isCanonical && options.isPractice && options.view === 'practice' && !!practiceByMidi[cell.midi];
+      var isHardwareLit = options.isPractice && options.view === 'practice' && !!litPracticeById[cellId];
       var isMismatch = !!state.mismatched[cellId];
       var role = isMismatch ? 'mismatch'
         : (heldInfo.level > 0 ? 'held'
@@ -6405,11 +6513,11 @@
         isScale: isScale || isHardwareLit,
         isHardwareLit: isHardwareLit,
         isPath: isPath,
-        pathIndex: isCanonical && isPath ? pathIndexByMidi[cell.midi] : undefined,
-        pathMidi: isCanonical && isPath ? pathMidiByMidi[cell.midi] : undefined,
-        finger: isCanonical && isPath ? fingerByMidi[cell.midi] : '',
+        pathIndex: isPath ? pathIndexById[cellId] : undefined,
+        pathMidi: isPath ? pathMidiById[cellId] : undefined,
+        finger: isPath ? fingerById[cellId] : '',
         isTarget: isTarget,
-        targetIndex: isCanonical && isTarget ? targetOrderByMidi[cell.midi] : 0,
+        targetIndex: isTarget ? targetOrderByKey[exactKey] : 0,
         isHeld: heldInfo.level > 0,
         isMismatch: isMismatch
       };
@@ -8613,6 +8721,11 @@
         break;
       }
     }
+    // The Exquis scale map is the stable playing surface: light every in-key
+    // pad in the standard two-per-column layout. The exercise path is an
+    // overlay that supplies targets, fingers, and the current flash; it must
+    // never replace the selected tonic/key map with only eight or fifteen
+    // notes.
     var litPracticeById = getLitPracticeCells(cells, scale, rootCell);
     var pathById = {};
     var pathIndexById = {};
@@ -8656,7 +8769,6 @@
         fingerById[path[i].id.replace('-octave', '')] = fingers[i % fingers.length];
       }
     }
-
     clearChildren(els.keyboard);
     if (els.appShell) {
       els.appShell.setAttribute('data-mode', state.mode);
@@ -8664,7 +8776,6 @@
     }
     if (els.libraryWorkspace) els.libraryWorkspace.hidden = state.workspace !== 'library';
     if (els.studioWorkspace) els.studioWorkspace.hidden = state.workspace !== 'studio';
-    if (els.setupWorkspace) els.setupWorkspace.hidden = state.workspace !== 'setup';
     if (els.sidePanel) els.sidePanel.hidden = state.workspace !== 'practice' || !state.coachOpen;
     if (els.coachToggle) {
       els.coachToggle.hidden = state.workspace !== 'practice';
@@ -8695,10 +8806,8 @@
         soundTabButton.setAttribute('aria-pressed', soundTabActive ? 'true' : 'false');
       }
     }
-    if (els.studioTitle) els.studioTitle.textContent = state.studioTab === 'sound' ? 'Shape your sound.' : 'Connect hardware.';
-    if (els.studioDescription) els.studioDescription.textContent = state.studioTab === 'sound'
-      ? 'Choose the voice, effects, and response curve that make the Exquis feel like your instrument.'
-      : 'MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.';
+    if (els.studioTitle) els.studioTitle.textContent = 'Connect and diagnose Exquis.';
+    if (els.studioDescription) els.studioDescription.textContent = 'MIDI routing, Exquis synchronization, and diagnostic tools live here.';
     if (els.workspaceNav) {
       var workspaceButtons = els.workspaceNav.querySelectorAll('button[data-workspace]');
       for (var workspaceIndex = 0; workspaceIndex < workspaceButtons.length; workspaceIndex++) {
@@ -8788,7 +8897,7 @@
       var hardwareLit = !!(lightPad && lightPad.isHardwareLit);
       var inScale = !!(lightPad && lightPad.isScale && state.view !== 'map');
       var isTonic = !!(lightPad && lightPad.isRoot);
-      var isCurrent = !!(isPracticeMode && current && lightPad && lightPad.isCanonical && current.midi === cell.midi);
+      var isCurrent = !!(isPracticeMode && current && lightPad && current.id === cell.id && current.midi === cell.midi);
       var currentGripTargetIndex = lightPad ? lightPad.targetIndex : 0;
       var isCurrentGripTarget = currentGripTargetIndex > 0;
       var heldInfo = getHeldInfoForCell(cell);
@@ -8798,7 +8907,10 @@
       var classes = ['key'];
       if (hardwareLit) classes.push('hardware-lit');
       if (inScale) classes.push('in-scale');
-      if (isPracticeMode && inPath && state.view === 'practice') classes.push('in-path');
+      // The complete tonic/key map owns pad color. A path target outside that
+      // standard map may still receive its current-step outline, but it must
+      // not introduce another colored pad into a two-per-column scale map.
+      if (isPracticeMode && inPath && hardwareLit && state.view === 'practice') classes.push('in-path');
       if (isTonic) classes.push('tonic');
       if (isCurrent) classes.push('current');
       if (isCurrentGripTarget) classes.push('current-grip-target');
@@ -8953,6 +9065,7 @@
       els.stopAuditionSong.hidden = !songPractice || !songAuditionRunning;
       els.stopAuditionSong.disabled = !songAuditionRunning;
     }
+    updateSequenceTransportControls();
     if (els.exerciseLegend) els.exerciseLegend.textContent = songPractice ? 'Public-domain song' : (repertoirePractice ? 'Song' : (progressionPractice ? 'Progression' : 'Exercise'));
     if (els.practiceWorkflowControls) {
       els.practiceWorkflowControls.classList.toggle('progression-layout', progressionPractice);
@@ -9434,11 +9547,15 @@
       syncExquisPracticePadFrame();
     });
     els.playStep.addEventListener('click', playCurrent);
+    if (els.playSequence) els.playSequence.addEventListener('click', playPracticeSequence);
+    if (els.stopSequence) els.stopSequence.addEventListener('click', function() { stopPracticeSequence('learner stopped sequence'); });
     if (els.auditionSong) els.auditionSong.addEventListener('click', auditionSongMelody);
     if (els.stopAuditionSong) els.stopAuditionSong.addEventListener('click', function() { stopSongAudition('learner stopped playback'); });
     if (els.dashboardHearTarget) els.dashboardHearTarget.addEventListener('click', playCurrent);
+    if (els.coachPlayAll) els.coachPlayAll.addEventListener('click', playPracticeSequence);
+    if (els.coachClose) els.coachClose.addEventListener('click', function() { state.coachOpen = false; render(); });
     if (els.dashboardOpenSetup) els.dashboardOpenSetup.addEventListener('click', function() {
-      setWorkspace('setup');
+      setWorkspace('library');
     });
     els.coachNextAction.addEventListener('click', function() {
       if (state.feedbackKind === 'good' && state.mode === 'practice') {
@@ -9511,34 +9628,35 @@
   }
 
   function placeWorkspaceControls() {
-    if (!els.libraryControlsSlot || !els.studioControlsSlot || !els.setupControlsSlot) return;
-    if (state.workspace === 'setup') {
-      els.setupControlsSlot.appendChild(els.sessionSetup);
-    } else {
-      restoreWorkspaceControl('sessionSetup', els.sessionSetup);
-    }
+    if (!els.libraryControlsSlot || !els.studioControlsSlot) return;
     if (state.workspace === 'library') {
+      els.libraryControlsSlot.appendChild(els.sessionSetup);
       els.libraryControlsSlot.appendChild(els.practiceWorkflowControls);
       if (els.progressionVoicingPanel) els.libraryControlsSlot.appendChild(els.progressionVoicingPanel);
       if (els.repertoireSectionPanel) els.libraryControlsSlot.appendChild(els.repertoireSectionPanel);
+      if (els.practiceTools) {
+        els.practiceTools.open = true;
+        els.libraryControlsSlot.appendChild(els.practiceTools);
+      }
+      // The raw log belongs with Hardware & Diagnostics, not sound selection.
+      if (els.consolePanel) els.consolePanel.hidden = true;
     } else {
+      restoreWorkspaceControl('sessionSetup', els.sessionSetup);
       restoreWorkspaceControl('workflow', els.practiceWorkflowControls);
       restoreWorkspaceControl('progressionVoicing', els.progressionVoicingPanel);
       restoreWorkspaceControl('repertoireSection', els.repertoireSectionPanel);
+      restoreWorkspaceControl('practiceTools', els.practiceTools);
     }
     if (state.workspace === 'studio') {
       if (els.hardwareTools) {
         els.hardwareTools.open = true;
         els.studioControlsSlot.appendChild(els.hardwareTools);
       }
-      if (els.practiceTools) {
-        els.practiceTools.open = true;
-        els.studioControlsSlot.appendChild(els.practiceTools);
-      }
+      if (els.consolePanel) els.consolePanel.hidden = true;
     } else {
       restoreWorkspaceControl('hardwareTools', els.hardwareTools);
-      restoreWorkspaceControl('practiceTools', els.practiceTools);
       restoreWorkspaceControl('consolePanel', els.consolePanel);
+      if (els.consolePanel) els.consolePanel.hidden = false;
     }
   }
 
@@ -9580,10 +9698,8 @@
       sidePanel: document.querySelector('.side-panel'),
       libraryWorkspace: document.querySelector('[data-testid="library-workspace"]'),
       studioWorkspace: document.querySelector('[data-testid="studio-workspace"]'),
-      setupWorkspace: document.querySelector('[data-testid="setup-workspace"]'),
       libraryControlsSlot: document.getElementById('libraryControlsSlot'),
       studioControlsSlot: document.getElementById('studioControlsSlot'),
-      setupControlsSlot: document.getElementById('setupControlsSlot'),
       sessionSetup: document.querySelector('[data-testid="session-setup"]'),
       startLibrarySession: document.getElementById('startLibrarySession'),
       practiceTools: document.querySelector('[data-testid="practice-tools"]'),
@@ -9671,12 +9787,16 @@
       coachNowPlaying: document.getElementById('coachNowPlaying'),
       coachActionCue: document.getElementById('coachActionCue'),
       coachNextAction: document.getElementById('coachNextAction'),
+      coachPlayAll: document.getElementById('coachPlayAll'),
+      coachClose: document.getElementById('coachClose'),
       stepReadout: document.getElementById('stepReadout'),
       currentDegree: document.getElementById('currentDegree'),
       assumptionText: document.getElementById('assumptionText'),
       next: document.getElementById('nextStep'),
       prev: document.getElementById('prevStep'),
       playStep: document.getElementById('playStep'),
+      playSequence: document.getElementById('playSequence'),
+      stopSequence: document.getElementById('stopSequence'),
       auditionSong: document.getElementById('auditionSong'),
       stopAuditionSong: document.getElementById('stopAuditionSong'),
       testAudio: document.getElementById('testAudio'),

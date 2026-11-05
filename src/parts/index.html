@@ -23,9 +23,8 @@
     </div>
     <nav class="workspace-nav" aria-label="App workspace" data-testid="workspace-nav">
       <button type="button" data-workspace="practice" data-testid="workspace-practice">Practice</button>
-      <button type="button" data-workspace="library" data-testid="workspace-library">Exercises</button>
-      <button type="button" data-workspace="studio" data-testid="workspace-studio">Studio</button>
-      <button type="button" data-workspace="setup" data-testid="workspace-setup">Setup</button>
+      <button type="button" data-workspace="library" data-testid="workspace-library">Session</button>
+      <button type="button" data-workspace="studio" data-testid="workspace-studio">Hardware &amp; Diagnostics</button>
     </nav>
     <section class="session-setup" data-testid="session-setup">
       <div class="setup-controls-body">
@@ -137,41 +136,23 @@
     </section>
   </section>
 
-  <section class="workspace-screen library-workspace" data-testid="library-workspace" aria-label="Exercises" hidden>
+  <section class="workspace-screen library-workspace" data-testid="library-workspace" aria-label="Session" hidden>
     <header class="workspace-screen-header">
-      <p class="eyebrow">Exercises</p>
-      <h2>Choose the next musical task.</h2>
-      <p>Select a family, lesson, voicing, and surface before starting a focused practice session.</p>
+      <p class="eyebrow">Session</p>
+      <h2>Build your next practice session.</h2>
+      <p>Choose the musical task, shape the lesson, and dial in the sound in one place.</p>
     </header>
     <div class="library-controls-slot" id="libraryControlsSlot"></div>
     <button id="startLibrarySession" class="workspace-primary-action" type="button" data-testid="start-library-session">Start practice</button>
   </section>
 
-  <section class="workspace-screen studio-workspace" data-testid="studio-workspace" aria-label="Sound and hardware studio" hidden>
+  <section class="workspace-screen studio-workspace" data-testid="studio-workspace" aria-label="Hardware and diagnostics" hidden>
     <header class="workspace-screen-header">
-      <p class="eyebrow">Studio</p>
-      <h2 id="studioTitle">Connect hardware.</h2>
+      <p class="eyebrow">Hardware &amp; Diagnostics</p>
+      <h2 id="studioTitle">Connect and diagnose Exquis.</h2>
       <p id="studioDescription">Sound design, MIDI routing, Exquis synchronization, and diagnostics live here—not inside a lesson.</p>
     </header>
-    <nav class="studio-tabs" aria-label="Studio mode" data-testid="studio-tabs">
-      <button type="button" data-studio-tab="hardware" data-testid="studio-hardware-tab">Hardware</button>
-      <button type="button" data-studio-tab="sound" data-testid="studio-sound-tab">Sound</button>
-    </nav>
-    <nav class="sound-tabs" aria-label="Sound controls" data-testid="sound-tabs">
-      <button type="button" data-sound-tab="voice" data-testid="sound-voice-tab">Voice</button>
-      <button type="button" data-sound-tab="effects" data-testid="sound-effects-tab">Effects</button>
-      <button type="button" data-sound-tab="performance" data-testid="sound-performance-tab">Performance</button>
-    </nav>
     <div class="studio-controls-slot" id="studioControlsSlot"></div>
-  </section>
-
-  <section class="workspace-screen setup-workspace" data-testid="setup-workspace" aria-label="Session setup" hidden>
-    <header class="workspace-screen-header">
-      <p class="eyebrow">Setup</p>
-      <h2>Set the key, lesson, and surface.</h2>
-      <p>Configure the session before returning to the instrument.</p>
-    </header>
-    <div class="setup-controls-slot" id="setupControlsSlot"></div>
   </section>
 
   <section class="stage-panel" aria-label="Exquis keyboard visualization">
@@ -187,7 +168,9 @@
         <button id="prevStep" type="button" aria-label="Previous note" data-testid="prev-step">Prev</button>
         <output id="stepReadout" data-testid="step-readout">1 / 8</output>
         <button id="nextStep" type="button" aria-label="Next note" data-testid="next-step">Next</button>
-        <button id="playStep" type="button" aria-label="Play current note" data-testid="play-step">Play</button>
+        <button id="playStep" type="button" aria-label="Play the next target" data-testid="play-step">Play next</button>
+        <button id="playSequence" type="button" aria-label="Play the full practice sequence" data-testid="play-sequence">Play all</button>
+        <button id="stopSequence" type="button" aria-label="Stop sequence playback" data-testid="stop-sequence" hidden>Stop</button>
         <button id="auditionSong" type="button" aria-label="Audition the full song melody" data-testid="audition-song" hidden>Audition melody</button>
         <button id="stopAuditionSong" type="button" aria-label="Stop the song melody audition" data-testid="stop-audition-song" hidden>Stop</button>
       </div>
@@ -238,7 +221,7 @@
           <p class="eyebrow">Session</p>
           <strong id="dashboardSessionTitle" data-testid="dashboard-session-title">C Major</strong>
           <p id="dashboardSessionMeta" data-testid="dashboard-session-meta">Practice · Root to octave</p>
-          <button id="dashboardOpenSetup" type="button" data-testid="dashboard-open-setup">Change setup</button>
+          <button id="dashboardOpenSetup" type="button" data-testid="dashboard-open-setup">Edit session</button>
         </section>
       </aside>
     </div>
@@ -246,7 +229,7 @@
 
   <aside class="side-panel" aria-label="Practice guidance">
     <section class="practice-coach" data-testid="practice-coach" aria-label="Practice Coach">
-      <h2>Practice Coach</h2>
+      <header class="coach-header"><div><p class="eyebrow">Guided practice</p><h2>Practice Coach</h2></div><button id="coachClose" type="button" data-testid="coach-close">Close</button></header>
       <p id="midiStatus" role="status" aria-live="polite" data-testid="midi-status">Connect your Exquis to start live coaching.</p>
       <p class="coach-field-label">Now play</p>
       <p id="coachNowPlaying" class="coach-now-playing" data-testid="coach-now-playing">C4</p>
@@ -254,7 +237,7 @@
       <div class="coach-result" role="status" aria-live="polite" data-testid="coach-result">
         <p id="coachFeedback" class="feedback-neutral" data-testid="coach-feedback">Enable MIDI to compare the physical Exquis against the current target.</p>
       </div>
-      <button id="coachNextAction" type="button" data-testid="coach-next-action">Hear target</button>
+      <div class="coach-actions"><button id="coachNextAction" type="button" data-testid="coach-next-action">Hear target</button><button id="coachPlayAll" type="button" data-testid="coach-play-all">Play all</button></div>
       <div class="coach-progress" data-testid="coach-progress">
         <p id="drillScore" data-testid="drill-score">Score: 0 correct / 0 missed / streak 0</p>
       </div>
@@ -275,7 +258,7 @@
       <p id="repertoireSectionSummary" data-testid="repertoire-section-summary"></p>
     </section>
     <details class="practice-tools" data-testid="hardware-tools">
-      <summary>Hardware tools</summary>
+      <summary>Hardware &amp; diagnostics</summary>
       <section class="midi-coach-section" data-testid="midi-coach-section">
       <h2>Exquis hardware</h2>
       <section class="hardware-control-group" aria-labelledby="hardware-connection-heading">

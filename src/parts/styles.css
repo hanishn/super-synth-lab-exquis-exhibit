@@ -338,6 +338,50 @@ input {
   display: none;
 }
 
+/* Session deliberately combines lesson setup, repertoire, and sound design. */
+.library-controls-slot .session-setup {
+  position: static;
+  margin: 0;
+}
+
+.library-controls-slot .setup-controls-body {
+  display: grid;
+  gap: 12px;
+}
+
+.library-controls-slot .controls-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-3);
+}
+
+.library-controls-slot .controls-grid > * {
+  grid-column: auto !important;
+  min-width: 0 !important;
+}
+
+.library-controls-slot .mode-switch {
+  grid-column: span 2 !important;
+}
+
+.library-controls-slot [data-testid="practice-tools"] {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-3);
+}
+
+.library-controls-slot [data-testid="practice-tools"] > summary {
+  display: none;
+}
+
+.library-controls-slot .console-panel {
+  display: none !important;
+}
+
 .library-controls-slot .progression-voicing-panel,
 .library-controls-slot .repertoire-section-panel,
 .studio-controls-slot details {
@@ -536,21 +580,21 @@ input {
 }
 
 .studio-workspace {
-  grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 8px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
   padding: 16px 20px;
 }
 
 .studio-workspace .workspace-screen-header {
+  max-width: none;
   display: grid;
-  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.4fr);
-  column-gap: 24px;
+  grid-template-columns: minmax(390px, 0.85fr) minmax(0, 1.4fr);
+  gap: 4px 28px;
   margin: 0;
 }
 
-.studio-workspace .workspace-screen-header .eyebrow,
-.studio-workspace .workspace-screen-header h2 {
-  grid-column: 1;
+.studio-workspace .workspace-screen-header .eyebrow {
+  grid-column: 1 / -1;
 }
 
 .studio-workspace .workspace-screen-header .eyebrow {
@@ -558,14 +602,16 @@ input {
 }
 
 .studio-workspace .workspace-screen-header h2 {
+  grid-column: 1;
+  grid-row: 2;
   align-self: end;
   font-size: clamp(22px, 2.5vw, 30px);
 }
 
 .studio-workspace #studioDescription {
   grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
+  grid-row: 2;
+  align-self: end;
   max-width: none;
   margin: 0;
   font-size: 13px;
@@ -712,6 +758,54 @@ input {
   color: #07120f;
   font-size: 16px;
   font-weight: 900;
+}
+
+/* A Session is a single workstation, not a vertically clipped form. */
+@media (min-width: 1001px) {
+  .library-workspace {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px 22px;
+    overflow: hidden;
+  }
+
+  .library-workspace .workspace-screen-header {
+    max-width: none;
+    margin: 0;
+  }
+
+  .library-controls-slot {
+    display: grid;
+    grid-template-columns: minmax(430px, 0.92fr) minmax(500px, 1.08fr);
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: 12px;
+    max-width: none;
+    min-height: 0;
+  }
+
+  .library-controls-slot .session-setup {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .library-controls-slot .practice-workflow-controls {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .library-controls-slot [data-testid="practice-tools"] {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    height: 100%;
+    margin: 0;
+  }
+
+  .library-workspace .workspace-primary-action {
+    min-height: 44px;
+    margin: 0;
+  }
 }
 
 @media (min-width: 901px) {
@@ -2433,6 +2527,73 @@ input[type="range"]:focus-visible {
   min-height: 36px;
   border-color: rgba(117, 167, 255, 0.72);
   background: #25364a;
+}
+
+.coach-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.coach-header .eyebrow { margin: 0 0 3px; }
+.coach-header #coachClose { width: auto; flex: 0 0 auto; }
+.coach-actions { display: flex; gap: 8px; }
+.coach-actions button { flex: 1 1 0; }
+
+/* Coach is a deliberate focused sheet, not a clipped corner overlay. */
+@media (min-width: 901px) {
+  .app-shell[data-workspace="practice"] .side-panel:not([hidden]) {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 16px;
+  /* Keep Coach wholly within the notation rail: never cover the Exquis surface. */
+  width: min(298px, calc(100vw - 32px));
+    max-height: min(560px, calc(100vh - 112px));
+    transform: translateY(-50%);
+  padding: 10px;
+    overflow: auto;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.58);
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach .coach-header,
+  .app-shell[data-workspace="practice"] .practice-coach #midiStatus,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-progress,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-field-label,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-now-playing,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-action-cue,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-result,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach h2 { display: block; }
+  .app-shell[data-workspace="practice"] .practice-coach .coach-field-label { display: block; }
+
+  .app-shell[data-workspace="practice"] .practice-coach #midiStatus,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-action-cue,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-result,
+  .app-shell[data-workspace="practice"] .practice-coach .coach-progress {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach .coach-now-playing {
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 241, 168, 0.42);
+    border-radius: 6px;
+    background: rgba(255, 241, 168, 0.08);
+    font-size: clamp(40px, 6vw, 60px);
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach .coach-field-label {
+    margin: 0 0 -8px !important;
+    font-size: 11px;
+  }
+
+  .app-shell[data-workspace="practice"] .practice-coach .coach-actions button { min-height: 48px; font-size: 15px; }
 }
 
 .practice-tools,

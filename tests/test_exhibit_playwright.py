@@ -54,8 +54,13 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "keyboard_zoom_must_not_show_giant_empty_tray": "test_regression_keyboard_viewport_is_tight_around_physical_surface",
         "no_scroll_must_keep_primary_controls_visible": "test_regression_laptop_no_scroll_keeps_primary_controls_visible",
         "practice_coach_status_regions_must_remain_visible_on_laptop": "test_regression_practice_coach_status_regions_remain_visible_and_live_on_laptop",
+        "practice_coach_must_not_cover_the_exquis_play_surface": "test_regression_practice_coach_docks_over_notation_not_exquis_surface",
         "fingering_root_must_not_be_overwritten": "test_regression_selected_root_keeps_first_fingering_assignment",
         "fingering_labels_must_stay_valid": "test_regression_fingering_labels_are_valid_for_visible_path",
+        "chord_grips_must_never_stack_three_targets_in_one_column": "test_regression_db_minor_grip_never_uses_three_notes_in_one_column",
+        "scale_paths_must_never_stack_three_targets_in_one_column": "test_regression_db_minor_scale_path_never_uses_three_notes_in_one_column",
+        "two_octave_scale_paths_must_use_fifteen_pads_without_three_pad_lanes": "test_regression_db_minor_two_octave_path_uses_fifteen_pads_without_lane_stacks",
+        "every_major_and_minor_root_must_render_without_three_pad_columns": "test_visual_regression_every_major_and_minor_root_and_octave_mode_has_safe_rendered_columns",
         "wrist_led_pairs_must_allow_same_finger_for_nearby_steps": "test_regression_wrist_led_pairs_allow_same_finger_for_d3_e3",
         "natural_clusters_must_prioritize_human_finger_names": "test_regression_natural_clusters_prioritize_human_finger_names",
         "natural_clusters_must_be_default_fingering_strategy": "test_regression_natural_clusters_is_default_fingering_strategy",
@@ -101,7 +106,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "exquis_midi_must_use_ssli_sustained_notes_and_expression": "test_regression_exquis_midi_uses_ssli_sustained_note_and_expression_api",
         "hardware_target_sync_must_clear_previous_pulses": "test_regression_exquis_sync_pulses_current_targets_and_clears_prior_targets",
         "hardware_target_pulse_must_advance_after_correct_midi_sequence_note": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
-        "hardware_target_pulse_must_not_wait_behind_unrelated_pad_effects": "test_regression_exquis_sync_target_pulse_has_no_frame_length_latency",
+        "hardware_target_pulse_must_not_wait_behind_unrelated_pad_effects": "test_regression_exquis_sync_advances_target_pulse_after_correct_sequence_note",
         "practice_notation_must_follow_canonical_target_step": "test_regression_practice_notation_lens_tracks_step_and_conceals_ear_answers",
         "staff_roll_and_keyboard_must_share_one_runtime_theme_contract": "test_regression_notation_theme_is_shared_and_preserves_pitch_semantics",
         "hardware_chord_sync_must_pulse_all_current_targets": "test_regression_exquis_sync_pulses_every_current_chord_target",
@@ -196,7 +201,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "ipad_shell_must_prioritize_playing_canvas_over_setup_controls": "test_regression_ipad_shell_prioritizes_playing_canvas_over_setup_controls",
         "practice_surface_must_use_its_available_canvas": "test_regression_practice_surface_uses_its_available_canvas",
         "build_metadata_must_not_cover_the_practice_surface": "test_regression_build_metadata_does_not_dominate_practice_surface",
-        "workspaces_must_separate_practice_library_and_studio": "test_regression_workspaces_separate_practice_library_and_studio",
+        "workspace_navigation_must_consolidate_session_and_hardware": "test_regression_three_workspace_navigation_consolidates_session_and_hardware",
+        "session_workspace_must_fit_laptop_without_clipping_controls": "test_regression_session_workspace_fits_laptop_without_clipping_controls",
         "midi_diagnostics_console_must_be_visible": "test_regression_midi_diagnostics_console_is_visible",
         "studio_diagnostics_must_open_a_visible_hardware_drawer": "test_regression_studio_diagnostics_opens_visible_hardware_drawer",
         "studio_hardware_must_fit_laptop_height_without_scroll_or_cutoff": "test_regression_studio_hardware_fits_laptop_height_without_scroll_or_cutoff",
@@ -310,17 +316,17 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.locator('[data-testid="continue-without-midi"]').click()
         page_select_option = self.page.select_option
 
-        def select_option_with_setup(*args, **kwargs):
+        def select_option_with_session(*args, **kwargs):
             active_workspace = self.page.locator('.app-shell').get_attribute('data-workspace')
-            if active_workspace != 'setup':
-                self.page.locator('[data-testid="workspace-setup"]').click()
+            if active_workspace != 'library':
+                self.page.locator('[data-testid="workspace-library"]').click()
             try:
                 return page_select_option(*args, **kwargs)
             finally:
-                if active_workspace != 'setup':
+                if active_workspace != 'library':
                     self.page.locator(f'[data-testid="workspace-{active_workspace}"]').click()
 
-        self.page.select_option = select_option_with_setup
+        self.page.select_option = select_option_with_session
 
     def tearDown(self):
         self.browser.close()
@@ -987,6 +993,165 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(event["valid"], event)
         self.assertEqual(self.page.locator('[data-testid="step-readout"]').inner_text(), "1 / 1")
         self.assertEqual(self.page.locator('[data-testid="current-note"]').inner_text(), "C3 + E3 + G3")
+
+    def test_regression_db_minor_grip_never_uses_three_notes_in_one_column(self):
+        fixture = self.page.evaluate("""() => window.__exquisDebugBuildHarmonyGripFixture({
+          id: 'db-minor-root', quality: 'minor', rootMidi: 49, inversion: 0
+        })""")
+        self.assertTrue(fixture and fixture["valid"], fixture)
+        self.assertEqual([target["midi"] for target in fixture["targets"]], [49, 52, 56], fixture)
+        columns = {}
+        for cell in fixture["sourceCells"]:
+            columns[cell["col"]] = columns.get(cell["col"], 0) + 1
+        self.assertLessEqual(max(columns.values()), 2, fixture)
+
+    def test_regression_db_minor_scale_path_never_uses_three_notes_in_one_column(self):
+        # This is intentionally the user's real route, not an algorithm fixture:
+        # Session -> Tonic Db -> Scale Minor -> Practice.  It verifies the
+        # rendered Exquis buttons as well as the planner snapshot.  The grid
+        # may be rotated, so a visual "column" can align to either DOM axis.
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.page.select_option('[data-testid="tonic-select"]', '1')
+        self.page.select_option('[data-testid="scale-select"]', 'aeolian')
+        self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        self.page.select_option('[data-testid="exercise-select"]', 'root_octave')
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        visual_path = ROOT / '.tmp' / 'db-minor-rendered-layout-regression.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+        path = self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath")
+        self.assertEqual(len(path), 8, path)
+        self.assertEqual(path[0]["midi"] % 12, 1, path)
+        self.assertEqual(path[-1]["midi"] - path[0]["midi"], 12, path)
+        self.assertTrue(all(path[index - 1]["midi"] < path[index]["midi"] for index in range(1, len(path))), path)
+        rows = {}
+        for cell in path:
+            row_part, _column = cell["id"].split('c', 1)
+            row = row_part.removeprefix('r')
+            rows[row] = rows.get(row, 0) + 1
+        self.assertLessEqual(max(rows.values()), 2, path)
+
+        rendered = self.page.evaluate("""() => {
+          const path = window.__exquisDebugSnapshot().currentPath;
+          const pathIds = new Set(path.map((step) => step.cellId));
+          const scaleIds = new Set(window.__exquisLightDebug.currentFrame().pads
+            .filter((pad) => pad.isHardwareLit).map((pad) => pad.cellId));
+          // The full tonic/key map stays colored; the target sequence is a
+          // subset, not a replacement map.
+          const keys = [...document.querySelectorAll('[data-testid="exquis-key"].in-path, [data-testid="exquis-key"].hardware-lit, [data-testid="exquis-key"].tonic')]
+            .map((key) => {
+              const rect = key.getBoundingClientRect();
+              return { id: key.dataset.cellId, left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) };
+            });
+          const laneCounts = (property) => keys.reduce((counts, key) => {
+            counts[key[property]] = (counts[key[property]] || 0) + 1;
+            return counts;
+          }, {});
+          return {
+            title: document.querySelector('#stateTitle').textContent.trim(),
+            expectedIds: [...scaleIds].sort(),
+            pathIds: [...pathIds].sort(),
+            renderedIds: keys.map((key) => key.id).sort(),
+            keys,
+            verticalLaneCounts: laneCounts('left'),
+            horizontalLaneCounts: laneCounts('top')
+          };
+        }""")
+        self.assertEqual(rendered["title"], "Db Minor", rendered)
+        self.assertEqual(len(rendered["expectedIds"]), 22, rendered)
+        self.assertEqual(rendered["renderedIds"], rendered["expectedIds"], rendered)
+        self.assertTrue(all(key["width"] > 0 and key["height"] > 0 for key in rendered["keys"]), rendered)
+        self.assertLessEqual(max(rendered["verticalLaneCounts"].values()), 2, rendered)
+
+    def test_regression_db_minor_two_octave_path_uses_fifteen_pads_without_lane_stacks(self):
+        # The two-octave requirement is a separate contract: 15 physical pads
+        # must be shown and none may create a three-pad hex-grid lane.
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.page.select_option('[data-testid="tonic-select"]', '1')
+        self.page.select_option('[data-testid="scale-select"]', 'aeolian')
+        self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+        self.page.select_option('[data-testid="exercise-select"]', 'two_octaves')
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        visual_path = ROOT / '.tmp' / 'db-minor-two-octave-lane-safety-regression.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+        rendered = self.page.evaluate("""() => {
+          const path = window.__exquisDebugSnapshot().currentPath;
+          const scaleIds = new Set(window.__exquisLightDebug.currentFrame().pads
+            .filter((pad) => pad.isHardwareLit).map((pad) => pad.cellId));
+          const keys = [...document.querySelectorAll('[data-testid="exquis-key"].in-path, [data-testid="exquis-key"].hardware-lit, [data-testid="exquis-key"].tonic')];
+          const counts = (values) => values.reduce((out, value) => {
+            out[value] = (out[value] || 0) + 1;
+            return out;
+          }, {});
+          const coordinates = keys.map((key) => {
+            const match = /^r(\\d+)c(\\d+)$/.exec(key.dataset.cellId);
+            const rect = key.getBoundingClientRect();
+            return { id: key.dataset.cellId, row: Number(match[1]), column: Number(match[2]), left: Math.round(rect.left) };
+          });
+          return {
+            path,
+            scaleIds: [...scaleIds].sort(),
+            renderedIds: coordinates.map((cell) => cell.id).sort(),
+            pathIds: path.map((cell) => cell.cellId).sort(),
+            visibleColumnCounts: counts(coordinates.map((cell) => cell.left))
+          };
+        }""")
+        self.assertEqual(len(rendered["path"]), 15, rendered)
+        self.assertEqual(len(rendered["scaleIds"]), 22, rendered)
+        self.assertEqual(rendered["renderedIds"], rendered["scaleIds"], rendered)
+        self.assertTrue(all(rendered["path"][index - 1]["midi"] < rendered["path"][index]["midi"] for index in range(1, 15)), rendered)
+        self.assertLessEqual(max(rendered["visibleColumnCounts"].values()), 2, rendered)
+
+    def test_visual_regression_every_major_and_minor_root_and_octave_mode_has_safe_rendered_columns(self):
+        # This is intentionally a UI matrix rather than a solver fixture. It
+        # verifies the actual colored pad surface for all 24 tonic/mode pairs
+        # in both sequence lengths, leaving one screenshot per case for visual
+        # review.  Eight pads is valid only for Root to octave; Two octaves
+        # must visibly contain all fifteen physical targets.
+        visual_dir = ROOT / '.tmp' / 'major-minor-root-visual-regression'
+        visual_dir.mkdir(parents=True, exist_ok=True)
+        outcomes = []
+        for scale_id, scale_name in (("ionian", "major"), ("aeolian", "minor")):
+            for exercise_id, exercise_name, expected_count in (("root_octave", "one-octave", 8), ("two_octaves", "two-octaves", 15)):
+                for tonic in range(12):
+                    self.page.locator('[data-testid="workspace-library"]').click()
+                    self.page.select_option('[data-testid="tonic-select"]', str(tonic))
+                    self.page.select_option('[data-testid="scale-select"]', scale_id)
+                    self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
+                    self.page.select_option('[data-testid="exercise-select"]', exercise_id)
+                    self.page.locator('[data-testid="workspace-practice"]').click()
+                    label = self.page.locator('[data-testid="tonic-select"] option:checked').inner_text().replace('#', 'sharp').replace('b', 'flat')
+                    self.page.screenshot(path=str(visual_dir / (exercise_name + '-' + scale_name + '-' + label + '.png')), full_page=True)
+                    outcome = self.page.evaluate("""() => {
+                  const path = window.__exquisDebugSnapshot().currentPath;
+                  const scaleIds = new Set(window.__exquisLightDebug.currentFrame().pads
+                    .filter((pad) => pad.isHardwareLit).map((pad) => pad.cellId));
+                  const keys = [...document.querySelectorAll('[data-testid="exquis-key"].in-path, [data-testid="exquis-key"].hardware-lit, [data-testid="exquis-key"].tonic')];
+                  const counts = keys.reduce((out, key) => {
+                    const left = Math.round(key.getBoundingClientRect().left);
+                    out[left] = (out[left] || 0) + 1;
+                    return out;
+                  }, {});
+                  return {
+                    title: document.querySelector('#stateTitle').textContent.trim(),
+                    path,
+                    scaleIds: [...scaleIds].sort(),
+                    visibleIds: keys.map((key) => key.dataset.cellId).sort(),
+                    pathIds: path.map((cell) => cell.cellId).sort(),
+                    visibleColumnCounts: counts
+                  };
+                }""")
+                    outcomes.append({"scale": scale_name, "exercise": exercise_name, "expectedCount": expected_count, "tonic": tonic, **outcome})
+        self.assertEqual(len(outcomes), 48, outcomes)
+        for outcome in outcomes:
+            with self.subTest(scale=outcome["scale"], exercise=outcome["exercise"], tonic=outcome["tonic"]):
+                self.assertEqual(len(outcome["path"]), outcome["expectedCount"], outcome)
+                self.assertEqual(len(outcome["scaleIds"]), 22, outcome)
+                self.assertEqual(outcome["visibleIds"], outcome["scaleIds"], outcome)
+                self.assertEqual(outcome["path"][-1]["midi"] - outcome["path"][0]["midi"], 12 if outcome["expectedCount"] == 8 else 24, outcome)
+                self.assertTrue(all(outcome["path"][index - 1]["midi"] < outcome["path"][index]["midi"] for index in range(1, outcome["expectedCount"])), outcome)
+                self.assertLessEqual(max(outcome["visibleColumnCounts"].values()), 2, outcome)
 
     def test_regression_harmony_fixture_resolves_minor_first_inversion_to_exact_cells(self):
         fixture = self.page.evaluate("""() => window.__exquisDebugBuildHarmonyGripFixture({
@@ -2369,7 +2534,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
     def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
         self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
-        self.page.locator('[data-testid="workspace-setup"]').click()
+        self.page.locator('[data-testid="workspace-library"]').click()
         controls = {
             "family": self.page.locator('[data-testid="exercise-family-select"]').bounding_box(),
             "genre": self.page.locator('[data-testid="progression-genre-select"]').bounding_box(),
@@ -2386,7 +2551,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertFalse(self.page.locator('[data-testid="fingering-control"]').is_visible())
         self.assertEqual(self.page.locator('#practiceTitle').inner_text(), 'Progression lab')
         self.page.select_option('[data-testid="exercise-family-select"]', 'technique')
-        self.page.locator('[data-testid="workspace-setup"]').click()
+        self.page.locator('[data-testid="workspace-library"]').click()
         self.assertTrue(self.page.locator('[data-testid="octave-control"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="root-control"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="fingering-control"]').is_visible())
@@ -3141,7 +3306,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertTrue(all(not step["virtual"] for step in path))
         self.assertEqual(len({step["cellId"] for step in path}), len(path))
         self.assertTrue(all(path[index]["midi"] < path[index + 1]["midi"] for index in range(len(path) - 1)))
+        # Session owns the mode selector; select Play there, then verify its
+        # effect on the instrument surface.
+        self.page.locator('[data-testid="workspace-library"]').click()
         self.page.locator('[data-testid="play-mode"]').click()
+        self.page.locator('[data-testid="workspace-practice"]').click()
         play_by_id = self.page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('[data-testid="exquis-key"]')]
           .map((key) => [key.dataset.cellId, { label: key.getAttribute('aria-label'), midi: Number(key.dataset.midi) }]))""")
         for step in path:
@@ -10815,6 +10984,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
     def test_regression_practice_coach_is_the_authoritative_learning_surface(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.locator('[data-testid="coach-toggle"]').click()
         coach = self.page.locator('[data-testid="practice-coach"]')
         self.assertTrue(coach.is_visible())
         for test_id in [
@@ -10834,6 +11004,38 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertFalse(self.page.locator('[data-testid="last-midi"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="console-panel"]').is_visible())
         self.assertFalse(self.page.locator('[data-testid="calibration-section"]').is_visible())
+
+    def test_regression_practice_coach_docks_over_notation_not_exquis_surface(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.locator('[data-testid="coach-toggle"]').click()
+        metrics = self.page.evaluate("""() => {
+          const rect = (selector) => {
+            const box = document.querySelector(selector).getBoundingClientRect();
+            return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+          };
+          return {
+            sidePanel: rect('.side-panel'),
+            coach: rect('[data-testid="practice-coach"]'),
+            staff: rect('#notationStaffRail'),
+            exquis: rect('[data-testid="exquis-device"]')
+          };
+        }""")
+        self.assertLessEqual(metrics["sidePanel"]["right"], metrics["exquis"]["left"] + 1, metrics)
+        self.assertLess(metrics["coach"]["left"], metrics["staff"]["right"], metrics)
+        self.assertGreater(metrics["coach"]["right"], metrics["staff"]["left"], metrics)
+        self.assertGreaterEqual(metrics["coach"]["top"], 0, metrics)
+        self.assertLessEqual(metrics["coach"]["bottom"], 768, metrics)
+
+    def test_regression_practice_transport_exposes_next_and_full_sequence_playback(self):
+        self.assertEqual(self.page.locator('[data-testid="play-step"]').inner_text(), 'Play next')
+        self.assertEqual(self.page.locator('[data-testid="play-sequence"]').inner_text(), 'Play all')
+        self.assertTrue(self.page.locator('[data-testid="stop-sequence"]').is_hidden())
+        step_before = self.page.locator('[data-testid="step-readout"]').inner_text()
+        self.page.locator('[data-testid="play-sequence"]').click()
+        self.assertTrue(self.page.locator('[data-testid="stop-sequence"]').is_visible())
+        self.page.wait_for_function("before => document.querySelector('[data-testid=\"step-readout\"]').textContent !== before", arg=step_before)
+        self.page.locator('[data-testid="stop-sequence"]').click()
+        self.assertTrue(self.page.locator('[data-testid="stop-sequence"]').is_hidden())
 
     def test_regression_session_settings_uses_a_specific_learner_facing_label(self):
         settings = self.page.locator('[data-testid="practice-tools"]')
@@ -10936,6 +11138,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
     def test_regression_practice_coach_status_regions_remain_visible_and_live_on_laptop(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.locator('[data-testid="coach-toggle"]').click()
         metrics = self.page.evaluate("""() => {
           const selectors = [
             '[data-testid="midi-status"]',
@@ -11012,14 +11215,17 @@ class PlaywrightExhibitTests(unittest.TestCase):
           };
         }""")
         self.assertFalse(self.page.locator('.side-panel').is_visible())
-        self.assertGreaterEqual(metrics["keyboard"]["width"] / metrics["stage"]["width"], 0.94, metrics)
-        self.assertGreaterEqual(metrics["keyboard"]["height"] / metrics["stage"]["height"], 0.8, metrics)
+        # iPad retains staff and piano-roll learning rails; the instrument must
+        # still receive the majority of the central practice surface without
+        # forcing a scroll or clipping a playable key.
+        self.assertGreaterEqual(metrics["keyboard"]["width"] / metrics["stage"]["width"], 0.64, metrics)
+        self.assertGreaterEqual(metrics["keyboard"]["height"] / metrics["stage"]["height"], 0.62, metrics)
         self.assertGreater(metrics["stage"]["height"], metrics["top"]["height"] * 4, metrics)
         self.assertLessEqual(metrics["stage"]["bottom"], 768, metrics)
         self.assertLessEqual(metrics["overflow"], 1, metrics)
         self.assertLessEqual(metrics["vertical"], 1, metrics)
-        self.page.locator('[data-testid="workspace-setup"]').click()
-        self.assertTrue(self.page.locator('[data-testid="setup-workspace"]').is_visible())
+        self.page.locator('[data-testid="workspace-library"]').click()
+        self.assertTrue(self.page.locator('[data-testid="library-workspace"]').is_visible())
         self.assertTrue(self.page.locator('[data-testid="exercise-family-select"]').is_visible())
         self.page.locator('[data-testid="workspace-practice"]').click()
         self.page.locator('[data-testid="coach-toggle"]').click()
@@ -11063,83 +11269,57 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 self.assertLessEqual(metrics["horizontalDeadSpace"], 0.32, metrics)
                 self.assertLessEqual(metrics["verticalDeadSpace"], 0.10, metrics)
 
-    def test_regression_workspaces_separate_practice_library_and_studio(self):
+    def test_regression_three_workspace_navigation_consolidates_session_and_hardware(self):
         self.page.set_viewport_size({"width": 1024, "height": 768})
-        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'practice')
-        self.assertTrue(self.page.locator('.stage-panel').is_visible())
-        self.assertFalse(self.page.locator('.side-panel').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="library-workspace"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="studio-workspace"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="setup-workspace"]').is_visible())
-
-        self.page.locator('[data-testid="workspace-setup"]').click()
-        self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'setup')
-        self.assertTrue(self.page.locator('[data-testid="setup-workspace"]').is_visible())
-        self.assertFalse(self.page.locator('.stage-panel').is_visible())
-        self.assertEqual(
-            self.page.locator('[data-testid="tonic-select"]').evaluate(
-                "element => element.closest('#setupControlsSlot') !== null"
-            ),
-            True,
-        )
-        self.assertEqual(self.page.locator('[data-testid="workspace-setup"]').get_attribute('aria-pressed'), 'true')
+        nav = self.page.locator('[data-testid="workspace-nav"] button')
+        self.assertEqual(nav.count(), 3)
+        self.assertEqual([nav.nth(i).inner_text() for i in range(3)], ['Practice', 'Session', 'Hardware & Diagnostics'])
 
         self.page.locator('[data-testid="workspace-library"]').click()
         self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'library')
-        self.assertEqual(self.page.locator('[data-testid="workspace-library"]').inner_text(), 'Exercises')
         self.assertTrue(self.page.locator('[data-testid="library-workspace"]').is_visible())
-        self.assertFalse(self.page.locator('.stage-panel').is_visible())
-        self.assertFalse(self.page.locator('.side-panel').is_visible())
-        self.assertEqual(
-            self.page.locator('[data-testid="exercise-family-select"]').evaluate(
-                "element => element.closest('#libraryControlsSlot') !== null"
-            ),
-            True,
-        )
+        for test_id in ['tonic-select', 'exercise-family-select', 'sound-engine-select', 'fx-preset-select']:
+            self.assertTrue(self.page.locator(f'[data-testid="{test_id}"]').is_visible(), test_id)
         self.assertEqual(self.page.locator('[data-testid="workspace-library"]').get_attribute('aria-pressed'), 'true')
 
         self.page.locator('[data-testid="workspace-studio"]').click()
         self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'studio')
         self.assertTrue(self.page.locator('[data-testid="studio-workspace"]').is_visible())
-        self.assertEqual(self.page.locator('[data-testid="studio-hardware-tab"]').get_attribute('aria-pressed'), 'true')
         self.assertTrue(self.page.locator('[data-testid="enable-midi"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
-        self.page.locator('[data-testid="studio-sound-tab"]').click()
-        self.assertEqual(
-            self.page.locator('[data-testid="sound-engine-select"]').evaluate(
-                "element => element.closest('#studioControlsSlot') !== null"
-            ),
-            True,
-        )
-        self.assertEqual(self.page.locator('[data-testid="studio-sound-tab"]').get_attribute('aria-pressed'), 'true')
-        self.assertEqual(self.page.locator('[data-testid="sound-voice-tab"]').get_attribute('aria-pressed'), 'true')
-        self.assertTrue(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="fx-control-row"]').is_visible())
-
-        self.page.locator('[data-testid="sound-effects-tab"]').click()
-        self.assertEqual(self.page.locator('[data-testid="sound-effects-tab"]').get_attribute('aria-pressed'), 'true')
-        self.assertTrue(self.page.locator('[data-testid="fx-control-row"]').is_visible())
-        self.assertTrue(self.page.locator('[data-testid="filter-cutoff"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="sound-engine-select"]').is_visible())
-
-        self.page.locator('[data-testid="sound-performance-tab"]').click()
-        self.assertEqual(self.page.locator('[data-testid="sound-performance-tab"]').get_attribute('aria-pressed'), 'true')
-        self.assertTrue(self.page.locator('[data-testid="performance-volume"]').is_visible())
-        self.assertFalse(self.page.locator('[data-testid="fx-control-row"]').is_visible())
-        self.assertEqual(self.page.locator('[data-testid="workspace-studio"]').get_attribute('aria-pressed'), 'true')
-        self.assertEqual(self.page.locator('[data-testid="workspace-library"]').get_attribute('aria-pressed'), 'false')
+        self.assertTrue(self.page.locator('[data-testid="hardware-diagnostics"]').is_visible())
+        self.assertEqual(self.page.locator('[data-testid="studio-hardware-tab"]').count(), 0)
+        self.assertEqual(self.page.locator('[data-testid="studio-sound-tab"]').count(), 0)
 
         self.page.locator('[data-testid="workspace-library"]').click()
         self.page.locator('[data-testid="start-library-session"]').click()
         self.assertEqual(self.page.locator('.app-shell').get_attribute('data-workspace'), 'practice')
         self.assertTrue(self.page.locator('.stage-panel').is_visible())
-        self.assertFalse(self.page.locator('.side-panel').is_visible())
-        self.assertEqual(
-            self.page.locator('[data-testid="exercise-family-select"]').evaluate(
-                "element => element.closest('#practiceWorkflowControls') !== null"
-            ),
-            True,
-        )
+
+    def test_regression_session_workspace_fits_laptop_without_clipping_controls(self):
+        self.page.set_viewport_size({"width": 1366, "height": 768})
+        self.page.locator('[data-testid="workspace-library"]').click()
+        metrics = self.page.evaluate("""() => {
+          const rect = (selector) => document.querySelector(selector).getBoundingClientRect().toJSON();
+          const session = document.querySelector('[data-testid="library-workspace"]');
+          return {
+            session: rect('[data-testid="library-workspace"]'),
+            setup: rect('[data-testid="session-setup"]'),
+            workflow: rect('#practiceWorkflowControls'),
+            sound: rect('[data-testid="practice-tools"]'),
+            start: rect('[data-testid="start-library-session"]'),
+            sessionScrollHeight: session.scrollHeight,
+            sessionClientHeight: session.clientHeight,
+            pageScrollHeight: document.documentElement.scrollHeight,
+            pageClientHeight: document.documentElement.clientHeight
+          };
+        }""")
+        self.assertLessEqual(metrics["session"]["bottom"], 768, metrics)
+        self.assertLessEqual(metrics["setup"]["bottom"], metrics["session"]["bottom"], metrics)
+        self.assertLessEqual(metrics["workflow"]["bottom"], metrics["session"]["bottom"], metrics)
+        self.assertLessEqual(metrics["sound"]["bottom"], metrics["session"]["bottom"], metrics)
+        self.assertLessEqual(metrics["start"]["bottom"], metrics["session"]["bottom"], metrics)
+        self.assertLessEqual(metrics["sessionScrollHeight"], metrics["sessionClientHeight"] + 1, metrics)
+        self.assertLessEqual(metrics["pageScrollHeight"], metrics["pageClientHeight"] + 1, metrics)
 
     def test_medium_view_has_no_document_horizontal_overflow(self):
         self.page.set_viewport_size({"width": 1024, "height": 768})

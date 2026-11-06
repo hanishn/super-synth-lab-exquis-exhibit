@@ -1039,6 +1039,13 @@ input {
 
 
 @media (min-width: 901px) {
+  /* In portrait practice the encoder strip carries the hands-free root/mode
+     controls. Keep the non-learning transport deck out of the constrained
+     stage so it cannot be pushed beneath fixed diagnostics. */
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="vertical"] .edge-controls-bottom {
+    display: none;
+  }
+
   .app-shell[data-workspace="practice"] {
     grid-template-rows: auto minmax(0, 1fr);
   }
@@ -1086,14 +1093,113 @@ input {
 
   .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "keys";
+    grid-template-rows: auto minmax(210px, 1fr) auto;
+    grid-template-areas:
+      "top"
+      "keys"
+      "bottom";
     width: 100%;
     height: 100%;
     max-width: none;
   }
 
   .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-controls {
+    display: block;
+    padding: 4px 8px;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-controls-header {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0 0 3px;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-controls-hint {
+    display: block;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-encoder-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    padding: 0;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-encoder {
+    min-height: 42px;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-encoder .edge-visual {
+    width: 30px;
+    height: 30px;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-encoder .edge-meta {
     display: none;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-encoder .edge-value {
+    position: static;
+    display: block;
+    max-width: none;
+    margin-top: 2px;
+    padding: 1px 3px;
+    font-size: 8px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-controls {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+    gap: 8px;
+    align-items: center;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-deck,
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-action-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    order: initial;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-action-row {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-deck .edge-control,
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-action-row .edge-control {
+    width: auto;
+    min-height: 30px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    column-gap: 0;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-deck .edge-detail,
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-action-row .edge-detail {
+    display: none;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-controls .edge-label,
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-action-row .edge-label {
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    justify-items: center;
+  }
+
+  .app-shell[data-workspace="practice"] .exquis-device[data-orientation="horizontal"] .edge-bottom-deck .edge-slider .edge-visual {
+    width: 100%;
+    height: 20px;
+    background:
+      repeating-linear-gradient(90deg, transparent 0, transparent calc(16.666% - 1px), rgba(255,255,255,0.2) calc(16.666% - 1px), rgba(255,255,255,0.2) 16.666%),
+      linear-gradient(180deg, #151c20, #0d1215);
   }
 }
 
@@ -2205,6 +2311,14 @@ input[type="range"]:focus-visible {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
+.edge-controls-hint {
+  display: none;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+
 .practice-piano-reference {
   position: relative;
   display: flex;
@@ -2315,6 +2429,21 @@ input[type="range"]:focus-visible {
   z-index: 8;
 }
 
+/* The active target is also a member of the colored scale map. Do not let
+   the generic scale-pulse erase its ring and label: the next action must be
+   recognisable without changing the pitch's semantic hue. */
+.key.current.light-target {
+  /* `--exquis-target-pulse-gain` is updated from the same native Exquis 3F
+     pulsate-to-black timing model used for the physical target. */
+  animation: none;
+  filter: brightness(var(--exquis-target-pulse-gain, 1)) saturate(1);
+  outline-color: var(--notation-current-outline);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--notation-current-glow) 24%, transparent), 0 0 34px color-mix(in srgb, var(--notation-current-glow) 76%, transparent);
+  z-index: 20;
+}
+
+.key.current.light-target::after { z-index: 24; }
+
 @keyframes exquis-target-breathe {
   0%, 100% {
     filter: brightness(0.25) saturate(1.04);
@@ -2323,6 +2452,44 @@ input[type="range"]:focus-visible {
     filter: brightness(1.2) saturate(1.14);
   }
 }
+
+/* Readability contract: primary control names stay at 12px or larger and
+   supporting operational text at 11px or larger on a normal desktop. The
+   physical-device drawing may be compact, but its labels are instructions,
+   not decorative texture. */
+.workspace-nav button { font-size: 13px; }
+.hardware-status-grid span { font-size: 11px; }
+.studio-workspace .studio-controls-slot[data-studio-tab="hardware"] .console-panel.expanded .console-actions button,
+.console-actions button { font-size: 12px; }
+.edge-controls h3 { font-size: 14px; }
+.edge-controls p { font-size: 12px; }
+.edge-name { font-size: 12px; }
+.edge-encoder .edge-name { font-size: 14px; }
+.edge-meta,
+.edge-detail,
+.edge-value { font-size: 11px; }
+.edge-encoder .edge-value { font-size: 12px; }
+.edge-controls-hint { font-size: 11px; }
+/* Sideways device rails are physically narrow; retain a readable compact
+   label without letting it overlap the rendered control. */
+.exquis-device[data-orientation="horizontal"] .edge-meta,
+.exquis-device[data-orientation="horizontal"] .edge-bottom-controls .edge-name,
+.exquis-device[data-orientation="vertical"] .edge-bottom-controls .edge-name { font-size: 10px; }
+.practice-tools > summary,
+.practice-reference > summary,
+.midi-action-row button,
+#exquisSyncStatus,
+.legacy-map-picker span,
+.legacy-light-picker span,
+.legacy-map-picker select,
+.legacy-light-picker select { font-size: 12px; }
+.side-panel label span,
+.target-rationale p,
+#scopeReadout,
+.score-window-controls,
+.score-window-controls button,
+.notation-rail-heading p:last-child { font-size: 11px; }
+.target-rationale b { font-size: 10px; }
 
 .chord-target-hex-outline {
   position: absolute;

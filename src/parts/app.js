@@ -15,19 +15,26 @@
     { name: 'F#', pc: 6 }, { name: 'G', pc: 7 }, { name: 'Ab', pc: 8 },
     { name: 'A', pc: 9 }, { name: 'Bb', pc: 10 }, { name: 'B', pc: 11 }
   ];
-  var SCALE_KEYS = ['ionian', 'aeolian', 'penta_min', 'penta_maj', 'chromatic', 'dorian', 'mixolydian', 'blues'];
-  var EXQUIS_SCALE_NUMBER_BY_ID = {
-    ionian: 0,
-    dorian: 1,
-    mixolydian: 4,
-    aeolian: 5
-  };
-  var EXQUIS_SCALE_ID_BY_NUMBER = {
-    0: 'ionian',
-    1: 'dorian',
-    4: 'mixolydian',
-    5: 'aeolian'
-  };
+  // One canonical musician-facing mode bank drives the selector, Encoder 3,
+  // outbound SysEx, and documentation.  Order is deliberate: common writing
+  // and improvising vocabulary first, then the complete diatonic family,
+  // jazz/color scales, and regional traditions.  `bebop_dominant` is omitted
+  // because SSLI also exposes it as `bebop_dom` with identical pitch content.
+  var PRACTICE_MODE_BANK = [
+    'ionian', 'aeolian', 'penta_maj', 'penta_min', 'blues',
+    'dorian', 'mixolydian', 'lydian', 'phrygian', 'locrian',
+    'harmonic_min', 'melodic_min', 'altered', 'whole_tone', 'dim_wh', 'dim_hw', 'bebop_dom', 'bebop_maj', 'chromatic',
+    'bhairav', 'yaman', 'kafi', 'asavari', 'marwa', 'todi', 'purvi', 'kalyan', 'bilawal', 'khamaj',
+    'hirajoshi', 'kumoi', 'in_sen', 'pelog', 'chinese_pent', 'egyptian', 'hungarian_min',
+    'maqam_rast', 'maqam_bayati', 'maqam_hijaz', 'maqam_nahawand', 'maqam_saba', 'maqam_kurd'
+  ];
+  var SCALE_KEYS = PRACTICE_MODE_BANK.slice();
+  var EXQUIS_SCALE_NUMBER_BY_ID = {};
+  var EXQUIS_SCALE_ID_BY_NUMBER = {};
+  PRACTICE_MODE_BANK.forEach(function(scaleId, index) {
+    EXQUIS_SCALE_NUMBER_BY_ID[scaleId] = index;
+    EXQUIS_SCALE_ID_BY_NUMBER[index] = scaleId;
+  });
   var EXQUIS_EDGE_CONTROLS = [
     { id: 'settings', zone: 'settings', kind: 'button', led: 100, label: 'Settings', detail: 'Hold: settings menu' },
     { id: 'sound', zone: 'settings', kind: 'button', led: 101, label: 'Sound', detail: 'Hold: compatibility/menu' },
@@ -39,10 +46,10 @@
     { id: 'up', zone: 'updown', kind: 'button', led: 107, label: 'Up', detail: 'Octave up' },
     { id: 'undo', zone: 'other', kind: 'button', led: 108, label: 'Undo', detail: 'Action button' },
     { id: 'redo', zone: 'other', kind: 'button', led: 109, label: 'Redo', detail: 'Action button' },
-    { id: 'enc1', zone: 'encoders', kind: 'encoder', led: 110, clickCc: 21, cc: 41, label: 'Encoder 1', detail: 'CC41 / click CC21' },
+    { id: 'enc1', zone: 'encoders', kind: 'encoder', led: 110, clickCc: 21, cc: 41, label: 'Encoder 1', detail: 'CC41 / practice family' },
     { id: 'enc2', zone: 'encoders', kind: 'encoder', led: 111, clickCc: 22, cc: 42, label: 'Encoder 2', detail: 'CC42 / root in Settings' },
     { id: 'enc3', zone: 'encoders', kind: 'encoder', led: 112, clickCc: 23, cc: 43, label: 'Encoder 3', detail: 'CC43 / scale in Settings' },
-    { id: 'enc4', zone: 'encoders', kind: 'encoder', led: 113, clickCc: 24, cc: 44, label: 'Encoder 4', detail: 'CC44 / brightness/sensitivity' },
+    { id: 'enc4', zone: 'encoders', kind: 'encoder', led: 113, clickCc: 24, cc: 44, label: 'Encoder 4', detail: 'CC44 / exercise' },
     { id: 'slider', zone: 'slider', kind: 'slider', led: 90, label: 'Slider', detail: 'Arpeggiator speed/pattern, portions 80-85' }
   ];
   var EXQUIS_EDGE_BY_CC = {};
@@ -1158,6 +1165,10 @@
   var lastMidiPressureRenderAt = 0;
   var lastMidiPressureLogAt = 0;
   var skippedSsliExpressionUpdates = 0;
+  // Root ranking and rendering repeatedly ask the same pure layout question.
+  // Cache it so complete root/mode verification does not re-solve a route for
+  // every sort comparison.
+  var columnSafeLayoutCache = {};
   var MIDI_VOICE_BUDGET = 12;
   var SSLI_EXPRESSION_PRESSURE_STEP = 8;
   var PHYSICAL_PRESSURE_STEP = 14;
@@ -1226,6 +1237,7 @@
     activeEdgeControlId: '',
     lastEdgeControlId: '',
     lastEdgeControlValue: '',
+    edgeControlValues: {},
     legacyMap: 'bottom_left',
     legacyLightTarget: 'buttons',
     midiActivity: 'Activity: none',
@@ -1573,6 +1585,77 @@
   var EXQUIS_KEY_MODE_COMMAND_GAP_MS = 18;
   var EXQUIS_LED_COMMAND_GAP_MS = 8;
   var EXQUIS_PAD_COUNT = 61;
+  // 3F is Exquis' native pulsate effect. Its label says “to black”, but the
+  // physical pad is a soft optical dim rather than a hard blackout. Keep the
+  // browser at the authored colour for its peak and use the measured-feeling
+  // soft floor for the trough, one beat per cycle.
+  var EXQUIS_TARGET_PULSE_EFFECT = 0x3F;
+  var EXQUIS_DEFAULT_TEMPO_BPM = 120;
+  var EXQUIS_TARGET_PULSE_MIN_GAIN = 0.55;
+  var EXQUIS_TARGET_PULSE_MAX_GAIN = 1.0;
+  var exquisPulseTempoBpm = EXQUIS_DEFAULT_TEMPO_BPM;
+  var exquisPulseEpochMs = 0;
+  var exquisPulseClockTick = 0;
+  var lastExquisPulseClockAt = 0;
+  var exquisPulseRaf = null;
+
+  function exquisPulsePeriodMs() {
+    return 60000 / Math.max(20, Math.min(240, exquisPulseTempoBpm || EXQUIS_DEFAULT_TEMPO_BPM));
+  }
+
+  function exquisTargetPulseGain(now) {
+    var period = exquisPulsePeriodMs();
+    var phase = mod((now - exquisPulseEpochMs) / period, 1);
+    var unitSine = 0.5 + 0.5 * Math.cos(Math.PI * 2 * phase);
+    return EXQUIS_TARGET_PULSE_MIN_GAIN + (EXQUIS_TARGET_PULSE_MAX_GAIN - EXQUIS_TARGET_PULSE_MIN_GAIN) * unitSine;
+  }
+
+  function renderExquisTargetPulse(now) {
+    var keys = document.querySelectorAll('.key.current.light-target');
+    var gain = exquisTargetPulseGain(now);
+    for (var i = 0; i < keys.length; i++) keys[i].style.setProperty('--exquis-target-pulse-gain', gain.toFixed(4));
+    exquisPulseRaf = window.requestAnimationFrame(renderExquisTargetPulse);
+  }
+
+  function startExquisTargetPulse() {
+    if (exquisPulseRaf !== null) return;
+    exquisPulseEpochMs = window.performance && window.performance.now ? window.performance.now() : Date.now();
+    exquisPulseRaf = window.requestAnimationFrame(renderExquisTargetPulse);
+  }
+
+  function setExquisPulseTempo(bpm) {
+    var next = Number(bpm);
+    if (!isFinite(next) || next < 20 || next > 240) return false;
+    exquisPulseTempoBpm = next;
+    return true;
+  }
+
+  function observeExquisPulseClock(status, timestamp) {
+    var now = typeof timestamp === 'number' ? timestamp : (window.performance && window.performance.now ? window.performance.now() : Date.now());
+    if (status === 0xFA) {
+      exquisPulseClockTick = 0;
+      exquisPulseEpochMs = now;
+      lastExquisPulseClockAt = now;
+      return;
+    }
+    if (status !== 0xF8) return;
+    if (lastExquisPulseClockAt && now > lastExquisPulseClockAt) {
+      var tickMs = now - lastExquisPulseClockAt;
+      if (tickMs > 2 && tickMs < 250) setExquisPulseTempo(60000 / (tickMs * 24));
+    }
+    exquisPulseClockTick = mod(exquisPulseClockTick + 1, 24);
+    // Each MIDI clock tick is 1/24 of a beat; retaining that absolute phase
+    // keeps the browser oscillator locked to the device's tempo grid.
+    exquisPulseEpochMs = now - exquisPulseClockTick * (exquisPulsePeriodMs() / 24);
+    lastExquisPulseClockAt = now;
+  }
+
+  function beginTargetPulseAtHardwareDispatch() {
+    var now = window.performance && window.performance.now ? window.performance.now() : Date.now();
+    // Without inbound MIDI clock the effect command itself is the only shared
+    // phase edge. With clock present, never disturb the device tempo phase.
+    if (!lastExquisPulseClockAt || now - lastExquisPulseClockAt > 1500) exquisPulseEpochMs = now;
+  }
 
   function clamp7Bit(value) {
     return Math.max(0, Math.min(127, Math.round(Number(value) || 0)));
@@ -1646,7 +1729,7 @@
   }
 
   function updateTonicFromHardwareRoot(rootPc, source) {
-    if (state.exquisSyncEnabled && Date.now() < exquisUserKeyModeAuthorityUntil) {
+    if (state.exquisSyncEnabled && source !== 'Settings Encoder 2' && Date.now() < exquisUserKeyModeAuthorityUntil) {
       logEvent('midi', 'Exquis sync ignored stale root readback during local key/mode update');
       return;
     }
@@ -1660,10 +1743,11 @@
     }
     state.exquisSyncStatus = 'Exquis sync: received root ' + getTonicName() + ' from ' + source;
     render();
+    syncExquisHardwareKeyModeChange(source);
   }
 
   function updateScaleFromHardwareNumber(scaleNumber, source) {
-    if (state.exquisSyncEnabled && Date.now() < exquisUserKeyModeAuthorityUntil) {
+    if (state.exquisSyncEnabled && source !== 'Settings Encoder 3' && Date.now() < exquisUserKeyModeAuthorityUntil) {
       logEvent('midi', 'Exquis sync ignored stale scale readback during local key/mode update');
       return;
     }
@@ -1677,9 +1761,13 @@
       }
       state.exquisSyncStatus = 'Exquis sync: received scale ' + getScale().name + ' from ' + source + ' number=' + scaleNumber;
     } else {
-      state.exquisSyncStatus = 'Exquis sync: received hardware scale number ' + scaleNumber + ' from ' + source + ' (unmapped)';
+      // CC43 is also a freely configurable physical encoder. Preserve the
+      // observed value without presenting an alarming pseudo-error when a
+      // device preset emits a number this practice-mode subset does not own.
+      state.exquisSyncStatus = 'Exquis sync: received raw hardware scale value ' + scaleNumber + ' from ' + source + '; practice mode unchanged';
     }
     render();
+    if (scaleId) syncExquisHardwareKeyModeChange(source);
   }
 
   window.__exquisSysexDebug = {
@@ -4745,11 +4833,17 @@
     return supported.sort(function(a, b) {
       var aSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, a, 2);
       var bSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, b, 2);
-      var aColumnSafe = state.exerciseId !== 'two_octaves' && hasColumnSafeScaleLayout(cells, scale, a, 1);
-      var bColumnSafe = state.exerciseId !== 'two_octaves' && hasColumnSafeScaleLayout(cells, scale, b, 1);
-      // A fully playable one-octave map without a three-note column outranks
-      // octave-side and equator preferences.
-      return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || (bColumnSafe ? 1 : 0) - (aColumnSafe ? 1 : 0) || Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || centerScore(a) - centerScore(b) || a.midi - b.midi;
+      // Compact modes have duplicate roots that need a complete-route check.
+      // C Ionian gets the same check because it is the cold-start lesson: a
+      // merely musical C root can otherwise boot into a 0/0 blank staff.
+      var requiresColumnSafeRoot = (scale.intervals || []).length <= 5 || (state.tonicPc === 0 && state.scaleId === 'ionian');
+      var aColumnSafe = requiresColumnSafeRoot && hasColumnSafeScaleLayout(cells, scale, a, 1);
+      var bColumnSafe = requiresColumnSafeRoot && hasColumnSafeScaleLayout(cells, scale, b, 1);
+      // Equal-pitch duplicate roots are not interchangeable.  The ascending
+      // practice route travels rightward across the corrected horizontal
+      // surface, so prefer the later visible column and retain usable room for
+      // the ascent (for example the ergonomic F3 representation in F keys).
+      return (bSupported ? 1 : 0) - (aSupported ? 1 : 0) || (bColumnSafe ? 1 : 0) - (aColumnSafe ? 1 : 0) || Math.abs(a.midi - preferredRootMidi) - Math.abs(b.midi - preferredRootMidi) || (a.midi === b.midi ? b.x - a.x : 0) || centerScore(a) - centerScore(b) || a.midi - b.midi;
     });
   }
 
@@ -4772,8 +4866,10 @@
 
   function rootSupportsCurrentExercise(cells, scale, root) {
     if (!root) return false;
-    if (state.exerciseId === 'two_octaves') return supportsAscendingOctaves(cells, scale, root, 2) && hasColumnSafeScaleLayout(cells, scale, root, 2);
-    return supportsAscendingOctaves(cells, scale, root, 1) && hasColumnSafeScaleLayout(cells, scale, root, 1);
+    var octaves = state.exerciseId === 'two_octaves' ? 2 : 1;
+    if (!supportsAscendingOctaves(cells, scale, root, octaves)) return false;
+    var requiresColumnSafeRoot = (scale.intervals || []).length <= 5 || (state.tonicPc === 0 && state.scaleId === 'ionian');
+    return !requiresColumnSafeRoot || hasColumnSafeScaleLayout(cells, scale, root, octaves);
   }
 
   function selectedRoot(cells) {
@@ -4911,13 +5007,32 @@
       label.appendChild(detail);
       item.appendChild(visual);
       item.appendChild(label);
-      if (active && state.lastEdgeControlValue) {
+      var diagnosticValue = edgeControlDiagnosticValue(control);
+      if (diagnosticValue) {
         var value = document.createElement('span');
         value.className = 'edge-value';
-        value.textContent = state.lastEdgeControlValue;
+        value.textContent = diagnosticValue;
         label.appendChild(value);
       }
       return item;
+  }
+
+  function edgeControlDiagnosticValue(control) {
+    var raw = state.edgeControlValues[control.id];
+    if (control.id === 'enc2' && raw !== undefined && Number(raw) >= 0 && Number(raw) <= 11) {
+      return 'value ' + raw + ' · ' + TONICS[Number(raw)].name;
+    }
+    if (control.id === 'enc3' && raw !== undefined) {
+      var scaleId = scaleIdForExquisNumber(Number(raw));
+      var scale = scaleId ? SSLI_MODES[scaleId] : null;
+      // CC43 can be freely configured on the device.  A raw number without a
+      // practice-mode mapping is still useful diagnostics, not an error.
+      if (!scale || !scale.name) return 'value ' + raw;
+      return 'value ' + raw + (scale && scale.name ? ' · ' + scale.name : ' · unmapped');
+    }
+    return (state.activeEdgeControlId === control.id || state.lastEdgeControlId === control.id)
+      ? state.lastEdgeControlValue
+      : '';
   }
 
   function isScalePc(pc, scale) {
@@ -4949,7 +5064,7 @@
     return offset === 1 ? '0' : '1';
   }
 
-  function selectUniqueScaleLightsByRow(cells, scale, root) {
+  function selectSparseScaleLightsByRow(cells, scale, root) {
     // The Exquis has duplicate lattice representations for a few MIDI pitches.
     // A "two nearest in each row" pass can therefore select the same actual
     // pitch twice (A minor used to emit C3 and F3 twice) while omitting another
@@ -4962,49 +5077,156 @@
       if (!byRow[cells[i].row]) byRow[cells[i].row] = [];
       byRow[cells[i].row].push(cells[i]);
     }
-    var rows = Object.keys(byRow).map(Number);
-    var choices = rows.map(function(row) {
-      var candidates = byRow[row].slice().sort(function(a, b) {
+    var rows = Object.keys(byRow).map(Number).sort(function(a, b) { return a - b; });
+    var selectedByRow = {};
+    var usedMidis = {};
+    var selectedPcs = {};
+    function sortedCandidates(row) {
+      return byRow[row].slice().sort(function(a, b) {
         return Math.abs(logicalColumn(a) - rootColumn) - Math.abs(logicalColumn(b) - rootColumn) || a.col - b.col;
       });
-      var pairs = [];
-      for (var left = 0; left < candidates.length; left++) {
-        for (var right = left + 1; right < candidates.length; right++) {
-          var pair = [candidates[left], candidates[right]];
-          if (pair[0].midi === pair[1].midi) continue;
-          if (pair[0].id !== root.id && pair[1].id !== root.id && byRow[row].some(function(cell) { return cell.id === root.id; })) continue;
-          pairs.push({
-            cells: pair,
-            score: Math.abs(logicalColumn(pair[0]) - rootColumn) + Math.abs(logicalColumn(pair[1]) - rootColumn)
-          });
-        }
-      }
-      return { row: row, pairs: pairs };
+    }
+    function add(cell) {
+      if (!cell || usedMidis[cell.midi] || (selectedByRow[cell.row] || []).length >= 2) return false;
+      (selectedByRow[cell.row] || (selectedByRow[cell.row] = [])).push(cell);
+      usedMidis[cell.midi] = true;
+      selectedPcs[cell.pc] = true;
+      return true;
+    }
+    // A sparse scale may have just one valid pitch in a physical row.  The
+    // former pair-only solver treated that as impossible and blacked out every
+    // key except the root. Start with one unique pitch per row; then expand to
+    // a second only where it remains musically useful and physically safe.
+    rows.forEach(function(row) {
+      var candidates = sortedCandidates(row);
+      var rootHere = candidates.filter(function(cell) { return cell.id === root.id; })[0];
+      add(rootHere || candidates.filter(function(cell) { return !usedMidis[cell.midi]; })[0]);
     });
-    // Constrain the tightest rows first. This avoids a locally pretty choice
-    // consuming the only MIDI available to a later physical row.
-    choices.sort(function(a, b) { return a.pairs.length - b.pairs.length || a.row - b.row; });
-    var best = null;
-    function choose(index, usedMidis, selected, score) {
-      if (best && score >= best.score) return;
-      if (index === choices.length) {
-        best = { cells: selected.slice(), score: score };
-        return;
-      }
-      choices[index].pairs.forEach(function(pair) {
-        if (usedMidis[pair.cells[0].midi] || usedMidis[pair.cells[1].midi]) return;
-        usedMidis[pair.cells[0].midi] = true;
-        usedMidis[pair.cells[1].midi] = true;
-        selected.push(pair.cells[0], pair.cells[1]);
-        choose(index + 1, usedMidis, selected, score + pair.score);
-        selected.pop();
-        selected.pop();
-        delete usedMidis[pair.cells[0].midi];
-        delete usedMidis[pair.cells[1].midi];
+    // Coverage is non-negotiable: every degree in the selected scale must be
+    // visible somewhere on the hardware, even for pentatonic/world scales.
+    var requiredPcs = (scale.intervals || []).map(function(interval) { return mod(state.tonicPc + interval, 12); });
+    requiredPcs.forEach(function(pc) {
+      if (selectedPcs[pc]) return;
+      var candidate = null;
+      rows.forEach(function(row) {
+        sortedCandidates(row).forEach(function(cell) {
+          if (cell.pc !== pc || usedMidis[cell.midi] || (selectedByRow[row] || []).length >= 2) return;
+          if (!candidate || Math.abs(logicalColumn(cell) - rootColumn) < Math.abs(logicalColumn(candidate) - rootColumn)) candidate = cell;
+        });
+      });
+      add(candidate);
+    });
+    // Fill a second lane where possible. This preserves the familiar dense
+    // Exquis map without ever creating a third pad in a row or a duplicate
+    // physical MIDI note.
+    rows.forEach(function(row) {
+      sortedCandidates(row).some(function(cell) { return add(cell); });
+    });
+    return rows.reduce(function(selected, row) { return selected.concat(selectedByRow[row] || []); }, []);
+  }
+
+  function selectUniqueScaleLightsByRow(cells, scale, root) {
+    // Select the actual visible map as one ordered physical sequence.  A
+    // previous row-local matching pass could satisfy colour, degree, and
+    // two-pad limits while placing (for example) F above an available E in the
+    // next displayed Exquis column.  That is musically backwards.  The solver
+    // keeps the fixed honeycomb intact and chooses one or two in-key pads per
+    // physical column, in the same top-to-bottom / left-to-right order the
+    // player sees.  It maximizes useful lights rather than forcing a bad second
+    // pad merely to make every column contain two.
+    var byRow = {};
+    cells.forEach(function(cell) {
+      if (!isScalePc(cell.pc, scale)) return;
+      (byRow[cell.row] || (byRow[cell.row] = [])).push(cell);
+    });
+    var groups = Object.keys(byRow).map(Number).map(function(row) {
+      var candidates = byRow[row].slice().sort(function(a, b) {
+        return a.y - b.y || a.x - b.x || a.id.localeCompare(b.id);
+      });
+      return { row: row, candidates: candidates, x: candidates[0].x };
+    }).sort(function(a, b) {
+      return a.x - b.x || a.row - b.row;
+    });
+    if (!groups.length) return [];
+
+    var requiredMask = 0;
+    (scale.intervals || []).forEach(function(interval) {
+      requiredMask |= (1 << mod(state.tonicPc + interval, 12));
+    });
+    // The practice buttons and the coloured map are one physical contract.
+    // Keep every exact ascending target in the selected map, not merely some
+    // duplicate representation of the same pitch class elsewhere on Exquis.
+    var targetOctaves = state.exerciseId === 'two_octaves' ? 2 : 1;
+    var requiredTargetMidis = [];
+    for (var targetOctave = 0; targetOctave < targetOctaves; targetOctave++) {
+      (scale.intervals || []).forEach(function(interval) {
+        requiredTargetMidis.push(root.midi + interval + targetOctave * 12);
       });
     }
-    choose(0, {}, [], 0);
-    return best ? best.cells : [];
+    requiredTargetMidis.push(root.midi + targetOctaves * 12);
+    var targetBitByMidi = {};
+    requiredTargetMidis.forEach(function(midi, index) { targetBitByMidi[midi] = (1 << index); });
+    var requiredTargetMask = requiredTargetMidis.reduce(function(mask, midi) { return mask | targetBitByMidi[midi]; }, 0);
+
+    function optionsForGroup(group) {
+      var options = [];
+      for (var first = 0; first < group.candidates.length; first++) {
+        for (var size = 1; size <= 2; size++) {
+          var choice = group.candidates.slice(first, first + size);
+          if (choice.length !== size) continue;
+          if (choice.some(function(cell) { return cell.id === root.id; }) || !group.candidates.some(function(cell) { return cell.id === root.id; })) {
+            options.push(choice);
+          }
+        }
+      }
+      return options;
+    }
+
+    // Dynamic programming keeps this exhaustive for all 42 scale modes: only
+    // the last rendered MIDI and the covered pitch classes affect later rows.
+    // It replaces the exponential candidate walk with a small, deterministic
+    // state frontier.
+    var states = { '-Infinity:0:0': { lastMidi: -Infinity, mask: 0, targetMask: 0, cells: [], distance: 0 } };
+    groups.forEach(function(group) {
+      var nextStates = {};
+      var options = optionsForGroup(group);
+      Object.keys(states).forEach(function(stateKey) {
+        var previous = states[stateKey];
+        options.forEach(function(choice) {
+          if (choice[0].midi <= previous.lastMidi) return;
+          for (var i = 1; i < choice.length; i++) if (choice[i - 1].midi >= choice[i].midi) return;
+          var nextMask = previous.mask;
+          var nextTargetMask = previous.targetMask;
+          var nextDistance = previous.distance;
+          choice.forEach(function(cell) {
+            nextMask |= (1 << cell.pc);
+            if (targetBitByMidi[cell.midi]) nextTargetMask |= targetBitByMidi[cell.midi];
+            nextDistance += Math.abs(logicalColumn(cell) - logicalColumn(root));
+          });
+          var key = String(choice[choice.length - 1].midi) + ':' + String(nextMask) + ':' + String(nextTargetMask);
+          var candidate = {
+            lastMidi: choice[choice.length - 1].midi,
+            mask: nextMask,
+            targetMask: nextTargetMask,
+            cells: previous.cells.concat(choice),
+            distance: nextDistance
+          };
+          var existing = nextStates[key];
+          if (!existing || candidate.cells.length > existing.cells.length || (candidate.cells.length === existing.cells.length && candidate.distance < existing.distance)) nextStates[key] = candidate;
+        });
+      });
+      states = nextStates;
+    });
+    var best = null;
+    Object.keys(states).forEach(function(key) {
+      var candidate = states[key];
+      if (candidate.mask !== requiredMask || candidate.targetMask !== requiredTargetMask) return;
+      if (!best || candidate.cells.length > best.cells.length || (candidate.cells.length === best.cells.length && candidate.distance < best.distance)) best = candidate;
+    });
+    // Every group must retain a physical light.  If an unusual scale/root
+    // cannot satisfy the complete visible contract, preserve the old
+    // coverage-first sparse map rather than lighting an out-of-key pad.
+    return best && best.cells.length >= groups.length ? best.cells : selectSparseScaleLightsByRow(cells, scale, root);
   }
 
   function getLitPracticeCells(cells, scale, root) {
@@ -5100,7 +5322,12 @@
   function selectColumnSafeScalePath(cells, targetMidis, root, preferredCellsById) {
     var candidateGroups = targetMidis.map(function(midi, index) {
       if (index === 0) return [root];
-      return exactMidiCandidates(cells, midi);
+      var candidates = exactMidiCandidates(cells, midi);
+      // The coloured scale map is the player's stable physical contract.
+      // If a target MIDI already has a lit representation, the practice path
+      // must use that exact pad—not a duplicate MIDI elsewhere on the lattice.
+      var litCandidates = preferredCellsById ? candidates.filter(function(cell) { return preferredCellsById[cell.id]; }) : [];
+      return litCandidates.length ? litCandidates : candidates;
     });
     if (candidateGroups.some(function(group) { return !group.length; })) return null;
     var best = null;
@@ -5124,13 +5351,26 @@
   }
 
   function hasColumnSafeScaleLayout(cells, scale, root, octaveCount) {
+    if (!root) return false;
     var totalOctaves = Math.max(1, octaveCount || 1);
+    var cacheKey = [state.tonicPc, state.scaleId, state.exerciseId, state.orientation, state.rotation, root.id, root.midi, totalOctaves, (scale.intervals || []).join(',')].join('|');
+    if (Object.prototype.hasOwnProperty.call(columnSafeLayoutCache, cacheKey)) return columnSafeLayoutCache[cacheKey];
     var targetMidis = [];
     for (var octaveIndex = 0; octaveIndex < totalOctaves; octaveIndex++) {
       for (var d = 0; d < scale.intervals.length; d++) targetMidis.push(root.midi + scale.intervals[d] + octaveIndex * 12);
     }
     targetMidis.push(root.midi + totalOctaves * 12);
-    return !!selectColumnSafeScalePath(cells, targetMidis, root, getLitPracticeCells(cells, scale, root));
+    var litCellsById = getLitPracticeCells(cells, scale, root);
+    var path = selectColumnSafeScalePath(cells, targetMidis, root, litCellsById);
+    // A same-MIDI duplicate outside the lit map is not safe for practice: the
+    // player would see one pad highlighted and be instructed to press another.
+    var orderedLights = cells.filter(function(cell) { return !!litCellsById[cell.id]; }).sort(function(a, b) {
+      return a.x - b.x || a.y - b.y || a.id.localeCompare(b.id);
+    });
+    var isMonotonic = orderedLights.every(function(cell, index) {
+      return index === 0 || orderedLights[index - 1].midi < cell.midi;
+    });
+    return (columnSafeLayoutCache[cacheKey] = !!path && path.every(function(cell) { return !!litCellsById[cell.id]; }) && isMonotonic);
   }
 
   function buildAscendingScalePath(cells, scale, octaveCount) {
@@ -5919,6 +6159,17 @@
     render();
   }
 
+  function syncExquisHardwareKeyModeChange(source) {
+    if (!state.exquisSyncEnabled) return;
+    // A native Settings encoder changes the device's own key/scale state, but
+    // our colors come from the app-owned custom scale and palette. Reassert
+    // the complete transaction after render has built the new physical frame;
+    // otherwise the UI changes while Exquis keeps the prior LED map.
+    exquisUserKeyModeAuthorityUntil = Date.now() + 1400;
+    logEvent('midi', 'Exquis sync rebuilding custom pad frame after hardware ' + source + ' key/mode change');
+    syncExquisKeyModeToHardware();
+  }
+
   function exactMidiCandidates(cells, midi) {
     return cells.filter(function(cell) { return cell.midi === midi; });
   }
@@ -6698,6 +6949,15 @@
 
   function notationCanvasDimensions(svg) {
     var width = notationCanvasWidth();
+    // Practice opens from Session, where the notation rails are briefly
+    // hidden while their controls are moved into place. Reading clientHeight
+    // in that instant yields the 104px fallback and permanently compresses
+    // the first phrase into a narrow strip. Desktop rails have a deliberate,
+    // viewport-derived coordinate height so their first visible render uses
+    // the same full vertical canvas as every subsequent one.
+    if (isNotationRailLayout()) {
+      return { width: width, height: Math.max(300, Math.min(520, Math.round(window.innerHeight - 380))) };
+    }
     var renderedWidth = Math.max(1, svg && svg.clientWidth || width);
     var renderedHeight = Math.max(104, svg && svg.clientHeight || 104);
     return { width: width, height: Math.max(104, Math.round(width * renderedHeight / renderedWidth)) };
@@ -6765,6 +7025,19 @@
     if (els.scoreWindowReadout) els.scoreWindowReadout.textContent = 'Measures ' + String(firstIndex + 1) + (lastIndex > firstIndex ? '–' + String(lastIndex + 1) : '') + ' of ' + String(measures.length);
   }
 
+  function applyFullScorePitchColor(engravedNote, color) {
+    // OSMD owns the SVG tree and can restore its neutral foreground while a
+    // cached score is being repainted.  Reassert the semantic color on the
+    // glyphs themselves on every projection update; a root/mode change must
+    // never leave the staff as an all-white score just because its MusicXML
+    // did not need to be reloaded.
+    engravedNote.style.setProperty('--score-pitch-color', color);
+    Array.prototype.forEach.call(engravedNote.querySelectorAll('path, text'), function(glyph) {
+      if (glyph.getAttribute('fill') !== 'none') glyph.style.setProperty('fill', color);
+      glyph.style.setProperty('stroke', color);
+    });
+  }
+
   function paintFullScoreWhenVisible(song, projection, token) {
     window.requestAnimationFrame(function() {
       if (!scoreRenderer || token !== scoreRendererLoadToken || !els.scoreNotation || els.scoreNotation.hidden) return;
@@ -6802,7 +7075,7 @@
           }).join(','));
           engravedNote.setAttribute('data-notation-midis', event.midis.join(','));
           engravedNote.classList.add('full-score-pitch-color');
-          engravedNote.style.setProperty('--score-pitch-color', 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 66% 46%)');
+          applyFullScorePitchColor(engravedNote, 'hsl(' + intervalHue(mod(event.midis[0], 12) - state.tonicPc, getScale()) + 'deg 66% 46%)');
           if (event.active) engravedNote.classList.add('full-score-active-note', 'notation-active');
           bindAlternativeSurfaceInput(engravedNote, event.midis, 'Play score step ' + String(index + 1));
         });
@@ -7256,9 +7529,23 @@
       var railTop = els.edgeTopControls && els.edgeTopControls.closest ? els.edgeTopControls.closest('.edge-controls-top') : null;
       var railBottom = els.edgeBottomControls && els.edgeBottomControls.closest ? els.edgeBottomControls.closest('.edge-controls-bottom') : null;
       var reservedHeight = (railTop ? railTop.getBoundingClientRect().height : 0) + (railBottom ? railBottom.getBoundingClientRect().height : 0);
+      var visibleBottom = window.innerHeight;
+      ['[data-testid="console-panel"]', '[data-testid="build-version"]'].forEach(function(selector) {
+        var overlay = document.querySelector(selector);
+        if (!overlay || getComputedStyle(overlay).position !== 'fixed') return;
+        var overlayBox = overlay.getBoundingClientRect();
+        if (overlayBox.width && overlayBox.height) visibleBottom = Math.min(visibleBottom, overlayBox.top);
+      });
       return {
         width: Math.max(0, deviceBox.width - 20),
-        height: Math.max(0, deviceBox.height - reservedHeight - 20)
+        // Device height can be content-inflated by a previous render. Cap it
+        // to the visible viewport after its physical control bands so a
+        // vertical surface cannot push the bottom controls below the build
+        // overlay.
+        height: Math.max(0, Math.min(
+          deviceBox.height - reservedHeight - 20,
+          visibleBottom - deviceBox.top - reservedHeight - 4
+        ))
       };
     }
     var stage = els.keyboard.closest('.stage-panel');
@@ -7286,6 +7573,16 @@
     var dashboard = document.querySelector('[data-testid="practice-dashboard"]');
     var dashboardWidth = dashboard && dashboard.offsetParent ? dashboard.getBoundingClientRect().width + 16 : 0;
     if (state.orientation === 'horizontal') {
+      // Practice deliberately places the device controls above and below the
+      // playing surface.  They are no longer side rails, so reserve their
+      // height before sizing the hex field; otherwise a narrow laptop makes
+      // the keybed consume the full stage and pushes the controls off-screen.
+      if (state.workspace === 'practice') {
+        return {
+          width: Math.max(0, stageBox.width - 20),
+          height: Math.max(0, safeBottom - contentTop - topHeight - bottomHeight - 26)
+        };
+      }
       return {
         width: Math.max(0, stageBox.width - topWidth - bottomWidth - 44),
         height: Math.max(0, safeBottom - contentTop - 26)
@@ -7300,7 +7597,10 @@
   function getKeyboardScale(baseWidth, baseHeight) {
     var available = getKeyboardAvailableSpace();
     if (!available.width || !available.height) return 1;
-    var minScale = state.orientation === 'vertical' ? 0.52 : (isNotationRailLayout() ? 0.58 : 0.72);
+    // A vertical device with both physical control bands needs a little more
+    // headroom than the bare keybed.  This is still comfortably playable but
+    // avoids clipping the lower hardware controls at laptop height.
+    var minScale = state.orientation === 'vertical' ? 0.40 : (isNotationRailLayout() ? 0.58 : 0.72);
     var maxScale = state.workspace === 'practice' && state.orientation === 'horizontal' ? 2.5 : 1.9;
     return Math.max(minScale, Math.min(maxScale, available.width / baseWidth, available.height / baseHeight));
   }
@@ -7663,7 +7963,15 @@
 
   function onMidiMessage(event) {
     var data = event.data;
-    if (!data || data.length < 2) return;
+    if (!data || !data.length) return;
+    // Exquis' native 3F LED effect follows its tempo grid.  MIDI realtime
+    // clock gives the browser the same frequency and absolute phase without
+    // re-rendering the UI on every one of the 24 PPQN ticks.
+    if (data[0] === 0xF8 || data[0] === 0xFA || data[0] === 0xFC) {
+      observeExquisPulseClock(data[0], event.receivedTime);
+      return;
+    }
+    if (data.length < 2) return;
     traceExquisWire('in', data, data[0] === 0xF0 ? 'SysEx receive' : 'MIDI receive');
     if (data[0] === 0xF0) {
       handleExquisSysex(data);
@@ -7698,6 +8006,12 @@
         var delta = velocity - 64;
         rememberEdgeControl(officialEdge || null, 'delta ' + delta);
         logEvent('midi', 'Exquis dial encoder=' + midi + ' ' + (officialEdge ? officialEdge.label + ' ' : '') + 'delta=' + delta + ' raw=' + velocity);
+        if (midi === 110 && cyclePracticeFamily(delta, 'Developer Encoder 1')) {
+          return;
+        }
+        if (midi === 113 && cyclePracticeExercise(delta, 'Developer Encoder 4')) {
+          return;
+        }
         state.midiActivity = 'Activity: ' + (officialEdge ? officialEdge.label : 'dial ' + midi) + ' delta ' + delta;
         render();
       } else if (officialEdge) {
@@ -7708,7 +8022,9 @@
       } else {
         logEvent('midi', 'Exquis ch16 control id=' + midi + ' value=' + velocity);
       }
-    } else if (state.exquisDialListenEnabled && status === 0xB0 && channel === 0 && handleExquisSettingsControl(midi, velocity)) {
+    } else if (status === 0xB0 && channel === 0 &&
+      (state.exquisDialListenEnabled || (isExquisMidiDevice(midiInput) && midi >= 41 && midi <= 44)) &&
+      handleExquisSettingsControl(midi, velocity)) {
       return;
     } else if (state.exquisDialListenEnabled) {
       logEvent('midi', 'Exquis dial raw status=0x' + data[0].toString(16).toUpperCase().padStart(2, '0') + ' channel=' + (channel + 1) + ' data=' + Array.prototype.slice.call(data).join(','));
@@ -7720,19 +8036,25 @@
     state.activeEdgeControlId = control.id;
     state.lastEdgeControlId = control.id;
     state.lastEdgeControlValue = value || '';
+    state.edgeControlValues[control.id] = value || '';
   }
 
   function handleExquisSettingsControl(cc, value) {
     var control = EXQUIS_EDGE_BY_CC[cc];
     if (control) {
+      var previousValue = state.edgeControlValues[control.id];
       rememberEdgeControl(control, String(value));
       var dialIndex = cc - 40;
-      if (cc === 42 && value >= 0 && value <= 11) {
+      if (cc === 41 && cyclePracticeFamily(absoluteEncoderDirection(previousValue, value), 'Settings Encoder 1')) {
+        return true;
+      } else if (cc === 42 && value >= 0 && value <= 11) {
         logEvent('midi', 'Exquis settings ' + control.label + ' root value=' + value + ' note=' + TONICS[value].name);
         updateTonicFromHardwareRoot(value, 'Settings Encoder 2');
       } else if (cc === 43) {
         logEvent('midi', 'Exquis settings ' + control.label + ' scale-number=' + value);
         updateScaleFromHardwareNumber(value, 'Settings Encoder 3');
+      } else if (cc === 44 && cyclePracticeExercise(absoluteEncoderDirection(previousValue, value), 'Settings Encoder 4')) {
+        return true;
       } else {
         logEvent('midi', 'Exquis settings ' + control.label + ' cc=' + cc + ' value=' + value);
         state.midiActivity = 'Activity: ' + control.label + ' value ' + value;
@@ -7749,6 +8071,70 @@
       return true;
     }
     return false;
+  }
+
+  // Native settings encoders report absolute 7-bit positions, while the
+  // developer/control-zone reports signed deltas. Normalize the former here
+  // so both protocols use the same wrapped practice navigation. A first
+  // absolute message only establishes the current position: it must never
+  // change the learner's exercise just because the hardware connected.
+  function absoluteEncoderDirection(previousValue, nextValue) {
+    var previous = parseInt(previousValue, 10);
+    var next = parseInt(nextValue, 10);
+    if (!Number.isFinite(previous) || !Number.isFinite(next) || previous === next) return 0;
+    if (previous > 110 && next < 17) return 1;
+    if (previous < 17 && next > 110) return -1;
+    return next > previous ? 1 : -1;
+  }
+
+  function wrapPracticeIndex(index, length) {
+    return ((index % length) + length) % length;
+  }
+
+  function cyclePracticeFamily(delta, source) {
+    if (!delta || !EXERCISE_FAMILIES.length) return false;
+    var familyIndex = EXERCISE_FAMILIES.findIndex(function(family) { return family.id === state.exerciseFamily; });
+    var nextFamily = EXERCISE_FAMILIES[wrapPracticeIndex((familyIndex < 0 ? 0 : familyIndex) + (delta > 0 ? 1 : -1), EXERCISE_FAMILIES.length)];
+    stopSongAudition('practice family changed');
+    state.exerciseFamily = nextFamily.id;
+    state.repertoireSectionId = '';
+    if (state.exerciseFamily === 'progressions') {
+      state.progressionGenre = 'starter';
+      state.exerciseId = 'major_i_iv_vi_v';
+      applyCanonicalProgressionScale();
+    }
+    state.step = 0;
+    renderExerciseOptions();
+    state.midiActivity = 'Activity: ' + source + ' · family ' + nextFamily.name;
+    logEvent('midi', 'Exquis ' + source + ' practice family=' + nextFamily.id + ' delta=' + delta);
+    render();
+    if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
+    return true;
+  }
+
+  function cyclePracticeExercise(delta, source) {
+    if (!delta) return false;
+    var exercises = exercisesForSelectedFamily();
+    if (!exercises.length) return false;
+    var exerciseIndex = exercises.findIndex(function(exercise) { return exercise.id === state.exerciseId; });
+    var nextExercise = exercises[wrapPracticeIndex((exerciseIndex < 0 ? 0 : exerciseIndex) + (delta > 0 ? 1 : -1), exercises.length)];
+    stopSongAudition('exercise changed');
+    state.exerciseId = nextExercise.id;
+    state.exerciseFamily = exerciseFamilyForId(nextExercise.id);
+    applyCanonicalProgressionScale();
+    applySelectedSongMusicalProfile();
+    applySelectedSongSoundProfile();
+    state.step = 0;
+    state.midiActivity = 'Activity: ' + source + ' · exercise ' + nextExercise.name;
+    logEvent('midi', 'Exquis ' + source + ' exercise=' + nextExercise.id + ' delta=' + delta);
+    render();
+    if (songLessonForId(state.exerciseId)) {
+      applySelectedSsliPreset();
+      applySelectedSsliFxChain();
+      if (audioCtx) rebuildFxBus(audioCtx);
+    }
+    if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
+    return true;
   }
 
   function midiInputLabel(input) {
@@ -8233,6 +8619,7 @@
     pads.forEach(function(pad, index) {
       var effect = lightFrameEffect(pad);
       scheduleExquisKeyModeSync(function() {
+        if (effect === EXQUIS_TARGET_PULSE_EFFECT) beginTargetPulseAtHardwareDispatch();
         sendRawMidi([0xAF, pad.padId, effect], '');
         lastExquisPadEffect[pad.padId] = effect;
       }, delayMs + (pads.length + index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
@@ -8248,7 +8635,7 @@
   }
 
   function lightFrameEffect(pad) {
-    return pad.isTarget ? 0x3F : 0x00;
+    return pad.isTarget ? EXQUIS_TARGET_PULSE_EFFECT : 0x00;
   }
 
   function syncExquisPracticePadFrame() {
@@ -8274,6 +8661,7 @@
     effectPads.forEach(function(pad, index) {
       scheduleExquisKeyModeSync(function() {
         var effect = lightFrameEffect(pad);
+        if (effect === EXQUIS_TARGET_PULSE_EFFECT) beginTargetPulseAtHardwareDispatch();
         sendRawMidi([0xAF, pad.padId, effect], '');
         lastExquisPadEffect[pad.padId] = effect;
       }, (changedPalettePads.length * 2 + index + 1) * EXQUIS_LED_COMMAND_GAP_MS);
@@ -8288,6 +8676,10 @@
 
   function refreshExquisDisplay(reason) {
     return sendExquisSysex(0x03, [], reason || 'refresh-display');
+  }
+
+  function requestExquisTempoReadback() {
+    return sendExquisSysex(0x05, [], 'request-tempo-readback');
   }
 
   function cancelPendingExquisKeyModeSync() {
@@ -8326,6 +8718,7 @@
     var ledStartDelay = setupDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 6;
     scheduleExquisPadColors(ledStartDelay);
     var afterLedFrameDelay = ledStartDelay + EXQUIS_LED_COMMAND_GAP_MS * (EXQUIS_PAD_COUNT * 2 + 1);
+    scheduleExquisKeyModeSync(requestExquisTempoReadback, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x06, [], 'request-root-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS);
     scheduleExquisKeyModeSync(function() { sendExquisSysex(0x07, [], 'request-scale-readback'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 2);
     scheduleExquisKeyModeSync(function() { endOfficialKeyModeTransaction('key/mode sync'); }, afterLedFrameDelay + EXQUIS_KEY_MODE_COMMAND_GAP_MS * 3);
@@ -8360,7 +8753,12 @@
       return;
     }
     logEvent('midi', 'Exquis sync receive cmd=' + parsed.command.toString(16).padStart(2, '0').toUpperCase() + ' payload=' + parsed.payload.join(','));
-    if (parsed.command === 0x06 && parsed.payload.length >= 1) {
+    if (parsed.command === 0x05 && parsed.payload.length >= 2) {
+      var tempoBpm = parsed.payload[0] * 128 + parsed.payload[1];
+      if (setExquisPulseTempo(tempoBpm)) {
+        logEvent('midi', 'Exquis pulse tempo=' + tempoBpm + ' BPM');
+      }
+    } else if (parsed.command === 0x06 && parsed.payload.length >= 1) {
       updateTonicFromHardwareRoot(parsed.payload[0], 'official SysEx');
     } else if (parsed.command === 0x07 && parsed.payload.length >= 1) {
       if (state.exquisCustomScaleActive && parsed.payload[0] === 0) {
@@ -9010,9 +9408,10 @@
         key.setAttribute('data-chain-offset', String(chainOffset(cell, rootCell)));
         key.setAttribute('data-chain-lane', hardwareLit ? String(litPracticeById[cell.id]) : chainLane(cell, rootCell));
       }
-      key.setAttribute('aria-label', cell.label + octave(displayMidi) + (isCurrentGripTarget ? ', chord target ' + currentGripTargetIndex + ' of ' + currentGripCells.length + ', play together with ' + currentGripTargetNotes.join(', ') : ''));
+      var displayedNoteLabel = noteName(displayMidi);
+      key.setAttribute('aria-label', displayedNoteLabel + octave(displayMidi) + (isCurrentGripTarget ? ', chord target ' + currentGripTargetIndex + ' of ' + currentGripCells.length + ', play together with ' + currentGripTargetNotes.join(', ') : ''));
       bindUiCellInput(key, [cell]);
-      key.innerHTML = '<span class="key-label"><span class="note">' + cell.label + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
+      key.innerHTML = '<span class="key-label"><span class="note">' + displayedNoteLabel + '</span><span class="octave">' + octave(displayMidi) + '</span></span>';
       if (isTonic) key.insertAdjacentHTML('beforeend', '<span class="root-marker" aria-hidden="true">R</span>');
       if (isPracticeMode && isCurrentGripTarget && state.view === 'practice') {
         var chordFinger = document.createElement('span');
@@ -9323,6 +9722,10 @@
     });
     els.scale.addEventListener('change', function() {
       state.scaleId = els.scale.value;
+      // A root choice is an arrangement decision for one specific mode. Do
+      // not carry it into a new mode where a different duplicate may be the
+      // only ordered, fully-lit physical route.
+      state.rootCellId = '';
       state.step = 0;
       render();
       syncExquisKeyModeFromUiChange();
@@ -9955,6 +10358,7 @@
       });
     }
     render();
+    startExquisTargetPulse();
     window.requestAnimationFrame(function() {
       render();
     });

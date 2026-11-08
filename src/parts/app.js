@@ -1498,7 +1498,7 @@
           midi: event.midi,
           targets: event.targets.map(function(target) { return { cellId: target.cellId, midi: target.midi, pc: target.pc }; }),
           fingering: { primary: event.fingering.primary, alternatives: event.fingering.alternatives.slice() },
-          timing: { mode: event.timing.mode }
+          timing: Object.assign({}, event.timing)
         };
       })
     };
@@ -1509,6 +1509,17 @@
   window.__exquisDebugBuildHarmonyGripFixture = buildHarmonyGripFixture;
   window.__exquisDebugBuildProgressionFixture = buildProgressionFixture;
   window.__exquisDebugBuildSsliProgressionFixture = buildSsliProgressionFixture;
+  window.__exquisDebugPreferredGripCellIdForMidi = function(midi) {
+    var cells = makeGrid();
+    var preferred = getLitPracticeCells(cells, getScale(), selectedRoot(cells));
+    var candidates = preferredGripCandidates(cells, midi, preferred);
+    return candidates.length ? cellKey(candidates[0]) : '';
+  };
+  window.__exquisDebugSongCatalog = function() {
+    return SONG_LESSONS.map(function(song) {
+      return { id: song.id, melodyLength: song.melody.length, durationsBeats: song.durationsBeats.slice() };
+    });
+  };
   window.__exquisDebugPromptMidis = function() { return getPromptMidis(expectedExerciseEvent()); };
   window.__exquisDebugShouldUseSsliPlayback = shouldUseSsliPlayback;
   window.__exquisDebugStartAfterAudioResume = startAfterAudioResume;
@@ -4452,6 +4463,14 @@
     return typeof beats === 'number' && beats > 0 ? beats : songEventDurationBeats(song, index);
   }
 
+  // A rest belongs to the transport, not to a fake silent note. Keeping it
+  // separate means an Exquis player is never asked to press a placeholder pad.
+  function songEventRestBeforeBeats(song, index) {
+    var rests = song && song.restsBeforeBeats;
+    var beats = Array.isArray(rests) ? rests[index] : 0;
+    return typeof beats === 'number' && beats > 0 ? Math.min(8, beats) : 0;
+  }
+
   function prepareSongAuditionOutput() {
     var host = getSsliHost();
     if (!host || !host.SynthLab) return;
@@ -4550,6 +4569,7 @@
     // prevent one slow render from becoming cumulative phrase drift.
     var startedAtMs = performance.now() + 32;
     currentExerciseEvents.forEach(function(event, index) {
+      offsetMs += songEventRestBeforeBeats(song, index) * msPerBeat;
       var beats = songEventDurationBeats(song, index);
       var eventDurationMs = beats * msPerBeat;
       var gateDurationMs = Math.min(eventDurationMs - 8, songEventGateBeats(song, index) * msPerBeat - 8);
@@ -4829,16 +4849,25 @@
     var byMidi = supported.slice().sort(function(a, b) {
       return a.midi - b.midi || centerScore(a) - centerScore(b);
     });
-    var preferredRootMidi = state.octaveSide === 'lower' ? byMidi[0].midi : byMidi[byMidi.length - 1].midi;
+    // Octave buttons select musical registers, not the outermost duplicate
+    // currently present on the physical surface.  Choosing min/max made a
+    // root-encoder sweep jump from D2 down to Eb1 (and could leave higher G
+    // without a usable route).  Keep the two choices anchored to C2–B2 and
+    // C3–B3, then let the supported-candidate ordering provide the closest
+    // physical fallback when that exact register is unavailable.
+    var preferredRootMidi = (state.octaveSide === 'lower' ? 36 : 48) + state.tonicPc;
     return supported.sort(function(a, b) {
       var aSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, a, 2);
       var bSupported = state.exerciseId === 'two_octaves' && supportsAscendingOctaves(cells, scale, b, 2);
       // Compact modes have duplicate roots that need a complete-route check.
       // C Ionian gets the same check because it is the cold-start lesson: a
       // merely musical C root can otherwise boot into a 0/0 blank staff.
-      var requiresColumnSafeRoot = (scale.intervals || []).length <= 5 || (state.tonicPc === 0 && state.scaleId === 'ionian');
-      var aColumnSafe = requiresColumnSafeRoot && hasColumnSafeScaleLayout(cells, scale, a, 1);
-      var bColumnSafe = requiresColumnSafeRoot && hasColumnSafeScaleLayout(cells, scale, b, 1);
+      // A root is usable only when its complete route can use the lit map.
+      // This must apply to every scale, not just compact modes: otherwise a
+      // higher-register root may be theoretically present but leave an empty
+      // practice path after a settings-encoder root sweep.
+      var aColumnSafe = hasColumnSafeScaleLayout(cells, scale, a, 1);
+      var bColumnSafe = hasColumnSafeScaleLayout(cells, scale, b, 1);
       // Equal-pitch duplicate roots are not interchangeable.  The ascending
       // practice route travels rightward across the corrected horizontal
       // surface, so prefer the later visible column and retain usable room for
@@ -4868,8 +4897,7 @@
     if (!root) return false;
     var octaves = state.exerciseId === 'two_octaves' ? 2 : 1;
     if (!supportsAscendingOctaves(cells, scale, root, octaves)) return false;
-    var requiresColumnSafeRoot = (scale.intervals || []).length <= 5 || (state.tonicPc === 0 && state.scaleId === 'ionian');
-    return !requiresColumnSafeRoot || hasColumnSafeScaleLayout(cells, scale, root, octaves);
+    return hasColumnSafeScaleLayout(cells, scale, root, octaves);
   }
 
   function selectedRoot(cells) {
@@ -4933,6 +4961,10 @@
 
   function renderEdgeControls() {
     if (!els.edgeTopControls || !els.edgeBottomControls) return;
+    // Target-pulse and MIDI-status renders happen while a player is deciding
+    // from an encoder dropdown. Rebuilding this strip would destroy the live
+    // native select and close its menu underneath them.
+    if (els.edgeTopControls.querySelector('.edge-encoder-select')) return;
     clearChildren(els.edgeTopControls);
     clearChildren(els.edgeBottomControls);
     if (els.edgeControlStatus) els.edgeControlStatus.textContent = developerMaskLabel(state.exquisDeveloperMask);
@@ -4986,6 +5018,19 @@
       item.setAttribute('data-edge-id', control.id);
       item.setAttribute('data-zone', control.zone);
       item.setAttribute('aria-label', control.label + ', ' + control.detail + ', LED ' + control.led + (captured ? ', developer captured' : ', normal'));
+      if (control.kind === 'encoder' && encoderSelectForControl(control)) {
+        item.classList.add('edge-encoder-selectable');
+        item.setAttribute('role', 'button');
+        item.setAttribute('tabindex', '0');
+        item.setAttribute('aria-haspopup', 'listbox');
+        item.setAttribute('aria-expanded', 'false');
+        item.addEventListener('click', function() { openEncoderControlMenu(control, item); });
+        item.addEventListener('keydown', function(event) {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          openEncoderControlMenu(control, item);
+        });
+      }
       var visual = document.createElement('span');
       visual.className = 'edge-visual';
       visual.setAttribute('aria-hidden', 'true');
@@ -5015,6 +5060,51 @@
         label.appendChild(value);
       }
       return item;
+  }
+
+  function encoderSelectForControl(control) {
+    if (!control) return null;
+    if (control.id === 'enc1') return els.exerciseFamily;
+    if (control.id === 'enc2') return els.tonic;
+    if (control.id === 'enc3') return els.scale;
+    if (control.id === 'enc4') return els.exercise;
+    return null;
+  }
+
+  function openEncoderControlMenu(control, item) {
+    var source = encoderSelectForControl(control);
+    if (!source || item.querySelector('.edge-encoder-select')) return;
+    var picker = document.createElement('select');
+    picker.className = 'edge-encoder-select';
+    picker.setAttribute('data-testid', 'encoder-control-select');
+    picker.setAttribute('aria-label', control.label + ' — ' + control.detail);
+    for (var i = 0; i < source.options.length; i++) {
+      var sourceOption = source.options[i];
+      var option = document.createElement('option');
+      option.value = sourceOption.value;
+      option.textContent = sourceOption.textContent;
+      option.selected = sourceOption.value === source.value;
+      picker.appendChild(option);
+    }
+    item.setAttribute('aria-expanded', 'true');
+    picker.addEventListener('change', function() {
+      var selectedValue = picker.value;
+      source.value = selectedValue;
+      source.dispatchEvent(new Event('change', { bubbles: true }));
+      if (picker.parentNode === item) item.removeChild(picker);
+      item.setAttribute('aria-expanded', 'false');
+    });
+    picker.addEventListener('blur', function() {
+      // A selection re-renders this control.  Blurring without a selection
+      // should simply put the encoder back into its normal visual state.
+      if (picker.parentNode === item) {
+        item.removeChild(picker);
+        item.setAttribute('aria-expanded', 'false');
+      }
+    });
+    item.appendChild(picker);
+    picker.focus();
+    if (typeof picker.showPicker === 'function') picker.showPicker();
   }
 
   function edgeControlDiagnosticValue(control) {
@@ -5600,7 +5690,7 @@
         alternatives: spec.fingeringAlternatives || [],
         assignments: assignments
       },
-      timing: { mode: 'simultaneous', toleranceMs: 80 },
+      timing: spec.timing || { mode: 'simultaneous', toleranceMs: 80 },
       remediation: { type: 'repeat-event' }
     };
     return finalizeExerciseEvent(event);
@@ -5830,6 +5920,20 @@
     return changed;
   }
 
+  // Repertoire sections are transposed from their C-based fixtures to the
+  // selected tonic, but their modal collection is intrinsic to the section.
+  // Leaving the previous exercise's scale active makes otherwise valid chord
+  // tones look out of key and lights the wrong Exquis map.
+  function applySelectedRepertoireMusicalProfile() {
+    var selection = selectedRepertoireSection();
+    if (!selection) return false;
+    var scaleId = canonicalScaleForProgressionExercise(selection.section.progressionId);
+    if (!scaleId || state.scaleId === scaleId) return false;
+    state.scaleId = scaleId;
+    state.rootCellId = '';
+    return true;
+  }
+
   var REPERTOIRE_LESSONS = [
     {
       id: 'repertoire_anthem_progression',
@@ -5838,7 +5942,10 @@
       tempo: 96,
       sections: [
         { id: 'verse', name: 'Verse', progressionId: 'major_i_v_vi_iv' },
-        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_iv_vi_v' }
+        { id: 'intro', name: 'Intro', progressionId: 'c_major_progression' },
+        { id: 'prechorus', name: 'Pre-chorus', progressionId: 'major_i_ii_vi_iv' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_iv_vi_v' },
+        { id: 'outro', name: 'Outro', progressionId: 'major_i_vi_ii_v' }
       ]
     },
     {
@@ -5847,7 +5954,9 @@
       style: 'Blues',
       tempo: 76,
       sections: [
-        { id: 'chorus', name: 'Chorus', progressionId: 'major_12_bar_blues' }
+        { id: 'head', name: 'Head', progressionId: 'major_i_iv_vi_v' },
+        { id: 'chorus', name: '12-bar chorus', progressionId: 'major_12_bar_blues' },
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
       ]
     },
     {
@@ -5856,8 +5965,10 @@
       style: 'Jazz',
       tempo: 112,
       sections: [
+        { id: 'head', name: 'Head', progressionId: 'c_major_progression' },
         { id: 'changes', name: 'Changes', progressionId: 'c_major_ii_v_i' },
-        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' },
+        { id: 'tag', name: 'Tag', progressionId: 'major_circle_of_fifths' }
       ]
     },
     {
@@ -5866,8 +5977,10 @@
       style: 'Cinematic minor',
       tempo: 72,
       sections: [
+        { id: 'intro', name: 'Intro', progressionId: 'minor_i_bVII_bVI_bVII' },
         { id: 'cadence', name: 'Cadence', progressionId: 'minor_i_iv_v_i' },
-        { id: 'descent', name: 'Descent', progressionId: 'minor_i_bVII_bVI_bVII' }
+        { id: 'descent', name: 'Descent', progressionId: 'minor_i_bVII_bVI_bVII' },
+        { id: 'resolve', name: 'Resolution', progressionId: 'minor_i_iv_v_i' }
       ]
     },
     {
@@ -5877,7 +5990,8 @@
       tempo: 92,
       sections: [
         { id: 'dorian', name: 'Dorian vamp', progressionId: 'dorian_i_iv_vamp' },
-        { id: 'phrygian', name: 'Phrygian color', progressionId: 'phrygian_i_bII_vamp' }
+        { id: 'lift', name: 'Dorian lift', progressionId: 'dorian_i_bVII_iv' },
+        { id: 'modal-return', name: 'Modal return', progressionId: 'dorian_i_iv_vamp' }
       ]
     },
     {
@@ -5887,7 +6001,105 @@
       tempo: 68,
       sections: [
         { id: 'circle', name: 'Circle', progressionId: 'major_circle_of_fifths' },
-        { id: 'cadence', name: 'Cadence', progressionId: 'c_major_progression' }
+        { id: 'cadence', name: 'Cadence', progressionId: 'c_major_progression' },
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
+      ]
+    },
+    {
+      id: 'repertoire_country_road', name: 'Country road', style: 'Folk / Country', tempo: 104,
+      sections: [
+        { id: 'verse', name: 'Verse', progressionId: 'major_i_iv_vi_v' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_v_vi_iv' },
+        { id: 'tag', name: 'Tag', progressionId: 'c_major_progression' }
+      ]
+    },
+    {
+      id: 'repertoire_soul_lift', name: 'Soul lift', style: 'R&B / Soul', tempo: 86,
+      sections: [
+        { id: 'verse', name: 'Verse', progressionId: 'major_i_iii_iv_v' },
+        { id: 'prechorus', name: 'Pre-chorus', progressionId: 'major_i_ii_vi_iv' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_iv_vi_v' },
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
+      ]
+    },
+    {
+      id: 'repertoire_worship_build', name: 'Worship build', style: 'Gospel / Worship', tempo: 74,
+      sections: [
+        { id: 'intro', name: 'Intro', progressionId: 'major_i_iv_vi_v' },
+        { id: 'verse', name: 'Verse', progressionId: 'major_i_v_vi_iv' },
+        { id: 'bridge', name: 'Bridge', progressionId: 'major_i_ii_vi_iv' },
+        { id: 'refrain', name: 'Refrain', progressionId: 'c_major_progression' }
+      ]
+    },
+    {
+      id: 'repertoire_electronic_cycle', name: 'Electronic cycle', style: 'EDM / Electronic', tempo: 124,
+      sections: [
+        { id: 'intro', name: 'Intro loop', progressionId: 'major_i_vi_ii_v' },
+        { id: 'drop', name: 'Drop', progressionId: 'major_i_v_vi_iv' },
+        { id: 'breakdown', name: 'Breakdown', progressionId: 'minor_i_bVII_bVI_bVII' },
+        { id: 'final-drop', name: 'Final drop', progressionId: 'major_i_iv_vi_v' }
+      ]
+    },
+    {
+      id: 'repertoire_bossa_evening', name: 'Bossa evening', style: 'Bossa Nova / MPB', tempo: 108,
+      sections: [
+        { id: 'a', name: 'A section', progressionId: 'c_major_ii_v_i' },
+        { id: 'b', name: 'B section', progressionId: 'major_i_iii_iv_v' },
+        { id: 'turnaround', name: 'Turnaround', progressionId: 'major_i_vi_ii_v' }
+      ]
+    },
+    {
+      id: 'repertoire_cinematic_arc', name: 'Cinematic arc', style: 'Film / Cinematic', tempo: 66,
+      sections: [
+        { id: 'bed', name: 'Bed', progressionId: 'minor_i_bVII_bVI_bVII' },
+        { id: 'rise', name: 'Rise', progressionId: 'dorian_i_bVII_iv' },
+        { id: 'arrival', name: 'Arrival', progressionId: 'minor_i_iv_v_i' },
+        { id: 'tail', name: 'Tail', progressionId: 'minor_i_bVII_bVI_bVII' }
+      ]
+    },
+    {
+      id: 'repertoire_classical_cadences', name: 'Classical cadences', style: 'Classical', tempo: 80,
+      sections: [
+        { id: 'sentence', name: 'Sentence', progressionId: 'c_major_progression' },
+        { id: 'sequence', name: 'Sequence', progressionId: 'major_circle_of_fifths' },
+        { id: 'half-cadence', name: 'Half cadence', progressionId: 'major_i_iii_iv_v' },
+        { id: 'authentic', name: 'Authentic cadence', progressionId: 'c_major_ii_v_i' }
+      ]
+    },
+    {
+      id: 'repertoire_art_rock_suite', name: 'Art-rock suite', style: 'Prog Rock / Art Rock', tempo: 118,
+      sections: [
+        { id: 'riff', name: 'Riff', progressionId: 'dorian_i_iv_vamp' },
+        { id: 'contrast', name: 'Contrast', progressionId: 'dorian_i_bVII_iv' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_ii_vi_iv' },
+        { id: 'coda', name: 'Coda', progressionId: 'minor_i_iv_v_i' }
+      ]
+    },
+    {
+      id: 'repertoire_ambient_shore', name: 'Ambient shore', style: 'Ambient / Drone', tempo: 56,
+      sections: [
+        { id: 'drone', name: 'Drone', progressionId: 'dorian_i_iv_vamp' },
+        { id: 'color', name: 'Color shift', progressionId: 'dorian_i_bVII_iv' },
+        { id: 'shadow', name: 'Shadow', progressionId: 'dorian_i_iv_vamp' }
+      ]
+    },
+    {
+      id: 'repertoire_songwriter_form', name: 'Songwriter form', style: 'Contemporary folk', tempo: 98,
+      sections: [
+        { id: 'verse', name: 'Verse', progressionId: 'major_i_v_vi_iv' },
+        { id: 'prechorus', name: 'Pre-chorus', progressionId: 'major_i_iii_iv_v' },
+        { id: 'chorus', name: 'Chorus', progressionId: 'major_i_iv_vi_v' },
+        { id: 'bridge', name: 'Bridge', progressionId: 'minor_i_bVII_bVI_bVII' },
+        { id: 'outro', name: 'Outro', progressionId: 'c_major_progression' }
+      ]
+    },
+    {
+      id: 'repertoire_modal_to_major', name: 'Modal-to-major journey', style: 'Harmony practice', tempo: 72,
+      sections: [
+        { id: 'dorian', name: 'Dorian opening', progressionId: 'dorian_i_bVII_iv' },
+        { id: 'modal-turn', name: 'Modal turn', progressionId: 'dorian_i_iv_vamp' },
+        { id: 'minor', name: 'Minor cadence', progressionId: 'minor_i_iv_v_i' },
+        { id: 'major', name: 'Major arrival', progressionId: 'c_major_progression' }
       ]
     }
   ];
@@ -5914,6 +6126,49 @@
     { id: 'song_william_tell_overture', name: 'William Tell Overture', artist: 'Gioachino Rossini', melody: [4, 4, 4, 5, 7, 4, 7, 4, 0, 2, 4, 5, 7, 7, 7, 5, 4, 2, 0] },
     { id: 'song_blue_danube', name: 'The Blue Danube', artist: 'Johann Strauss II', melody: [7, 9, 12, 14, 12, 9, 7, 5, 7, 9, 12, 14, 12, 9, 7, 5, 4, 5, 7, 9, 7, 5, 4, 2, 0] }
   ];
+
+  // Durations are intentionally data, not a UI playback default.  These
+  // single-line studies retain the rhythmic identity of their public-domain
+  // source melodies while avoiding lyrics and copied modern arrangements.
+  // q = quarter, e = eighth, h = half, dh = dotted half, dq = dotted quarter.
+  function songTiming(tokens) {
+    var beats = { e: 0.5, q: 1, dq: 1.5, h: 2, dh: 3, w: 4 };
+    return tokens.trim().split(/\s+/).map(function(token) {
+      if (!Object.prototype.hasOwnProperty.call(beats, token)) throw new Error('Unknown song timing token: ' + token);
+      return beats[token];
+    });
+  }
+
+  var SONG_LESSON_TIMINGS = {
+    // Traditional 4/4 round: eighth-note "ding dang" figures in the third phrase.
+    song_frere_jacques: songTiming('q q q q q q q q q q h q q h e e e e q q e e e e q q q q h q q h q q'),
+    // Beethoven, Symphony No. 9: the two cadential dotted-quarter/eighth figures are essential.
+    song_ode_to_joy: songTiming('q q q q q q q q q q q q dq e h q q q q q q q q q q q q dq e h'),
+    song_auld_lang_syne: songTiming('q dq e q q dq e q dq e q q dq e q q dq e q q dq e q dq e q q dq e h'),
+    song_oh_susanna: songTiming('q q q q q q q h q q q q h q q h q q q q q q q h'),
+    song_simple_gifts: songTiming('q q q q q q q q q q q q q q q q q q h'),
+    song_greensleeves: songTiming('dq e q q dq e q q dq e q q dq e q q dq e dh'),
+    // Ah! vous dirai-je, maman (the older French tune): phrase-ending half notes.
+    song_twinkle_twinkle: songTiming('q q q q q q h q q q q q q h q q q q q q h q q q q q q h q q q q q q h q q q q q q h'),
+    song_mary_had_a_little_lamb: songTiming('q q q q q q h q q h q q h q q q q q q q h q q q q h'),
+    song_london_bridge: songTiming('q q q q q q h q q q q q h q q q q q q q h q q q q h'),
+    song_row_row_row_your_boat: songTiming('q q dq e q dq e q q q q q q q q q q q q q q q q q dh'),
+    song_amazing_grace: songTiming('dq e q dq e q dq e q dq e q dq e q dq e q dq e q dq e q dq e q dh'),
+    song_yankee_doodle: songTiming('q q q q q q q q q q q q q q q q q q q q q q q q q q q q q q h'),
+    song_jingle_bells: songTiming('q q h q q h q q dq e q q q q q q q q q q q q q h'),
+    song_brahms_lullaby: songTiming('q q q q q q q q q q q q q q q q q q q q q q q q q q q q q q q h'),
+    song_can_can: songTiming('q q q q q q q q q q q q q q q q q q q q q q q q h'),
+    song_william_tell_overture: songTiming('e e e e q q q q q q q q q q q q q q h'),
+    song_blue_danube: songTiming('q q q q q q q q q q q q q q q q q q q q q q q q h')
+  };
+
+  SONG_LESSONS.forEach(function(song) {
+    var durations = SONG_LESSON_TIMINGS[song.id];
+    if (!durations || durations.length !== song.melody.length) {
+      throw new Error('Authored rhythm for ' + song.id + ' must match its melody length');
+    }
+    song.durationsBeats = durations;
+  });
 
   function songDisplayName(song) {
     return song.name + ' — ' + song.artist;
@@ -5998,12 +6253,13 @@
       var topLevelEvents = Array.isArray(song.chords)
         ? song.chords.map(function(chord) { return chord.slice(); })
         : song.melody.map(function(note) { return [note]; });
-      return { melody: topLevelEvents.map(function(event) { return event[0]; }), eventOffsets: topLevelEvents, durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : [], sections: [] };
+      return { melody: topLevelEvents.map(function(event) { return event[0]; }), eventOffsets: topLevelEvents, durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : [], restsBeforeBeats: Array.isArray(song.restsBeforeBeats) ? song.restsBeforeBeats.slice() : [], sections: [] };
     }
     if (!Array.isArray(rawSections) || !rawSections.length) throw new Error(sourceName + ': ' + song.title + ' sections must be a non-empty array');
     var seenIds = {};
     var melody = [];
     var durationsBeats = [];
+    var restsBeforeBeats = [];
     var sections = rawSections.map(function(section, sectionIndex) {
       if (!section || typeof section !== 'object') throw new Error(sourceName + ': ' + song.title + ' section ' + String(sectionIndex + 1) + ' must be an object');
       var id = typeof section.id === 'string' && section.id.trim() ? section.id.trim() : 'section-' + String(sectionIndex + 1);
@@ -6011,16 +6267,19 @@
       seenIds[id] = true;
       if (!Array.isArray(section.melody) || !section.melody.length || !section.melody.every(function(note) { return typeof note === 'number' && note >= 0 && note <= 24; })) throw new Error(sourceName + ': ' + song.title + ' section ' + id + ' needs 0–24-semitone melody offsets');
       if (typeof section.durationsBeats !== 'undefined' && (!Array.isArray(section.durationsBeats) || section.durationsBeats.length !== section.melody.length)) throw new Error(sourceName + ': ' + song.title + ' section ' + id + ' durationsBeats must match its melody length');
+      if (typeof section.restsBeforeBeats !== 'undefined' && (!Array.isArray(section.restsBeforeBeats) || section.restsBeforeBeats.length !== section.melody.length || !section.restsBeforeBeats.every(function(beats) { return typeof beats === 'number' && beats >= 0; }))) throw new Error(sourceName + ': ' + song.title + ' section ' + id + ' restsBeforeBeats must contain one non-negative duration per event');
       var startIndex = melody.length;
       Array.prototype.push.apply(melody, section.melody);
       if (Array.isArray(section.durationsBeats)) Array.prototype.push.apply(durationsBeats, section.durationsBeats);
       else for (var durationIndex = 0; durationIndex < section.melody.length; durationIndex++) durationsBeats.push(0.5);
+      if (Array.isArray(section.restsBeforeBeats)) Array.prototype.push.apply(restsBeforeBeats, section.restsBeforeBeats);
+      else for (var restIndex = 0; restIndex < section.melody.length; restIndex++) restsBeforeBeats.push(0);
       return { id: id, name: typeof section.name === 'string' && section.name.trim() ? section.name.trim() : ('Section ' + String(sectionIndex + 1)), startIndex: startIndex, eventCount: section.melody.length };
     });
     // Supplying both representations invites them to drift. Accept the
     // top-level form only when it exactly matches the canonical sequence.
     if (Array.isArray(song.melody) && (song.melody.length !== melody.length || song.melody.some(function(note, index) { return note !== melody[index]; }))) throw new Error(sourceName + ': ' + song.title + ' melody must match the concatenated sections, or be omitted');
-    return { melody: melody, eventOffsets: melody.map(function(note) { return [note]; }), durationsBeats: durationsBeats, sections: sections };
+    return { melody: melody, eventOffsets: melody.map(function(note) { return [note]; }), durationsBeats: durationsBeats, restsBeforeBeats: restsBeforeBeats, sections: sections };
   }
 
   function songSectionForEvent(song, eventIndex) {
@@ -6076,6 +6335,7 @@
     var normalizedSections = normalizeSongSections(song, sourceName);
     if (normalizedSections.melody.length < 4) throw new Error(sourceName + ': ' + song.title + ' needs at least four playable notes');
     if (typeof song.durationsBeats !== 'undefined' && (!Array.isArray(song.durationsBeats) || song.durationsBeats.length !== normalizedSections.melody.length)) throw new Error(sourceName + ': ' + song.title + ' durationsBeats must match the complete melody length');
+    if (typeof song.restsBeforeBeats !== 'undefined' && (!Array.isArray(song.restsBeforeBeats) || song.restsBeforeBeats.length !== normalizedSections.melody.length || !song.restsBeforeBeats.every(function(beats) { return typeof beats === 'number' && beats >= 0; }))) throw new Error(sourceName + ': ' + song.title + ' restsBeforeBeats must contain one non-negative duration per event');
     if (typeof song.gateBeats !== 'undefined' && (!Array.isArray(song.gateBeats) || song.gateBeats.length !== normalizedSections.melody.length || !song.gateBeats.every(function(beats) { return typeof beats === 'number' && beats > 0; }))) throw new Error(sourceName + ': ' + song.title + ' gateBeats must contain one positive duration per event');
     if (Array.isArray(song.scoreEventMap) && song.scoreEventMap.some(function(index) { return typeof index === 'number' && index >= normalizedSections.melody.length; })) throw new Error(sourceName + ': ' + song.title + ' scoreEventMap references a note outside the complete melody');
     return {
@@ -6090,6 +6350,7 @@
       fxPresetId: typeof song.fxPresetId === 'string' ? song.fxPresetId : '',
       tempoBpm: typeof song.tempoBpm === 'number' ? song.tempoBpm : 112,
       durationsBeats: Array.isArray(song.durationsBeats) ? song.durationsBeats.slice() : normalizedSections.durationsBeats,
+      restsBeforeBeats: Array.isArray(song.restsBeforeBeats) ? song.restsBeforeBeats.slice() : normalizedSections.restsBeforeBeats,
       gateBeats: Array.isArray(song.gateBeats) ? song.gateBeats.slice() : musicXmlPlayableGateBeats(song.scoreMusicXml, normalizedSections.melody.length),
       sections: normalizedSections.sections,
       // Full score source; OSMD handles the actual engraving from this standard.
@@ -6216,8 +6477,8 @@
     return false;
   }
 
-  function selectErgonomicGripCells(cells, targetMidis) {
-    var candidateGroups = targetMidis.map(function(midi) { return exactMidiCandidates(cells, midi); });
+  function selectErgonomicGripCells(cells, targetMidis, preferredCellsById) {
+    var candidateGroups = targetMidis.map(function(midi) { return preferredGripCandidates(cells, midi, preferredCellsById); });
     if (candidateGroups.some(function(group) { return !group.length; })) return null;
     var best = null;
     var bestScore = Infinity;
@@ -6241,6 +6502,18 @@
     return best;
   }
 
+  function preferredGripCandidates(cells, midi, preferredCellsById) {
+    var exact = exactMidiCandidates(cells, midi);
+    // The map's selected pad wins whenever this exact pitch is already lit.
+    // Chromatic chord tones (such as the major V in a natural-minor cadence)
+    // are not in that map, so they use the same meridian winner as every other
+    // canonical UI/hardware light. No solver gets to invent a third instance.
+    var lit = preferredCellsById ? exact.filter(function(cell) { return !!preferredCellsById[cell.id]; }) : [];
+    if (lit.length) return lit;
+    var canonicalId = canonicalLightCellIdsByMidi(cells)[midi];
+    return exact.filter(function(cell) { return cellKey(cell) === canonicalId; });
+  }
+
   function resolvePlayableTriadRootMidi(desiredRootMidi, quality) {
     return resolvePlayableChordRootMidi(desiredRootMidi, quality, 3, 0);
   }
@@ -6258,7 +6531,7 @@
     return fingers;
   }
 
-  function resolvePlayableChordRootMidi(desiredRootMidi, quality, noteCount, inversion) {
+  function resolvePlayableChordRootMidi(desiredRootMidi, quality, noteCount, inversion, preferredCellsById) {
     // Chord labels describe pitch classes, but a lesson needs one exact,
     // playable Exquis voicing. Search each physical instance of the requested
     // root and choose the closest valid ergonomic grip; never approximate a
@@ -6273,7 +6546,7 @@
       if (cell.pc !== mod(desiredRootMidi, 12) || seenMidis[cell.midi]) return;
       seenMidis[cell.midi] = true;
       var targetMidis = offsets.map(function(offset) { return cell.midi + offset; });
-      var gripCells = selectErgonomicGripCells(cells, targetMidis);
+      var gripCells = selectErgonomicGripCells(cells, targetMidis, preferredCellsById);
       if (!gripCells) return;
       var score = Math.abs(cell.midi - desiredRootMidi) * 32 + ergonomicGripScore(gripCells);
       if (score < bestScore) {
@@ -6297,7 +6570,7 @@
     // All chord entry points—including the live Harmony Triad lesson—share
     // the same physical-layout solver. Do not let the legacy anchored path
     // reintroduce an otherwise forbidden three-note column.
-    var gripCells = selectErgonomicGripCells(cells, offsets.map(function(offset) { return spec.rootMidi + offset; }));
+    var gripCells = selectErgonomicGripCells(cells, offsets.map(function(offset) { return spec.rootMidi + offset; }), spec.preferredCellsById);
     if (!gripCells) return null;
     var root = gripCells[0];
     var inversionName = inversion === 0 ? 'root' : inversion === 1 ? 'first' : inversion === 2 ? 'second' : inversion === 3 ? 'third' : String(inversion) + 'th';
@@ -6319,16 +6592,19 @@
     var requestedTonicPc = arguments.length > 1 && typeof arguments[1] === 'number' ? arguments[1] : state.tonicPc;
     var tonicPc = mod(requestedTonicPc, 12);
     var transposition = mod(tonicPc - (fixture.tonicPc || 0), 12);
+    var progressionCells = makeGrid();
+    var preferredCellsById = getLitPracticeCells(progressionCells, getScale(), selectedRoot(progressionCells));
     var events = fixture.chords.map(function(chord, index) {
       var voicing = progressionVoicingForStep(index);
-      var playableRootMidi = resolvePlayableChordRootMidi(chord.rootMidi + transposition, chord.quality, voicing.noteCount, voicing.inversion);
+      var playableRootMidi = resolvePlayableChordRootMidi(chord.rootMidi + transposition, chord.quality, voicing.noteCount, voicing.inversion, preferredCellsById);
       var event = buildHarmonyGripFixture({
         id: id + ':' + index + ':' + chord.degree,
         quality: chord.quality,
         rootMidi: playableRootMidi,
         inversion: voicing.inversion,
         noteCount: voicing.noteCount,
-        compactVoicing: true
+        compactVoicing: true,
+        preferredCellsById: preferredCellsById
       });
       if (event) {
         event.musicalIntent.progressionId = id;
@@ -6356,6 +6632,8 @@
     var qualityMap = { maj: 'major', min: 'minor', dim: 'diminished', aug: 'augmented' };
     if (!progression || !mode || !Array.isArray(progression.degs) || !Array.isArray(mode.scale) || !Array.isArray(mode.triads)) return null;
     var resolvedTonicPc = mod(typeof tonicPc === 'number' ? tonicPc : state.tonicPc, 12);
+    var progressionCells = makeGrid();
+    var preferredCellsById = getLitPracticeCells(progressionCells, getScale(), selectedRoot(progressionCells));
     var roman = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii'];
     var events = progression.degs.map(function(degree, index) {
       var interval = mode.scale[degree];
@@ -6364,7 +6642,7 @@
       var rootMidi = 48 + interval;
       if (rootMidi > 52) rootMidi -= 12;
       var voicing = progressionVoicingForStep(index);
-      var playableRootMidi = resolvePlayableChordRootMidi(rootMidi + resolvedTonicPc, quality, voicing.noteCount, voicing.inversion);
+      var playableRootMidi = resolvePlayableChordRootMidi(rootMidi + resolvedTonicPc, quality, voicing.noteCount, voicing.inversion, preferredCellsById);
       if (playableRootMidi === null) return null;
       var event = buildHarmonyGripFixture({
         id: ssliProgressionExerciseId(genreIndex, progressionIndex) + ':' + index,
@@ -6372,7 +6650,8 @@
         rootMidi: playableRootMidi,
         inversion: voicing.inversion,
         noteCount: voicing.noteCount,
-        compactVoicing: true
+        compactVoicing: true,
+        preferredCellsById: preferredCellsById
       });
       if (event) {
         event.musicalIntent.progressionId = ssliProgressionExerciseId(genreIndex, progressionIndex);
@@ -6516,12 +6795,16 @@
     var cells = makeGrid();
     var root = selectedRoot(cells);
     if (!root) return [];
+    var preferredCellsById = getLitPracticeCells(cells, getScale(), root);
     var events = [];
     for (var index = 0; index < song.melody.length; index++) {
       var offsets = Array.isArray(song.eventOffsets) && Array.isArray(song.eventOffsets[index]) ? song.eventOffsets[index] : [song.melody[index]];
       var targets = offsets.map(function(offset) {
         var targetMidi = root.midi + offset;
-        var target = bestCellForTarget(cells, mod(root.pc + offset, 12), targetMidi, root, null);
+        // Songs, scales, and chord progressions share one physical-address
+        // policy.  Do not let song playback choose an ergonomic duplicate that
+        // disagrees with the button the player already sees as preferred.
+        var target = preferredGripCandidates(cells, targetMidi, preferredCellsById)[0] || null;
         return target && target.midi === targetMidi ? target : null;
       });
       // A song must be completely playable on the displayed Exquis range. Do
@@ -6535,7 +6818,7 @@
           cellId: targetSpecs[0].cellId, midi: targetSpecs[0].midi,
           sourceCell: clonePathCell(targets[0]), targets: targetSpecs,
           fingering: { primary: fingers[index % fingers.length], alternatives: [] },
-          timing: { mode: 'sequential' }, remediation: { type: 'repeat-event' }
+          timing: { mode: 'sequential', durationBeats: songEventDurationBeats(song, index) }, remediation: { type: 'repeat-event' }
         }));
       } else {
         var chordFingers = exquisChordFingerPattern(targetSpecs.length);
@@ -6543,7 +6826,8 @@
           id: song.id + ':phrase-chord:' + index,
           musicalIntent: { type: 'song-chord', songId: song.id, title: song.name, artist: song.artist },
           sourceCell: clonePathCell(targets[0]), sourceCells: targets.map(clonePathCell), targets: targetSpecs,
-          fingerAssignments: targetSpecs.map(function(target, targetIndex) { return { cellId: target.cellId, finger: chordFingers[targetIndex] }; })
+          fingerAssignments: targetSpecs.map(function(target, targetIndex) { return { cellId: target.cellId, finger: chordFingers[targetIndex] }; }),
+          timing: { mode: 'simultaneous', toleranceMs: 80, durationBeats: songEventDurationBeats(song, index) }
         }));
       }
     }
@@ -7140,11 +7424,30 @@
     }
     function closeMeasure() {
       if (!current.length) return;
+      // Generated practice scores must be honest about unused beats. Without
+      // this explicit MusicXML rest, a short phrase is engraved as though its
+      // final note simply stretched toward the barline.
+      if (remaining > 0.001) {
+        var restRhythm = noteType(remaining);
+        current.push('<note><rest/><duration>' + String(Math.max(1, Math.round(remaining * divisions))) + '</duration><type>' + restRhythm.type + '</type>' + (restRhythm.dot ? '<dot/>' : '') + '</note>');
+      }
       measures.push('<measure number="' + String(measureNumber++) + '">' + current.join('') + '</measure>');
       current = [];
       remaining = beatsPerMeasure;
     }
+    function appendRest(beats) {
+      var rest = Math.max(0, beats || 0);
+      while (rest > 0.001) {
+        var slice = Math.min(rest, remaining);
+        var restRhythm = noteType(slice);
+        current.push('<note><rest/><duration>' + String(Math.max(1, Math.round(slice * divisions))) + '</duration><type>' + restRhythm.type + '</type>' + (restRhythm.dot ? '<dot/>' : '') + '</note>');
+        remaining -= slice;
+        rest -= slice;
+        if (remaining < 0.001) closeMeasure();
+      }
+    }
     projection.events.forEach(function(event, index) {
+      appendRest(songEventRestBeforeBeats(song, index));
       var beats = Math.min(beatsPerMeasure, songEventDurationBeats(song, index));
       if (current.length && beats > remaining + 0.001) closeMeasure();
       var rhythm = noteType(beats);
@@ -7335,6 +7638,7 @@
     var eventBeats = [];
     var cursorBeat = 0;
     projection.events.forEach(function(event, index) {
+      cursorBeat += songEventRestBeforeBeats(song, index);
       eventBeats.push(cursorBeat);
       cursorBeat += songEventDurationBeats(song, index);
     });
@@ -8022,8 +8326,8 @@
       } else {
         logEvent('midi', 'Exquis ch16 control id=' + midi + ' value=' + velocity);
       }
-    } else if (status === 0xB0 && channel === 0 &&
-      (state.exquisDialListenEnabled || (isExquisMidiDevice(midiInput) && midi >= 41 && midi <= 44)) &&
+    } else if (status === 0xB0 && channel === 0 && !state.exquisDialListenEnabled &&
+      isExquisMidiDevice(midiInput) && midi >= 41 && midi <= 44 &&
       handleExquisSettingsControl(midi, velocity)) {
       return;
     } else if (state.exquisDialListenEnabled) {
@@ -8042,10 +8346,8 @@
   function handleExquisSettingsControl(cc, value) {
     var control = EXQUIS_EDGE_BY_CC[cc];
     if (control) {
-      var previousValue = state.edgeControlValues[control.id];
       rememberEdgeControl(control, String(value));
-      var dialIndex = cc - 40;
-      if (cc === 41 && cyclePracticeFamily(absoluteEncoderDirection(previousValue, value), 'Settings Encoder 1')) {
+      if (cc === 41 && selectPracticeFamilyAtEncoderPosition(value, 'Settings Encoder 1')) {
         return true;
       } else if (cc === 42 && value >= 0 && value <= 11) {
         logEvent('midi', 'Exquis settings ' + control.label + ' root value=' + value + ' note=' + TONICS[value].name);
@@ -8053,7 +8355,7 @@
       } else if (cc === 43) {
         logEvent('midi', 'Exquis settings ' + control.label + ' scale-number=' + value);
         updateScaleFromHardwareNumber(value, 'Settings Encoder 3');
-      } else if (cc === 44 && cyclePracticeExercise(absoluteEncoderDirection(previousValue, value), 'Settings Encoder 4')) {
+      } else if (cc === 44 && selectPracticeExerciseAtEncoderPosition(value, 'Settings Encoder 4')) {
         return true;
       } else {
         logEvent('midi', 'Exquis settings ' + control.label + ' cc=' + cc + ' value=' + value);
@@ -8073,18 +8375,61 @@
     return false;
   }
 
-  // Native settings encoders report absolute 7-bit positions, while the
-  // developer/control-zone reports signed deltas. Normalize the former here
-  // so both protocols use the same wrapped practice navigation. A first
-  // absolute message only establishes the current position: it must never
-  // change the learner's exercise just because the hardware connected.
-  function absoluteEncoderDirection(previousValue, nextValue) {
-    var previous = parseInt(previousValue, 10);
-    var next = parseInt(nextValue, 10);
-    if (!Number.isFinite(previous) || !Number.isFinite(next) || previous === next) return 0;
-    if (previous > 110 && next < 17) return 1;
-    if (previous < 17 && next > 110) return -1;
-    return next > previous ? 1 : -1;
+  // Settings encoders are absolute controls, just like root: position 0 must
+  // always select the first item, and any position must map to one stable
+  // family/exercise rather than depending on the encoder's previous value.
+  function encoderPositionIndex(value, length) {
+    if (!length) return -1;
+    var position = Math.max(0, Math.min(127, parseInt(value, 10) || 0));
+    return Math.min(length - 1, Math.floor(position * length / 128));
+  }
+
+  function selectPracticeFamilyAtEncoderPosition(value, source) {
+    var index = encoderPositionIndex(value, EXERCISE_FAMILIES.length);
+    if (index < 0) return false;
+    var family = EXERCISE_FAMILIES[index];
+    stopSongAudition('practice family changed');
+    state.exerciseFamily = family.id;
+    state.repertoireSectionId = '';
+    if (family.id === 'progressions') {
+      state.progressionGenre = 'starter';
+      state.exerciseId = 'major_i_iv_vi_v';
+      applyCanonicalProgressionScale();
+    } else {
+      var exercises = exercisesForSelectedFamily();
+      state.exerciseId = exercises.length ? exercises[0].id : state.exerciseId;
+    }
+    state.step = 0;
+    renderExerciseOptions();
+    state.midiActivity = 'Activity: ' + source + ' Â· family ' + family.name;
+    logEvent('midi', 'Exquis ' + source + ' practice family=' + family.id + ' position=' + value + ' index=' + index);
+    render();
+    if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
+    return true;
+  }
+
+  function selectPracticeExerciseAtEncoderPosition(value, source) {
+    var exercises = exercisesForSelectedFamily();
+    var index = encoderPositionIndex(value, exercises.length);
+    if (index < 0) return false;
+    var exercise = exercises[index];
+    stopSongAudition('exercise changed');
+    state.exerciseId = exercise.id;
+    state.exerciseFamily = exerciseFamilyForId(exercise.id);
+    applyCanonicalProgressionScale();
+    applySelectedSongMusicalProfile();
+    applySelectedSongSoundProfile();
+    state.step = 0;
+    state.midiActivity = 'Activity: ' + source + ' Â· exercise ' + exercise.name;
+    logEvent('midi', 'Exquis ' + source + ' exercise=' + exercise.id + ' position=' + value + ' index=' + index);
+    render();
+    if (songLessonForId(state.exerciseId)) {
+      applySelectedSsliPreset();
+      applySelectedSsliFxChain();
+      if (audioCtx) rebuildFxBus(audioCtx);
+    }
+    if (state.exquisSyncEnabled) syncExquisKeyModeToHardware();
+    return true;
   }
 
   function wrapPracticeIndex(index, length) {
@@ -9132,6 +9477,7 @@
 
   function render() {
     document.documentElement.setAttribute('data-notation-theme', state.notationTheme === 'high-contrast' ? 'high-contrast' : 'dark');
+    if (state.exerciseFamily === 'repertoire') applySelectedRepertoireMusicalProfile();
     var logicCells = makeGrid();
     var cells = logicCells;
     var scale = getScale();
@@ -9791,6 +10137,7 @@
         state.exerciseId = button.dataset.value;
         els.exercise.value = state.exerciseId;
         applyCanonicalProgressionScale();
+        applySelectedRepertoireMusicalProfile();
         applySelectedSongMusicalProfile();
         applySelectedSongSoundProfile();
         state.step = 0;
@@ -9803,6 +10150,7 @@
       state.exerciseId = els.exercise.value;
       state.exerciseFamily = exerciseFamilyForId(state.exerciseId);
       applyCanonicalProgressionScale();
+      applySelectedRepertoireMusicalProfile();
       applySelectedSongMusicalProfile();
       applySelectedSongSoundProfile();
       state.step = 0;
@@ -9843,6 +10191,7 @@
     if (els.repertoireSection) {
       els.repertoireSection.addEventListener('change', function() {
         state.repertoireSectionId = els.repertoireSection.value;
+        applySelectedRepertoireMusicalProfile();
         state.step = 0;
         setFeedback('Song section: ' + els.repertoireSection.options[els.repertoireSection.selectedIndex].text + '.', 'neutral');
         render();

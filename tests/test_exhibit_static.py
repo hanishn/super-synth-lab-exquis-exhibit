@@ -68,7 +68,7 @@ class StaticExhibitTests(unittest.TestCase):
     def test_song_audition_never_rewinds_the_full_score_cursor_per_note(self):
         app = (ROOT / "src" / "parts" / "app.js").read_text(encoding="utf-8")
         self.assertIn(
-            "updateRenderedFullScorePlaybackState(song, projection, { suppressCursor: true })",
+            "updateRenderedFullScorePlaybackState(scoreSource, projection, { suppressCursor: true })",
             app,
         )
         self.assertIn("if (!options.suppressCursor && scoreRenderer && scoreRenderer.cursor)", app)
@@ -108,7 +108,10 @@ class StaticExhibitTests(unittest.TestCase):
         self.assertIn("notationClefGlyph", source)
         self.assertIn("\\ud834\\udd1e", source)  # U+1D11E MUSICAL SYMBOL G CLEF
         self.assertIn("\\ud834\\udd22", source)  # U+1D122 MUSICAL SYMBOL F CLEF
-        self.assertIn("key-signature-accidental", source)
+        # Key signatures are now engraved by OSMD/VexFlow from generated
+        # MusicXML, not hand-drawn accidental text nodes.
+        self.assertIn("stave.addKeySignature(signature.vexKey)", source)
+        self.assertIn("generatedSongScoreXml", source)
         self.assertIn("preserveAspectRatio', 'xMidYMid meet'", source)
         self.assertIn("@media (max-width: 640px)", styles)
 

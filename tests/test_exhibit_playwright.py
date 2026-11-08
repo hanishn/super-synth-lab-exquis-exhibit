@@ -64,6 +64,12 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "f_major_must_keep_full_unique_map_flat_spelling_and_readable_roll": "test_regression_f_major_layout_uses_complete_map_flat_spelling_and_full_roll_height",
         "f_major_and_pentatonic_must_choose_the_ergonomic_f3_instance": "test_regression_f_major_and_pentatonic_choose_the_ergonomic_f3_duplicate",
         "f_sharp_major_practice_targets_must_use_the_lit_pad_instances": "test_regression_f_sharp_major_practice_targets_use_the_same_lit_pad_instances",
+        "default_practice_boot_must_have_a_real_route_and_rendered_staff": "test_regression_default_practice_boot_has_a_real_route_and_rendered_staff",
+        "root_encoder_round_trip_must_preserve_selected_octave_side": "test_regression_root_encoder_round_trip_preserves_selected_octave_side",
+        "encoder_dropdown_must_remain_open_until_the_player_finishes": "test_regression_ui_encoder_click_opens_its_owned_dropdown",
+        "ui_target_pulse_must_match_exquis_soft_envelope": "test_regression_ui_target_uses_the_exquis_soft_pulse_envelope",
+        "progression_targets_must_use_the_canonical_lit_pad_instance": "test_regression_progression_targets_always_use_canonical_lit_pad_instances",
+        "song_targets_must_use_the_canonical_lit_pad_instance": "test_regression_song_targets_always_use_canonical_lit_pad_instances",
         "wrist_led_pairs_must_allow_same_finger_for_nearby_steps": "test_regression_wrist_led_pairs_allow_same_finger_for_d3_e3",
         "natural_clusters_must_prioritize_human_finger_names": "test_regression_natural_clusters_prioritize_human_finger_names",
         "natural_clusters_must_be_default_fingering_strategy": "test_regression_natural_clusters_is_default_fingering_strategy",
@@ -115,7 +121,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
         "staff_pitch_colors_must_survive_root_or_mode_repaint": "test_regression_full_score_recolors_after_root_and_mode_change",
         "every_tonic_and_mode_must_keep_a_complete_column_safe_hardware_key_map": "test_regression_every_tonic_and_mode_has_complete_column_safe_hardware_lights",
         "native_hardware_key_mode_changes_must_rebuild_the_exquis_led_frame": "test_regression_native_encoder_key_mode_change_resyncs_exquis_led_frame",
-        "native_encoders_one_and_four_must_cycle_practice_family_and_exercise": "test_regression_native_encoders_one_and_four_cycle_practice_family_and_exercise_without_dial_listen",
+        "native_encoders_one_and_four_must_use_stable_absolute_positions": "test_regression_native_encoders_one_and_four_use_stable_absolute_positions_without_dial_listen",
         "all_workspace_primary_labels_must_remain_readable": "test_regression_workspace_readability_contract_across_practice_session_and_hardware",
         "practice_transport_must_expose_next_and_full_sequence_playback": "test_regression_practice_transport_exposes_next_and_full_sequence_playback",
         "practice_idle_must_reassert_the_entire_led_frame": "test_regression_exquis_practice_idle_reasserts_the_entire_led_frame",
@@ -494,11 +500,10 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertLess(control_boxes[0]['top'], control_boxes[1]['top'])
         self.assertTrue(all(box['width'] > 0 and box['height'] > 0 for box in control_boxes), control_boxes)
 
-    def test_regression_native_encoders_one_and_four_cycle_practice_family_and_exercise_without_dial_listen(self):
-        # Settings Encoder 1 and 4 are the hands-free practice navigator. The
-        # regular native CC stream must work without the developer-only Dial
-        # Listen toggle, and an initial absolute CC must only establish a
-        # baseline rather than unexpectedly changing the exercise.
+    def test_regression_native_encoders_one_and_four_use_stable_absolute_positions_without_dial_listen(self):
+        # Settings Encoder 1 and 4 are absolute controls like root: position
+        # zero always means the first family/exercise, independent of where
+        # the physical encoder was previously turned.
         self.page.evaluate("""() => {
           window.__practiceNavigationInput = {
             id: 'practice-navigation-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null
@@ -518,31 +523,106 @@ class PlaywrightExhibitTests(unittest.TestCase):
 
         self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'technique')
         initial_exercise = self.page.locator('[data-testid="exercise-select"]').input_value()
-        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 41, 60] })")
+        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 41, 127] })")
+        families = self.page.locator('[data-testid="exercise-family-select"] option').evaluate_all("options => options.map(option => option.value)")
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), families[-1])
+        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 41, 0] })")
         self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'technique')
         self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), initial_exercise)
-        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 41, 61] })")
-        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'shapes')
-        self.assertIn('61', self.page.locator('[data-edge-id="enc1"]').inner_text())
+        self.assertIn('0', self.page.locator('[data-edge-id="enc1"]').inner_text())
 
         exercises = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
         self.assertGreaterEqual(len(exercises), 2)
         self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), exercises[0])
-        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 44, 30] })")
+        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 44, 127] })")
+        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), exercises[-1])
+        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 44, 0] })")
         self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), exercises[0])
-        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 44, 31] })")
-        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), exercises[1])
-        self.assertIn('31', self.page.locator('[data-edge-id="enc4"]').inner_text())
-        self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xB0, 44, 30] })")
-        self.assertEqual(self.page.locator('[data-testid="exercise-select"]').input_value(), exercises[0])
+        self.assertIn('0', self.page.locator('[data-edge-id="enc4"]').inner_text())
 
         # The developer/control-zone stream encodes signed deltas. It reaches
         # the same family navigation instead of becoming a diagnostics-only
         # dead end.
         self.page.evaluate("() => window.__practiceNavigationInput.onmidimessage({ data: [0xBF, 110, 65] })")
-        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'progressions')
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), 'shapes')
         self.assertIn('delta 1', self.page.locator('[data-edge-id="enc1"]').inner_text())
         visual_path = ROOT / '.tmp' / 'practice-encoder-family-exercise-navigation.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+
+    def test_regression_ui_encoder_click_opens_its_owned_dropdown(self):
+        # The rendered device is a control surface, not a static diagram.
+        # Each encoder must expose exactly the setting named on its bezel.
+        self.page.locator('[data-testid="workspace-practice"]').click()
+        bindings = [
+            ('enc1', '[data-testid="exercise-family-select"]'),
+            ('enc2', '[data-testid="tonic-select"]'),
+            ('enc3', '[data-testid="scale-select"]'),
+            ('enc4', '[data-testid="exercise-select"]'),
+        ]
+        for encoder_id, source_selector in bindings:
+            self.page.locator(f'[data-edge-id="{encoder_id}"]').click()
+            picker = self.page.locator(f'[data-edge-id="{encoder_id}"] [data-testid="encoder-control-select"]')
+            self.assertTrue(picker.is_visible())
+            self.assertEqual(picker.input_value(), self.page.locator(source_selector).input_value())
+            if encoder_id == 'enc1':
+                # Background pulse/status renders must not dismiss a picker
+                # while the player is considering a choice.
+                self.page.wait_for_timeout(3500)
+                self.assertTrue(picker.is_visible())
+                visual_path = ROOT / '.tmp' / 'ui-encoder-dropdown-open.png'
+                visual_path.parent.mkdir(parents=True, exist_ok=True)
+                self.page.screenshot(path=str(visual_path), full_page=True)
+            selection = picker.locator('option').evaluate_all("options => options[options.length - 1].value")
+            picker.select_option(selection)
+            self.assertEqual(self.page.locator(source_selector).input_value(), selection)
+        visual_path = ROOT / '.tmp' / 'ui-encoder-dropdowns.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+
+    def test_regression_root_encoder_round_trip_preserves_selected_octave_side(self):
+        self.page.evaluate("""() => {
+          window.__rootEncoderInput = { id: 'root-encoder-in', name: 'Exquis USB MIDI', manufacturer: 'Intuitive Instruments', onmidimessage: null };
+          navigator.requestMIDIAccess = () => Promise.resolve({
+            inputs: { forEach: callback => callback(window.__rootEncoderInput) }, outputs: { forEach: () => {} }, onstatechange: null
+          });
+        }""")
+        self.page.locator('[data-testid="workspace-studio"]').click()
+        self.page.locator('[data-testid="enable-midi"]').click()
+        self.page.wait_for_function("() => window.__rootEncoderInput.onmidimessage !== null")
+        self.page.locator('[data-testid="workspace-practice"]').click()
+
+        def path_labels():
+            return self.page.evaluate("() => window.__exquisDebugSnapshot().currentPath.map(step => step.label)")
+
+        tonic_names = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+
+        self.page.evaluate("() => document.querySelector('[data-testid=\"lower-octave-button\"]').click()")
+        lower_c_path = path_labels()
+        # Root is an absolute 0–11 selector.  Sweep every other tonic before
+        # returning to C: a round trip must restore the same octave register,
+        # not merely leave the octave UI label unchanged.
+        for root_pc in range(1, 12):
+            self.page.evaluate(f"() => window.__rootEncoderInput.onmidimessage({{ data: [0xB0, 42, {root_pc}] }})")
+            self.assertEqual(self.page.locator('[data-testid="octave-select"]').input_value(), 'lower')
+            self.assertTrue(path_labels())
+            self.assertTrue(path_labels()[0].startswith(tonic_names[root_pc]))
+            self.page.evaluate("() => window.__rootEncoderInput.onmidimessage({ data: [0xB0, 42, 0] })")
+            self.assertEqual(path_labels(), lower_c_path)
+        self.assertEqual(self.page.locator('[data-testid="octave-select"]').input_value(), 'lower')
+
+        self.page.evaluate("() => document.querySelector('[data-testid=\"higher-octave-button\"]').click()")
+        higher_c_path = path_labels()
+        self.assertNotEqual(higher_c_path, lower_c_path)
+        for root_pc in range(1, 12):
+            self.page.evaluate(f"() => window.__rootEncoderInput.onmidimessage({{ data: [0xB0, 42, {root_pc}] }})")
+            self.assertEqual(self.page.locator('[data-testid="octave-select"]').input_value(), 'higher')
+            self.assertTrue(path_labels())
+            self.assertTrue(path_labels()[0].startswith(tonic_names[root_pc]))
+            self.page.evaluate("() => window.__rootEncoderInput.onmidimessage({ data: [0xB0, 42, 0] })")
+            self.assertEqual(path_labels(), higher_c_path)
+        self.assertEqual(self.page.locator('[data-testid="octave-select"]').input_value(), 'higher')
+        visual_path = ROOT / '.tmp' / 'root-encoder-octave-round-trip.png'
         visual_path.parent.mkdir(parents=True, exist_ok=True)
         self.page.screenshot(path=str(visual_path), full_page=True)
 
@@ -897,6 +977,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
           });
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0x90 | 4, 60, 11] })")
@@ -1986,6 +2067,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
         for snapshot in snapshots:
             self.assertGreaterEqual(len(snapshot['events']), 16, snapshot)
             self.assertTrue(all(event['valid'] and event['musicalIntent']['type'] == 'song-melody' for event in snapshot['events']), snapshot)
+            catalog_song = next(song for song in self.page.evaluate("() => window.__exquisDebugSongCatalog()") if song['id'] == snapshot['exerciseId'])
+            self.assertEqual(
+                [event['timing']['durationBeats'] for event in snapshot['events']],
+                catalog_song['durationsBeats'],
+                snapshot['exerciseId']
+            )
+        self.page.select_option('[data-testid="exercise-select"]', 'song_ode_to_joy')
+        visual_path = ROOT / '.tmp' / 'song-rhythm-ode-to-joy.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
 
     def test_song_staff_input_advances_the_public_domain_melody(self):
         self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
@@ -2170,6 +2261,16 @@ class PlaywrightExhibitTests(unittest.TestCase):
                 self.assertIn('Measures ', staff_window_after)
                 self.page.screenshot(path=str(visual_path.with_name(visual_name + '-later-window.png')), full_page=True)
 
+    def test_builtin_song_catalog_has_authored_rhythm_for_every_event(self):
+        """No builtin may silently fall back to the old uniform pulse."""
+        catalog = self.page.evaluate("() => window.__exquisDebugSongCatalog()")
+        self.assertEqual(len(catalog), 17)
+        for song in catalog:
+            durations = song['durationsBeats']
+            self.assertEqual(len(durations), song['melodyLength'], song['id'])
+            self.assertTrue(all(isinstance(duration, (int, float)) and duration > 0 for duration in durations), song['id'])
+            self.assertGreater(len(set(durations)), 1, song['id'] + ' must retain authored rhythm, not a uniform default')
+
     def test_song_audition_uses_authored_durations_at_actual_ssli_note_on(self):
         """Audio-engine entry, not cursor paint, is the song timing contract."""
         song = {
@@ -2227,7 +2328,8 @@ class PlaywrightExhibitTests(unittest.TestCase):
         <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration></note><note><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration></note><note><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration></note></measure></part></score-partwise>'''
         song = {
             'title': 'Engraved-rest timing fixture', 'artist': 'Test fixture', 'tempoBpm': 240,
-            'durationsBeats': [4, 1, 1, 1], 'melody': [0, 2, 4, 5], 'scoreMusicXml': musicxml,
+            'durationsBeats': [1, 1, 1, 1], 'restsBeforeBeats': [0, 3, 0, 0],
+            'melody': [0, 2, 4, 5], 'scoreMusicXml': musicxml,
         }
         self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
         self.page.locator('[data-testid="song-pack-input"]').set_input_files({
@@ -2808,6 +2910,45 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.assertEqual(sorted(visible), sorted(hardware_lit))
         self.assertGreater(len(hardware_lit), 0)
         self.assertEqual(len(chord_targets), 3)
+        visual_path = ROOT / '.tmp' / 'progression-canonical-targets.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
+
+    def test_regression_progression_targets_always_use_canonical_lit_pad_instances(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'progressions')
+        self.page.select_option('[data-testid="progression-genre-select"]', 'starter')
+        progression_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
+        for progression_id in progression_ids:
+            self.page.select_option('[data-testid="exercise-select"]', progression_id)
+            events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+            self.assertTrue(events, progression_id)
+            for event in events:
+                self.assertEqual(event['type'], 'grip', { 'progression': progression_id, 'event': event })
+                preferred_ids = self.page.evaluate("event => event.targets.map(target => window.__exquisDebugPreferredGripCellIdForMidi(target.midi))", event)
+                self.assertEqual([target['cellId'] for target in event['targets']], preferred_ids, {
+                    'progression': progression_id,
+                    'targets': event['targets'],
+                    'preferred': preferred_ids
+                })
+
+    def test_regression_song_targets_always_use_canonical_lit_pad_instances(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'songs')
+        song_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
+        for song_index, song_id in enumerate(song_ids):
+            self.page.select_option('[data-testid="exercise-select"]', song_id)
+            events = self.page.evaluate("() => window.__exquisDebugSnapshot().exerciseEvents")
+            self.assertTrue(events, song_id)
+            for event in events:
+                preferred_ids = self.page.evaluate("event => event.targets.map(target => window.__exquisDebugPreferredGripCellIdForMidi(target.midi))", event)
+                self.assertEqual([target['cellId'] for target in event['targets']], preferred_ids, {
+                    'song': song_id,
+                    'targets': event['targets'],
+                    'preferred': preferred_ids
+                })
+            if song_index == 0:
+                visual_path = ROOT / '.tmp' / 'song-canonical-targets.png'
+                visual_path.parent.mkdir(parents=True, exist_ok=True)
+                self.page.screenshot(path=str(visual_path), full_page=True)
 
     def test_regression_imported_progression_catalog_uses_learner_facing_labels(self):
         source_metadata = self.page.evaluate("""() => window.SSLI_VENDOR.progressionGroups.flatMap((group) => (
@@ -2914,7 +3055,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         options = self.page.locator('[data-testid="exercise-select"] option').all_text_contents()
         self.assertIn('Anthem progression', options)
         self.page.select_option('[data-testid="exercise-select"]', 'repertoire_anthem_progression')
+        self.page.locator('[data-testid="workspace-library"]').click()
         self.assertTrue(self.page.locator('[data-testid="repertoire-section-panel"]').is_visible())
+        visual_path = ROOT / '.tmp' / 'repertoire-expanded-library.png'
+        visual_path.parent.mkdir(parents=True, exist_ok=True)
+        self.page.screenshot(path=str(visual_path), full_page=True)
         self.assertEqual(self.page.locator('[data-testid="repertoire-section-select"]').input_value(), 'verse')
         self.page.select_option('[data-testid="repertoire-section-select"]', 'chorus')
         self.page.locator('[data-testid="repertoire-tempo"]').fill('112')
@@ -2936,6 +3081,7 @@ class PlaywrightExhibitTests(unittest.TestCase):
             onstatechange: null
           });
         }""")
+        self.page.locator('[data-testid="workspace-studio"]').click()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockRepertoireInput && window.__mockRepertoireInput.onmidimessage")
         self.page.evaluate("""async () => {
@@ -2950,6 +3096,48 @@ class PlaywrightExhibitTests(unittest.TestCase):
         }""")
         self.page.wait_for_function("() => document.querySelector('[data-testid=\"repertoire-section-summary\"]').textContent.includes('1 completed loop')")
         self.assertIn('1 completed loop', self.page.locator('[data-testid="repertoire-section-summary"]').inner_text())
+
+    def test_repertoire_catalog_is_substantial_and_every_section_is_playable(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'repertoire')
+        lesson_ids = self.page.locator('[data-testid="exercise-select"] option').evaluate_all("options => options.map(option => option.value)")
+        self.assertGreaterEqual(len(lesson_ids), 17)
+        coverage = self.page.evaluate("""lessonIds => lessonIds.map((lessonId) => {
+          const exercise = document.querySelector('[data-testid="exercise-select"]');
+          exercise.value = lessonId;
+          exercise.dispatchEvent(new Event('change', { bubbles: true }));
+          const sections = [...document.querySelector('[data-testid="repertoire-section-select"]').options].map(option => option.value);
+          return {
+            lessonId,
+            sections: sections.map((sectionId) => {
+              const select = document.querySelector('[data-testid="repertoire-section-select"]');
+              select.value = sectionId;
+              select.dispatchEvent(new Event('change', { bubbles: true }));
+              return { sectionId, events: window.__exquisDebugSnapshot().exerciseEvents };
+            })
+          };
+        })""", lesson_ids)
+        self.assertGreaterEqual(sum(len(lesson['sections']) for lesson in coverage), 55)
+        for lesson in coverage:
+            self.assertGreaterEqual(len(lesson['sections']), 3, lesson['lessonId'])
+            for section in lesson['sections']:
+                self.assertGreaterEqual(len(section['events']), 3, {"lesson": lesson['lessonId'], "section": section['sectionId']})
+                self.assertTrue(all(event['valid'] for event in section['events']), {"lesson": lesson['lessonId'], "section": section['sectionId'], "events": section['events']})
+
+    def test_repertoire_section_selects_its_own_harmonic_collection(self):
+        self.page.select_option('[data-testid="exercise-family-select"]', 'repertoire')
+        checks = [
+            ('repertoire_minor_resolution', 'cadence', 'aeolian'),
+            ('repertoire_modal_groove', 'dorian', 'dorian'),
+            ('repertoire_cinematic_arc', 'rise', 'dorian'),
+            ('repertoire_anthem_progression', 'chorus', 'ionian'),
+        ]
+        for lesson_id, section_id, expected_scale in checks:
+            with self.subTest(lesson=lesson_id, section=section_id):
+                self.page.select_option('[data-testid="exercise-select"]', lesson_id)
+                self.page.select_option('[data-testid="repertoire-section-select"]', section_id)
+                snapshot = self.page.evaluate("() => window.__exquisDebugSnapshot()")
+                self.assertEqual(snapshot['scaleId'], expected_scale, snapshot)
+                self.assertTrue(snapshot['exerciseEvents'], snapshot)
 
     def test_regression_exercise_chooser_controls_remain_readable_at_desktop_width(self):
         self.page.set_viewport_size({"width": 1366, "height": 768})
@@ -4854,14 +5042,24 @@ class PlaywrightExhibitTests(unittest.TestCase):
           });
         }
         """)
+        self.open_hardware_tools()
         self.page.locator('[data-testid="enable-midi"]').click()
         self.page.wait_for_function("() => window.__mockExquisInput && window.__mockExquisInput.onmidimessage")
+        advanced_research = self.page.locator('details.advanced-hardware-research')
+        if advanced_research.count() and not advanced_research.evaluate("el => el.open"):
+            advanced_research.locator('summary').click()
         self.page.locator('[data-testid="dial-listen"]').click()
         sent = self.page.evaluate("() => window.__mockExquisOutput.sent")
         self.assertIn([240, 0, 33, 126, 127, 0, 19, 247], sent)
         self.assertEqual(self.page.locator('[data-testid="dial-listen"]').get_attribute("aria-pressed"), "true")
         self.assertIn("pads + encoders + settings", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+        # Developer Mode owns encoder rotation. A duplicate native CC stream
+        # must be diagnostic-only; otherwise one physical turn can change
+        # family/exercise twice and also leak into settings controls.
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xBF, 110, 65] })")
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), "shapes")
+        self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 41, 62] })")
+        self.assertEqual(self.page.locator('[data-testid="exercise-family-select"]').input_value(), "shapes")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 74, 12] })")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 42, 5] })")
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 43, 8] })")
@@ -4869,12 +5067,11 @@ class PlaywrightExhibitTests(unittest.TestCase):
         self.page.evaluate("() => window.__mockExquisInput.onmidimessage({ data: [0xB0, 22, 0] })")
         log = self.page.locator('[data-testid="diagnostic-log"]').inner_text()
         self.assertIn("Exquis dial encoder=110 Encoder 1 delta=1 raw=65", log)
-        self.assertIn("Exquis dial raw status=0xB0 channel=1 data=176,74,12", log)
-        self.assertIn("Exquis settings Encoder 2 root value=5 note=F", log)
-        self.assertIn("Exquis settings Encoder 3 scale-number=8", log)
-        self.assertIn("Exquis settings Encoder 2 click value=127", log)
-        self.assertEqual(self.page.locator('[data-testid="tonic-select"]').input_value(), "5")
-        self.assertIn("hardware scale number 8", self.page.locator('[data-testid="exquis-sync-status"]').inner_text())
+        self.assertNotIn("Exquis settings Encoder 1", log)
+        self.assertNotIn("Exquis settings Encoder 2", log)
+        self.assertNotIn("Exquis settings Encoder 3", log)
+        self.assertEqual(self.page.locator('[data-testid="tonic-select"]').input_value(), "0")
+        self.assertEqual(self.page.locator('[data-testid="scale-select"]').input_value(), "ionian")
         self.page.locator('[data-testid="dial-listen"]').click()
         self.assertIn([240, 0, 33, 126, 127, 0, 0, 247], self.page.evaluate("() => window.__mockExquisOutput.sent"))
 

@@ -24,12 +24,15 @@ Playwright/static test and this document in the same commit.
 | `__exquisDebugBuildHarmonyGripFixture` | `{rootMidi, quality, noteCount, inversion, compactVoicing?}` | Exact physical harmony fixture or `null`. | harmony/progression tests |
 | `__exquisDebugBuildProgressionFixture` | `(fixtureId, tonicPc?)` | Ordered, playable progression fixture transposed to the optional tonic PC, or `null`. | progression fixture tests |
 | `__exquisDebugBuildSsliProgressionFixture` | `(genreIndex, progressionIndex, tonicPc?, scaleId?)` | SSLI-derived playable progression or `null`. | SSLI progression tests |
+| `__exquisDebugPreferredGripCellIdForMidi` | `(midi)` | Canonical preferred physical pad ID for an exact MIDI target, or empty when unavailable. | song/progression duplicate-pad regressions |
+| `__exquisDebugSongCatalog` | `()` | Built-in song IDs with melody lengths and authored `durationsBeats`; returns copies only. | catalog rhythm regression |
 | `__exquisDebugPromptMidis` | `()` | Current expected prompt MIDI list. | prompt/playback tests |
 | `__exquisDebugShouldUseSsliPlayback` | `(presetApplied, hasOutput)` | Boolean SSLI playback decision. | audio routing tests |
 | `__exquisDebugStartAfterAudioResume` | `(audioContext, start)` | Promise resolving true only after the context can start; used to test gesture/audio sequencing. | audio-resume tests |
 | `__exquisDebugBuildVoiceLeadingTransition` | `{from, to}` harmony-fixture spec | Transition plan with retained anchors and movement score. | voice-leading tests |
 | `__exquisDebugBuildExerciseLifecycleEvents` | `()` | Stable reduced lifecycle-event sample: `type`, `valid`, `musicalIntent`, `cellId`, `midi`, `targets`, `fingering`, `timing`. | lifecycle schema test |
 | `__exquisDebugEvaluateGrip` | `(event, attempts)` | `{accepted, outcome, missing, wrong, timingSpreadMs, toleranceMs}`. | simultaneous-grip scoring tests |
+| `__exquisDebugSetNotationTheme` | `('dark' | 'high-contrast')` | Selects the shared notation theme and returns the applied ID. | notation-theme regression |
 
 ## Light and SysEx Objects
 
@@ -52,8 +55,8 @@ sequences.
 | `degreesFor` | `(scaleId?)` | Twelve 0/1 custom-scale degree flags, defaulting to selected scale. |
 | `scaleIndexFor` | `(scaleId)` | Internal selectable scale index, or `0` when unknown. |
 | `scaleIdForIndex` | `(index)` | Scale ID or empty string. |
-| `exquisScaleNumberFor` | `(scaleId)` | Official hardware scale number, or `0` when unmapped. |
-| `scaleIdForExquisNumber` | `(scaleNumber)` | Scale ID or empty string. |
+| `exquisScaleNumberFor` | `(scaleId)` | Ordered practice-mode-bank number, or `0` when unknown. |
+| `scaleIdForExquisNumber` | `(scaleNumber)` | Practice-bank scale ID or empty string. |
 | `developerMask` | none | Pads-only Developer Mode bitmask scalar. |
 | `legacy` | `(command, payload?)` | Legacy diagnostic SysEx byte array only; never normal sync. |
 

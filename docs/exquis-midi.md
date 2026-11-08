@@ -28,6 +28,18 @@ Pads are `0..60`, bottom-left to top-right. Palette index `1` is off; `16..27` a
 
 Keep pad Developer Mode active while sync is on; turning it off lets firmware overwrite the custom colors. Normal sync must not capture Settings, Sound, or transport zones.
 
+## Practice Mode Encoder Bank
+
+Holding **Settings** and turning physical Encoder 3 emits raw CC43 values.
+The app owns one complete, ordered practice bank shared by the selector and
+the hardware: common modes first (Major, Minor, the pentatonics, Blues), then
+the remaining diatonic modes, jazz/color scales, chromatic, Indian-derived
+scales, world pentatonics, and maqamat. Its zero-based order in
+`PRACTICE_MODE_BANK` is the inbound and outbound Scale Number contract. The
+vendor's duplicate `bebop_dominant` definition is intentionally represented
+once as `bebop_dom`. Values outside the bank remain visible as raw diagnostics
+and do not coerce the learner into an unrelated mode.
+
 ## Ownership and Recovery
 
 - **Normal mode:** only the pads Developer-Mode mask is enabled. The app owns

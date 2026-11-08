@@ -173,7 +173,7 @@
         "Dial Listen recognizes physical Settings raw CC42 as hardware root, raw CC43 as hardware scale number, and raw CC21-24 as encoder clicks",
         "the stage view arranges Exquis edge controls to match the physical device placement: Encoder 1-4 above the hex keybed, with Down/Up, six-zone Slider, Undo/Redo, and Settings/Sound/Record/Loop/Clips/Play-Stop below the keybed and visible above build/console overlays; horizontal mode rotates the bottom controls to the left rail and encoders to the right rail without clipping the stepper or leaving a large empty band above the device, with hardware labels beside controls so knobs/buttons stay visually primary",
         "edge controls show captured Developer Mode zones and the most recent edge control activity",
-        "Exquis scale numbers use the hardware ordering for supported modes: 0 Major, 1 Dorian, 4 Mixolydian, and 5 Natural minor",
+        "Exquis Settings Encoder 3 and the mode selector share one complete ordered practice-mode bank: common Major/Minor, pentatonic, and Blues modes first; all diatonic modes next; then jazz/color, chromatic, Indian-derived, world, and maqam modes",
         "Native Probe sweeps official root/scale writes across Developer Mode masks 01h, 10h, 11h, and 13h with labeled console output for hardware verification",
         "sync status is visible in the MIDI coach diagnostics"
       ],
